@@ -1,10 +1,15 @@
 /**
  * analyticshq — ingest + stats API.
  *
- * The public tracker (served at `/script.js`) beacons page views and custom
- * events to `POST /collect`. The dashboard reads aggregates from the
+ * The public tracker (the static `public/script.js`) beacons page views and
+ * custom events to `POST /collect`. The dashboard reads aggregates from the
  * `GET /api/sites/{siteId}/*` endpoints. All storage is PostgreSQL, queried
  * through bun-query-builder's `db`.
+ *
+ * Every route here must be reachable through the views server's proxy, which
+ * forwards only `/api/*` and mutating methods (POST/PUT/PATCH/DELETE) to this
+ * backend. A plain `GET` at the root would 404 against the STX views instead —
+ * which is why the tracker is a static asset and `/health` lives under `/api`.
  */
 
 import { createHash } from 'node:crypto'
@@ -867,45 +872,10 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
 // Tracker script + health
 // ---------------------------------------------------------------------------
 
-route.get('/script.js', (request: any) => {
-  const origin = new URL(request.url).origin
-  const script = `(function(){
-  var d=document,w=window,s=d.currentScript,site=s&&s.getAttribute('data-site');
-  if(!site)return;
-  // No cookies or device storage: the server derives sessions from the anonymous visitor
-  // hash + a 30-min window, keeping the tracker consent-free.
-  function send(e,p){try{
-    var q=new URLSearchParams(location.search),
-      b={s:site,e:e,p:p||{},u:location.origin+location.pathname,r:d.referrer||'',t:d.title,sw:screen.width,sh:screen.height};
-    ['source','medium','campaign','content','term'].forEach(function(k){var v=q.get('utm_'+k);if(v)b['utm_'+k]=v});
-    fetch('${origin}/collect',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-  }catch(_){}}
-  w.analyticshq=function(name,props){send(name,props)};
-  var DLRE=/\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i;
-  function onLink(ev){
-    if(ev.type==='auxclick'&&ev.button!==1)return;
-    try{
-      var t=ev.target,a=t&&t.closest?t.closest('a'):null;
-      if(!a)return;
-      var href=a.getAttribute('href');if(!href)return;
-      if(/^(javascript:|mailto:|tel:)/i.test(href))return;
-      var url=new URL(a.href,location.href);
-      if(url.protocol!=='http:'&&url.protocol!=='https:')return;
-      var cross=url.hostname!==location.hostname,path=url.pathname;
-      if((a.hasAttribute('download')&&!cross)||DLRE.test(path)){send('File Download',{url:a.href});return}
-      if(cross){send('Outbound Link',{url:a.href})}
-    }catch(_){}
-  }
-  d.addEventListener('click',onLink,true);
-  d.addEventListener('auxclick',onLink,true);
-  function pv(){send('pageview')}
-  pv();
-  var push=history.pushState;history.pushState=function(){push.apply(this,arguments);pv()};
-  w.addEventListener('popstate',pv);
-})();`
-  return new Response(script, {
-    headers: { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=3600', ...CORS },
-  })
-})
+// The tracker script is a STATIC asset (`public/script.js`), not a route: the
+// views server only forwards `/api/*` and mutating methods to this backend, so
+// a GET route here would be unreachable from the public origin. Serving it
+// statically also lets it derive its own collect origin from `document
+// .currentScript.src`, so one asset works on every host that fronts this app.
 
-route.get('/health', () => response.json({ status: 'ok', app: 'analyticshq' }))
+route.get('/api/health', () => response.json({ status: 'ok', app: 'analyticshq' }))

@@ -6,13 +6,9 @@ export default defineModel({
   table: 'page_views',
   primaryKey: 'id',
 
-  // SingleStore: append-heavy columnstore fact table. Shard on the
-  // high-cardinality id (a columnstore PK must contain the shard key), and
-  // sort on the analytics filter+range (site_id, timestamp) so time-scoped
-  // per-site scans get columnstore segment elimination.
-  tableKind: 'columnstore',
-  shardKey: ['id'],
-  sortKey: ['site_id', 'timestamp'],
+  // Append-heavy fact table. On Postgres the ordering that matters is the
+  // (site_id, timestamp) index below — every dashboard query is scoped to one
+  // site over a time range, so that composite index is what keeps scans bounded.
 
   traits: {
     useTimestamps: true,
@@ -20,11 +16,10 @@ export default defineModel({
 
   belongsTo: ['Site', 'Session'],
 
-  // KEYS on every column the dashboard filters/groups by. On a SingleStore
-  // columnstore these become hash indexes that keep filtered breakdowns
-  // (by page, source, country, device, browser, OS) fast even at billions of
-  // rows — the same "keys on all filterable fields" strategy Fathom uses for
-  // its V3 filtering.
+  // An index on every column the dashboard filters/groups by, so filtered
+  // breakdowns (by page, source, country, device, browser, OS) stay fast —
+  // the same "index all filterable fields" strategy Fathom uses for its V3
+  // filtering.
   indexes: [
     { name: 'pv_site_timestamp', columns: ['site_id', 'timestamp'] },
     { name: 'pv_session', columns: ['session_id'] },
@@ -40,9 +35,9 @@ export default defineModel({
 
   attributes: {
     // Column widths are tightened to what each field actually holds (hash ids,
-    // 2-char country codes, short device/browser labels) so SingleStore's
-    // columnstore reserves + scans fewer bytes per row — Fathom's column-width
-    // pass. Genuinely long fields (path, title, referrer) keep varchar(255).
+    // 2-char country codes, short device/browser labels) so each row stays
+    // narrow — Fathom's column-width pass. Genuinely long fields (path, title,
+    // referrer) keep varchar(255).
     id: { fillable: true, validation: { rule: schema.string().required().max(64) } },
     site_id: { fillable: true, validation: { rule: schema.string().required().max(64) } },
     session_id: { fillable: true, validation: { rule: schema.string().required().max(64) } },

@@ -10,7 +10,11 @@ import { env } from '@stacksjs/env'
  * you have any questions, feel free to reach out via Discord or GitHub Discussions.
  */
 export default {
-  default: env.DB_CONNECTION as SupportedDialect || 'sqlite',
+  // Postgres is the analytics store (see infrastructure.appDatabase in
+  // config/cloud.ts). It is also the default so a missing DB_CONNECTION cannot
+  // silently fall back to a local SQLite file and look healthy while writing
+  // every pageview somewhere the dashboard never reads.
+  default: env.DB_CONNECTION as SupportedDialect || 'postgres',
 
   connections: {
     sqlite: {
@@ -34,22 +38,6 @@ export default {
       username: env.DB_USERNAME || 'root',
       password: env.DB_PASSWORD || '',
       prefix: '',
-    },
-
-    // SingleStore speaks the MySQL wire protocol on port 3306. Managed
-    // SingleStore (Helios) endpoints require TLS — set DB_SSL=true.
-    singlestore: {
-      name: env.DB_DATABASE || 'stacks',
-      host: env.DB_HOST || '127.0.0.1',
-      port: env.DB_PORT || 3306,
-      username: env.DB_USERNAME || 'root',
-      password: env.DB_PASSWORD || '',
-      prefix: '',
-      // Managed SingleStore (Helios) requires TLS. DB_SSL isn't in the StacksEnv
-      // type yet (its DB_CONNECTION union also predates 'singlestore'), but the
-      // env Proxy reads it from process.env at runtime — read via process.env to
-      // stay type-clean. Local/self-hosted clusters can leave DB_SSL unset.
-      ssl: process.env.DB_SSL === 'true',
     },
 
     postgres: {

@@ -222,6 +222,14 @@ export const tsCloud: TsCloudConfig = {
         onDemandTls: true,
         onDemandTlsEmail: 'hello@stacksjs.com',
       },
+      // Declares which engine this project's tenant database lives on. The
+      // shared box's OWNER (`stacks`) installs and runs the engine — pantry's
+      // postgresql-pantry.service, already serving bughq and training on
+      // 127.0.0.1:5432. In attach mode ts-cloud never touches the install; it
+      // only runs the idempotent role+database setup for `appDatabase` below
+      // (ensureAttachModeDatabase), because our cloud-init never ran on a box
+      // we did not provision, so the tenant role would otherwise not exist.
+      managedServices: { postgres: true },
       // Uncomment for auto-scaling:
       // autoScaling: {
       //   min: 1,
@@ -240,6 +248,32 @@ export const tsCloud: TsCloudConfig = {
       //   onDemandPercentage: 50,
       //   strategy: 'capacity-optimized',
       // },
+    },
+
+    /**
+     * Application database — the analytics store.
+     *
+     * A tenant role + database on the shared box's co-located Postgres, created
+     * idempotently on deploy. This replaces the managed SingleStore cluster the
+     * app shipped against: analyticshq is a single-box app whose whole dataset
+     * is one project's pageviews, so a distributed columnstore bought nothing
+     * and cost an external dependency, a second network hop, and TLS setup on
+     * every query.
+     *
+     * Postgres (not SQLite) because ingest is append-heavy and concurrent:
+     * `POST /collect` writes page_views/sessions on every beacon while the
+     * dashboard runs aggregate reads, and SQLite's single writer would serialize
+     * the two behind a file lock.
+     */
+    appDatabase: {
+      engine: 'postgres',
+      name: 'analyticshq',
+      username: 'analyticshq',
+      // No literal fallback: an unset password must fail the deploy loudly
+      // rather than quietly provision a well-known credential on a box that
+      // hosts other tenants.
+      password: env.DB_PASSWORD,
+      port: 5432,
     },
 
     /**
@@ -696,6 +730,36 @@ export const tsCloud: TsCloudConfig = {
       start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
       port: 3024,
       preStart: ['bun install'],
+      // Pin the proxy target. `buddy serve` otherwise falls back to
+      // 127.0.0.1:3008, which on this SHARED box is the `stacks` project's own
+      // API — analyticshq's `POST /collect` would silently cross tenants.
+      env: { API_URL: 'http://127.0.0.1:3025' },
+    },
+
+    // The ingest + stats API (bun-router), behind `buddy serve`'s same-origin
+    // proxy on the `main` site. Without this site NOTHING served the routes in
+    // `routes/analytics.ts`: `buddy serve` renders STX views and proxies
+    // `/api/*` + mutating methods to `API_URL`, but no process was listening
+    // there, so `POST /collect` 502'd and the whole ingest path was dead.
+    //
+    // Deliberately NO `domain`/`path`: ts-cloud's rpx gateway skips
+    // domain-less sites, so this stays loopback-only and is reachable
+    // exclusively through the :3024 proxy. HOST pins the bind to 127.0.0.1 —
+    // the box is shared, so a 0.0.0.0 bind would expose the unauthenticated
+    // ingest endpoint of every tenant's neighbour.
+    //
+    // Port 3025 is analyticshq's API slot on the shared box (3024 is `main`).
+    api: {
+      root: '.',
+      // The API entry module directly, not `buddy serve:api`: that subcommand is
+      // advertised by the published CLI's --help but is not actually registered,
+      // so invoking it exits with "Command not found". This is the same module
+      // the subcommand imports, and it mirrors how the `stacks` project starts
+      // its own API site (a direct path to the serve/api entry).
+      start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
+      port: 3025,
+      preStart: ['bun install'],
+      env: { HOST: '127.0.0.1', APP_ENV: 'production' },
     },
 
     // www → apex redirect.

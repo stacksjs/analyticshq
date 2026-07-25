@@ -6,9 +6,6 @@ export default defineModel({
   table: 'goals',
   primaryKey: 'id',
 
-  // SingleStore: small per-site config dimension replicated to every leaf as
-  // a REFERENCE TABLE, so conversion joins against it need no reshuffle.
-  tableKind: 'reference',
 
   traits: {
     useTimestamps: true,

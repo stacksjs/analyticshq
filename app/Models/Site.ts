@@ -6,10 +6,6 @@ export default defineModel({
   table: 'sites',
   primaryKey: 'id',
 
-  // SingleStore: small tenant dimension replicated to every leaf as a
-  // REFERENCE TABLE, so it joins against the sharded fact tables without a
-  // reshuffle. Keeps the id primary key + unique semantics.
-  tableKind: 'reference',
 
   traits: {
     useTimestamps: true,

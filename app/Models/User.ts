@@ -4,17 +4,13 @@ import { schema } from '@stacksjs/validation'
 
 /**
  * Account owner. Auth is handled by the `useAuth` trait (password hashing,
- * session + token guards). On SingleStore the users table is small and joined
- * against the sharded fact tables, so it's a REFERENCE table (replicated to
- * every leaf) — same as Site.
+ * session + token guards).
  */
 export default defineModel({
   name: 'User',
   table: 'users',
   primaryKey: 'id',
   autoIncrement: true,
-
-  tableKind: 'reference',
 
   hasMany: ['Subscription'],
 
