@@ -1,5 +1,5 @@
 /**
- * ghostanalytics — ingest + stats API.
+ * analyticshq — ingest + stats API.
  *
  * The public tracker (served at `/script.js`) beacons page views and custom
  * events to `POST /collect`. The dashboard reads aggregates from the
@@ -908,4 +908,4 @@ route.get('/script.js', (request: any) => {
   })
 })
 
-route.get('/health', () => response.json({ status: 'ok', app: 'ghostanalytics' }))
+route.get('/health', () => response.json({ status: 'ok', app: 'analyticshq' }))

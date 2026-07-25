@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Mixpanel - privacy-first web analytics vs product analytics',
-  description: 'Mixpanel is deep product analytics built on user-level tracking, cookies, and a heavy SDK. ghostanalytics is cookieless web analytics: lightweight, exact, and privacy-first, with no consent banner and data you own.',
+  title: 'analyticshq vs Mixpanel - privacy-first web analytics vs product analytics',
+  description: 'Mixpanel is deep product analytics built on user-level tracking, cookies, and a heavy SDK. analyticshq is cookieless web analytics: lightweight, exact, and privacy-first, with no consent banner and data you own.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'What it is', them: 'Product analytics: per-user journeys, cohorts, funnels.', us: 'Web analytics: traffic, sources, and lightweight conversions.' },
   { dim: 'Cookies and identity', them: 'Cookies and a persistent user identity across sessions.', us: 'Cookieless. A daily rotating hash, no cross-session profile.' },
@@ -18,8 +18,8 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Most teams do not need per-user tracking', b: 'Mixpanel profiles every visitor to build cohorts and journeys. If your real question is how your site and marketing are doing, that machinery is overkill and a privacy liability. ghostanalytics answers it without identifying anyone.' },
-  { n: '02', h: 'No consent banner, no SDK weight', b: 'Because ghostanalytics stores no personal data, there is no banner to bolt on and no DPA to sign. The whole script is under 2 KB, versus a product-analytics SDK that loads before it does anything.' },
+  { n: '01', h: 'Most teams do not need per-user tracking', b: 'Mixpanel profiles every visitor to build cohorts and journeys. If your real question is how your site and marketing are doing, that machinery is overkill and a privacy liability. analyticshq answers it without identifying anyone.' },
+  { n: '02', h: 'No consent banner, no SDK weight', b: 'Because analyticshq stores no personal data, there is no banner to bolt on and no DPA to sign. The whole script is under 2 KB, versus a product-analytics SDK that loads before it does anything.' },
   { n: '03', h: 'Your numbers stay yours', b: 'Events land in a PostgreSQL database you control instead of a vendor cloud, priced per event. Nothing is sampled, and nothing is metered against a plan.' },
 ]
 
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Mixpanel</span>
+        <span class="kicker">analyticshq vs Mixpanel</span>
         <h1>Two different jobs. Pick the one you actually have.</h1>
-        <p>Mixpanel is deep product analytics, built on per-user tracking to model cohorts and journeys. ghostanalytics is privacy-first web analytics: how your site and marketing perform, counted exactly, with no cookies, no consent banner, and data you own.</p>
+        <p>Mixpanel is deep product analytics, built on per-user tracking to model cohorts and journeys. analyticshq is privacy-first web analytics: how your site and marketing perform, counted exactly, with no cookies, no consent banner, and data you own.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">Mixpanel vs ghostanalytics</p>
+          <p class="eyebrow">Mixpanel vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">
@@ -87,14 +87,14 @@ const related = [
 
       <section class="reveal section shell" aria-label="Where Mixpanel leads">
         <div class="migrate">
-          <p>Where Mixpanel leads: for genuine product analytics it does things ghostanalytics deliberately does not. Cross-session funnels, cohort retention, per-user profiles, and experimentation are its whole point. If you need to follow individual users through a product, Mixpanel is the right tool, and ghostanalytics is not trying to replace it.</p>
+          <p>Where Mixpanel leads: for genuine product analytics it does things analyticshq deliberately does not. Cross-session funnels, cohort retention, per-user profiles, and experimentation are its whole point. If you need to follow individual users through a product, Mixpanel is the right tool, and analyticshq is not trying to replace it.</p>
           <a class="textlink" href="/features/goals" data-no-router>See what events we do track</a>
         </div>
       </section>
 
       <section class="reveal section shell" aria-labelledby="why-heading">
         <div class="section-head">
-          <h2 id="why-heading" class="section-title">Why teams pick ghostanalytics instead.</h2>
+          <h2 id="why-heading" class="section-title">Why teams pick analyticshq instead.</h2>
         </div>
         <div class="flow">
           @foreach (reasons as step)

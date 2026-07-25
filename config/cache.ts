@@ -4,7 +4,7 @@ import { env } from '@stacksjs/env'
 /**
  * **Cache Configuration**
  *
- * ghostanalytics runs on PostgreSQL (SingleStore was dropped), which has no
+ * analyticshq runs on PostgreSQL (SingleStore was dropped), which has no
  * MySQL-wire cache table driver here, so the cache defaults to in-process
  * `memory` — one fewer service to run for a single-node dev/app. Set
  * `CACHE_DRIVER=redis` (with the redis block below) when a shared cache across
@@ -69,8 +69,8 @@ export default {
       port: env.DB_PORT || 3306,
       username: env.DB_USERNAME || 'root',
       password: env.DB_PASSWORD || '',
-      database: env.DB_DATABASE || 'ghostanalytics',
-      table: 'ghostanalytics_cache',
+      database: env.DB_DATABASE || 'analyticshq',
+      table: 'analyticshq_cache',
       ssl: (env as Record<string, string | undefined>).DB_SSL === 'true',
     },
   },

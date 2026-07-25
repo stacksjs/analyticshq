@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Cloudflare Web Analytics - the privacy-first alternative',
-  description: 'Cloudflare Web Analytics is free and cookieless, but read-only on pageviews and locked to Cloudflare. ghostanalytics adds custom events, data you own in PostgreSQL, and self-hosting, while staying cookieless.',
+  title: 'analyticshq vs Cloudflare Web Analytics - the privacy-first alternative',
+  description: 'Cloudflare Web Analytics is free and cookieless, but read-only on pageviews and locked to Cloudflare. analyticshq adds custom events, data you own in PostgreSQL, and self-hosting, while staying cookieless.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'Cookies and consent', them: 'Cookieless, no banner. A genuine privacy peer.', us: 'Cookieless, no banner, no personal data stored.' },
   { dim: 'Custom events and goals', them: 'None. Pageviews, referrers, and top paths only.', us: 'One-line ghost() events, goals, and UTM campaigns.' },
@@ -18,13 +18,13 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Events, not just a pageview counter', b: 'Cloudflare Web Analytics counts pages and referrers and stops there. ghostanalytics fires a conversion with a one-line ghost() call, so signups, purchases, and custom events sit beside your traffic.' },
-  { n: '02', h: 'You hold the data, not just a dashboard', b: 'Cloudflare shows you the numbers but keeps them. With ghostanalytics every raw event lands in a PostgreSQL database you own, ready to query, export, or self-host.' },
-  { n: '03', h: 'Not tied to one network', b: 'Cloudflare Analytics is happiest when your site already runs behind Cloudflare. ghostanalytics is a single first-party script that works on any host, CDN, or framework.' },
+  { n: '01', h: 'Events, not just a pageview counter', b: 'Cloudflare Web Analytics counts pages and referrers and stops there. analyticshq fires a conversion with a one-line ghost() call, so signups, purchases, and custom events sit beside your traffic.' },
+  { n: '02', h: 'You hold the data, not just a dashboard', b: 'Cloudflare shows you the numbers but keeps them. With analyticshq every raw event lands in a PostgreSQL database you own, ready to query, export, or self-host.' },
+  { n: '03', h: 'Not tied to one network', b: 'Cloudflare Analytics is happiest when your site already runs behind Cloudflare. analyticshq is a single first-party script that works on any host, CDN, or framework.' },
 ]
 
 const metrics = [
-  { v: 'Cookieless', l: 'Like Cloudflare, no cookies and no consent banner. Where ghostanalytics goes further is events and ownership.' },
+  { v: 'Cookieless', l: 'Like Cloudflare, no cookies and no consent banner. Where analyticshq goes further is events and ownership.' },
   { v: 'Your DB', l: 'Every event stored in your own PostgreSQL, not held inside a provider dashboard.' },
   { v: 'Any host', l: 'One script tag, no requirement to proxy your traffic through a specific network.' },
 ]
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Cloudflare Web Analytics</span>
+        <span class="kicker">analyticshq vs Cloudflare Web Analytics</span>
         <h1>Cookieless like Cloudflare, but the data is yours.</h1>
-        <p>Cloudflare Web Analytics is a solid free pageview counter, and like ghostanalytics it sets no cookies. The difference is depth and ownership: ghostanalytics adds custom events and goals, stores every event in your own PostgreSQL, and runs on any host, not just behind Cloudflare.</p>
+        <p>Cloudflare Web Analytics is a solid free pageview counter, and like analyticshq it sets no cookies. The difference is depth and ownership: analyticshq adds custom events and goals, stores every event in your own PostgreSQL, and runs on any host, not just behind Cloudflare.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/goals" data-no-router>See events and goals</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">Cloudflare vs ghostanalytics</p>
+          <p class="eyebrow">Cloudflare vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">

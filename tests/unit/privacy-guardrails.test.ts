@@ -1,7 +1,7 @@
 /**
  * Privacy guardrails — executable invariants.
  *
- * ghostanalytics is an aggregate-only, cookieless analytics product. These tests
+ * analyticshq is an aggregate-only, cookieless analytics product. These tests
  * fail CI the moment the code drifts toward individual-level tracking, so the
  * privacy contract in PRIVACY.md can't silently regress. See issue #28.
  *

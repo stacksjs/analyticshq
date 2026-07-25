@@ -61,7 +61,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 <div class="px-5 py-14 md:px-10">
   <div class="mx-auto max-w-3xl">
     <header class="mb-10 text-center">
-      <a href="/" class="text-2xl wordmark">ghostanalytics</a>
+      <a href="/" class="text-2xl wordmark">analyticshq</a>
       <h1 class="mt-6 text-3xl md:text-4xl wordmark" style="letter-spacing:-0.035em">Simple, honest pricing</h1>
       <p class="mt-3 text-base" style="color: var(--text-3)">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
       <div class="inline-flex gap-1 items-center mt-6 p-1 text-sm seg">
@@ -102,7 +102,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endif
       </div>
     </div>
-    <p class="mt-10 text-center text-xs" style="color: var(--text-3)">Prefer to self-host? ghostanalytics is open source and free to run yourself.</p>
+    <p class="mt-10 text-center text-xs" style="color: var(--text-3)">Prefer to self-host? analyticshq is open source and free to run yourself.</p>
   </div>
 </div>
 

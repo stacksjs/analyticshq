@@ -30,8 +30,8 @@ const promises = [
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Features - ghostanalytics</title>
-    <meta name="description" content="Every ghostanalytics feature in one place: real-time visitors, pageviews and sessions, sources, goals and events, geography and devices, Core Web Vitals, and privacy by design. Cookieless and exact.">
+    <title>Features - analyticshq</title>
+    <meta name="description" content="Every analyticshq feature in one place: real-time visitors, pageviews and sessions, sources, goals and events, geography and devices, Core Web Vitals, and privacy by design. Cookieless and exact.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -59,7 +59,7 @@ const promises = [
 
       <section class="reveal section shell" aria-labelledby="grid-heading">
         <div class="section-head">
-          <h2 id="grid-heading" class="section-title">Everything ghostanalytics measures.</h2>
+          <h2 id="grid-heading" class="section-title">Everything analyticshq measures.</h2>
         </div>
         <div class="bento">
           @foreach (featureCells as cell)

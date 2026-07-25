@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Analytics for SaaS - ghostanalytics</title>
-    <meta name="description" content="Cookieless analytics for SaaS. Follow visitors from landing page to signup and activation, attribute revenue to channels, and skip the consent banner. Powered by ghostanalytics.">
+    <title>Analytics for SaaS - analyticshq</title>
+    <meta name="description" content="Cookieless analytics for SaaS. Follow visitors from landing page to signup and activation, attribute revenue to channels, and skip the consent banner. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,7 +67,7 @@
           <div class="split-text">
             <h3>Measure the funnel without the cookie tax.</h3>
             <p>
-              A consent banner costs you the first click and a slice of every measurement behind it. ghostanalytics stores nothing on the visitor, so there is no banner to show and no gap between real signups and counted ones.
+              A consent banner costs you the first click and a slice of every measurement behind it. analyticshq stores nothing on the visitor, so there is no banner to show and no gap between real signups and counted ones.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>No cookie prompt between a visitor and your call to action.</li>
@@ -95,7 +95,7 @@
           <div class="split-text">
             <h3>Prove which channels bring paying users.</h3>
             <p>
-              Tag your ads, emails, and partner links with UTM parameters and ghostanalytics carries them through to the signup event. You can tell the difference between a channel that drives traffic and one that drives revenue.
+              Tag your ads, emails, and partner links with UTM parameters and analyticshq carries them through to the signup event. You can tell the difference between a channel that drives traffic and one that drives revenue.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>UTM source, medium, and campaign on every conversion.</li>

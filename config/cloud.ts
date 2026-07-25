@@ -22,8 +22,8 @@ export const tsCloud: TsCloudConfig = {
    * Project configuration
    */
   project: {
-    name: 'ghostanalytics',
-    slug: 'ghostanalytics',
+    name: 'analyticshq',
+    slug: 'analyticshq',
     region: 'us-east-1', // Default AWS region
   },
 
@@ -32,7 +32,7 @@ export const tsCloud: TsCloudConfig = {
     provider: 'hetzner',
     // Attach to the shared box owned by the `stacks` project instead of
     // provisioning our own: the deploy resolves the `stacks-<env>-app` server,
-    // ships only ghostanalytics' site, and adds an additive rpx fragment + DNS.
+    // ships only analyticshq' site, and adds an additive rpx fragment + DNS.
     attachTo: 'stacks',
   },
 
@@ -367,7 +367,7 @@ export const tsCloud: TsCloudConfig = {
     ssl: {
       enabled: true,
       provider: 'acm', // 'acm' | 'letsencrypt'
-      domains: env.SSL_DOMAINS?.split(',') || ['ghostanalytics.org', 'www.ghostanalytics.org'],
+      domains: env.SSL_DOMAINS?.split(',') || ['analyticshq.org', 'www.analyticshq.org'],
       redirectHttp: true,
       // Porkbun manages DNS for the analytics domain. ts-cloud auto-detects the
       // provider from the domain's nameservers and reads PORKBUN_API_KEY /
@@ -386,7 +386,7 @@ export const tsCloud: TsCloudConfig = {
     dns: {
       // The analytics domain is registered + DNS-managed at Porkbun (provider
       // auto-detected by ts-cloud from nameservers + PORKBUN_* creds above).
-      domain: env.APP_DOMAIN || 'ghostanalytics.org',
+      domain: env.APP_DOMAIN || 'analyticshq.org',
       hostedZoneId: env.AWS_HOSTED_ZONE_ID, // only used if the domain is on Route53
     },
 
@@ -675,23 +675,23 @@ export const tsCloud: TsCloudConfig = {
    * static `/` site for stacksjs.com or it will compete with the app route.
    */
   sites: {
-    // The ghostanalytics app itself — a Bun server (`buddy serve`) that renders
+    // The analyticshq app itself — a Bun server (`buddy serve`) that renders
     // the stx dashboard + serves the /collect ingest + /api/* stats routes on
-    // :3000, fronted by the reverse proxy on ghostanalytics.org. This is the
+    // :3000, fronted by the reverse proxy on analyticshq.org. This is the
     // ONLY site: no docs/blog/marketing static sites (this is a single-purpose
     // analytics app, not the stacks.com monorepo the scaffold was cloned from).
     //
     // On the shared `stacks` box (attachTo) ts-cloud namespaces every install
-    // dir by project slug — this ships to /var/www/ghostanalytics-main via the
-    // `ghostanalytics-main` service, so the generic `main` key can never
+    // dir by project slug — this ships to /var/www/analyticshq-main via the
+    // `analyticshq-main` service, so the generic `main` key can never
     // collide with the box owner's own `main` site (see ts-cloud
     // siteInstallBase).
     main: {
       root: '.',
       path: '/',
-      domain: env.APP_DOMAIN || 'ghostanalytics.org',
+      domain: env.APP_DOMAIN || 'analyticshq.org',
       // Resolve the framework CLI from node_modules (@stacksjs/buddy) — no
-      // vendored storage/framework/core needed. Port 3024 is ghostanalytics'
+      // vendored storage/framework/core needed. Port 3024 is analyticshq's
       // slot on the shared box (localhost-only; rpx fronts it by domain).
       start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
       port: 3024,
@@ -699,7 +699,25 @@ export const tsCloud: TsCloudConfig = {
     },
 
     // www → apex redirect.
-    www: { domain: `www.${env.APP_DOMAIN || 'ghostanalytics.org'}`, redirect: `https://${env.APP_DOMAIN || 'ghostanalytics.org'}` },
+    www: { domain: `www.${env.APP_DOMAIN || 'analyticshq.org'}`, redirect: `https://${env.APP_DOMAIN || 'analyticshq.org'}` },
+
+    // ---- legacy domain (pre-rename) ----
+    // The app shipped as `ghostanalytics` on ghostanalytics.org. We still own
+    // that domain, so both its apex and www 301 to the new one rather than
+    // going dark: inbound links, the tracking snippets already embedded on
+    // customer sites, and the OAuth callback URLs all still resolve.
+    //
+    // `preservePath` is left at its default (true) so a deep link such as
+    // /sites/abc/goals lands on the same page here.
+    //
+    // The status is 308, not the 301 default, because this domain serves more
+    // than HTML: already-deployed tracking snippets `POST /collect`. A 301/302
+    // lets the agent rewrite the request to GET and drop the body, which would
+    // silently discard every pageview from a not-yet-updated snippet. 308 is
+    // the permanent redirect that is *required* to preserve method and body,
+    // and search engines treat it as equivalent to 301 for canonicalization.
+    legacyApex: { domain: 'ghostanalytics.org', redirect: { to: `https://${env.APP_DOMAIN || 'analyticshq.org'}`, status: 308 } },
+    legacyWww: { domain: 'www.ghostanalytics.org', redirect: { to: `https://${env.APP_DOMAIN || 'analyticshq.org'}`, status: 308 } },
   },
 }
 

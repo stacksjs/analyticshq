@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Analytics for ecommerce - ghostanalytics</title>
-    <meta name="description" content="Cookieless analytics for ecommerce. Attribute orders to the campaigns and referrers that earned them, keep checkout free of a consent wall, and stay GDPR-safe for EU shoppers. Powered by ghostanalytics.">
+    <title>Analytics for ecommerce - analyticshq</title>
+    <meta name="description" content="Cookieless analytics for ecommerce. Attribute orders to the campaigns and referrers that earned them, keep checkout free of a consent wall, and stay GDPR-safe for EU shoppers. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,7 +74,7 @@
           <div class="split-text">
             <h3>No consent wall between a shopper and the buy button.</h3>
             <p>
-              A cookie prompt on the storefront costs you the first tap and a slice of every sale behind it. ghostanalytics stores nothing on the shopper, so there is no banner to dismiss and nothing standing between a visitor and checkout.
+              A cookie prompt on the storefront costs you the first tap and a slice of every sale behind it. analyticshq stores nothing on the shopper, so there is no banner to dismiss and nothing standing between a visitor and checkout.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>GDPR, CCPA, and PECR friendly, so EU shoppers see no popup.</li>
@@ -102,7 +102,7 @@
           <div class="split-text">
             <h3>Attribution that matches your revenue, not a sample.</h3>
             <p>
-              GA thresholds and samples your reports right when a campaign gets interesting. ghostanalytics counts every order and carries the UTM tags through to the purchase, so you can tell the channel that drives traffic from the one that drives sales.
+              GA thresholds and samples your reports right when a campaign gets interesting. analyticshq counts every order and carries the UTM tags through to the purchase, so you can tell the channel that drives traffic from the one that drives sales.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>UTM source, medium, and campaign on every order.</li>

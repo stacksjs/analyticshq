@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Use cases - ghostanalytics</title>
-    <meta name="description" content="How different teams put ghostanalytics to work: SaaS, ecommerce, agencies, publishers, and developers. The same cookieless script, from a solo blog to a funded product.">
+    <title>Use cases - analyticshq</title>
+    <meta name="description" content="How different teams put analyticshq to work: SaaS, ecommerce, agencies, publishers, and developers. The same cookieless script, from a solo blog to a funded product.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +23,7 @@
       <section class="feat-hero shell">
         <span class="kicker">Use cases</span>
         <h1>Real numbers for teams that respect their visitors.</h1>
-        <p>The same cookieless script fits a solo blog or a funded SaaS. Here is how different teams put ghostanalytics to work, and which features carry the weight.</p>
+        <p>The same cookieless script fits a solo blog or a funded SaaS. Here is how different teams put analyticshq to work, and which features carry the weight.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/dashboard">See a live dashboard</a>

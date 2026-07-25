@@ -3,7 +3,7 @@
  *
  * These run OUTSIDE the Stacks framework boot, where `@stacksjs/database` hangs
  * on connection init. So they talk to Postgres directly via Bun's built-in SQL
- * client, driven purely by env vars (with local-dev defaults). ghostanalytics is
+ * client, driven purely by env vars (with local-dev defaults). analyticshq is
  * Postgres-only, so no dialect abstraction is needed.
  */
 
@@ -14,7 +14,7 @@ export function connect(): Bun.SQL {
     + `:${process.env.DB_PASSWORD || ''}`
     + `@${process.env.DB_HOST || '127.0.0.1'}`
     + `:${process.env.DB_PORT || 5432}`
-    + `/${process.env.DB_DATABASE || 'ghostanalytics'}`
+    + `/${process.env.DB_DATABASE || 'analyticshq'}`
   return new Bun.SQL(url)
 }
 
@@ -56,7 +56,7 @@ export async function shortHash(input: string, len = 12): Promise<string> {
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, len)
 }
 
-/** ISO string ghostanalytics stores in the varchar `timestamp`/`started_at` cols. */
+/** ISO string analyticshq stores in the varchar `timestamp`/`started_at` cols. */
 export function isoStamp(d: Date): string {
   return d.toISOString().replace(/(\.\d{3})Z$/, '$1Z')
 }
@@ -105,7 +105,7 @@ export function pctChange(cur: number, prev: number): number | null {
   return Math.round(((cur - prev) / prev) * 100)
 }
 
-/** Verify a ghostanalytics site exists; exit if not. Returns its row. */
+/** Verify a analyticshq site exists; exit if not. Returns its row. */
 export async function requireSite(sql: Bun.SQL, siteId: string): Promise<{ id: string, name: string, owner_id: number | null }> {
   const rows = await sql`SELECT id, name, owner_id FROM sites WHERE id = ${siteId} LIMIT 1`
   if (!rows.length) {

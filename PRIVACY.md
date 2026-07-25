@@ -1,10 +1,10 @@
 # Privacy Charter
 
-ghostanalytics is **aggregate-only, cookieless web analytics**. Privacy isn't a
+analyticshq is **aggregate-only, cookieless web analytics**. Privacy isn't a
 setting here — it's the product. This document is the contract: what we
 guarantee, and what we will deliberately never build. It is enforced by
 `tests/unit/privacy-guardrails.test.ts`, so the guarantees below fail CI if the
-code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/ghostanalytics/issues/28).
+code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/issues/28).
 
 ## What we guarantee (invariants)
 

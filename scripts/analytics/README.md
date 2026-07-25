@@ -1,12 +1,12 @@
 # Analytics import / export tooling
 
 Small standalone CLIs for moving a site's analytics data in and out of
-ghostanalytics' Postgres. They talk to Postgres **directly** via Bun's built-in
+analyticshq' Postgres. They talk to Postgres **directly** via Bun's built-in
 `Bun.SQL` (the framework's `@stacksjs/database` hangs outside its boot context),
 driven by env vars with local-dev defaults:
 
 ```
-DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=ghostanalytics DB_USERNAME=$USER DB_PASSWORD=
+DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=analyticshq DB_USERNAME=$USER DB_PASSWORD=
 # …or a single DATABASE_URL=postgres://user:pass@host:5432/db
 ```
 
@@ -57,7 +57,7 @@ dashboard exactly like native traffic.
 bun scripts/analytics/import-fathom.ts \
   --token=<fathom-api-token> \
   --fathom-site=<fathom-site-id> \
-  --site=<ghostanalytics-site-id> \
+  --site=<analyticshq-site-id> \
   --from=2021-03-01 --to=2026-07-01 \
   [--with-utm] [--replace] [--dry-run]
 ```

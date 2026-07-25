@@ -20,7 +20,7 @@ const opts = { env, stdout: 'inherit', stderr: 'inherit' } as const
 const api = Bun.spawn(['bun', 'node_modules/@stacksjs/actions/dist/dev/api.js'], opts)
 const views = Bun.spawn(['bun', 'node_modules/@stacksjs/actions/dist/dev/views.js'], opts)
 
-console.log('\n  ghostanalytics dev\n    → http://localhost:3000   (full styled site: app + marketing)\n    → http://localhost:3008   (API only)\n')
+console.log('\n  analyticshq dev\n    → http://localhost:3000   (full styled site: app + marketing)\n    → http://localhost:3008   (API only)\n')
 
 function shutdown() {
   api.kill()

@@ -10,15 +10,15 @@ import { env } from '@stacksjs/env'
  */
 export default {
   // Default sender for all outbound mail. Change `address` (or set
-  // MAIL_FROM_ADDRESS) to any provisioned mailbox — e.g. hello@ghostanalytics.org
+  // MAIL_FROM_ADDRESS) to any provisioned mailbox — e.g. hello@analyticshq.org
   // — and, as long as that mailbox's MAIL_PASSWORD_<LOCALPART> is set, the SMTP
   // driver authenticates as it automatically.
   from: {
-    name: env.MAIL_FROM_NAME || 'Ghost Analytics',
-    address: env.MAIL_FROM_ADDRESS || `noreply@${env.MAIL_DOMAIN || 'ghostanalytics.org'}`,
+    name: env.MAIL_FROM_NAME || 'AnalyticsHQ',
+    address: env.MAIL_FROM_ADDRESS || `noreply@${env.MAIL_DOMAIN || 'analyticshq.org'}`,
   },
 
-  domain: env.MAIL_DOMAIN || 'ghostanalytics.org',
+  domain: env.MAIL_DOMAIN || 'analyticshq.org',
 
   /**
    * Mailbox users for IMAP/SMTP access.

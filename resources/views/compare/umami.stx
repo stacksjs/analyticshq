@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Umami - aggregate-only, cookieless analytics',
-  description: 'Two open-source, cookieless analytics tools compared. Where ghostanalytics stays strictly aggregate — 24h rotating IDs, no session replay, no individual profiles — and Umami does not.',
+  title: 'analyticshq vs Umami - aggregate-only, cookieless analytics',
+  description: 'Two open-source, cookieless analytics tools compared. Where analyticshq stays strictly aggregate — 24h rotating IDs, no session replay, no individual profiles — and Umami does not.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'ID rotation window', them: 'Session salt rotates monthly, visit salt hourly', us: 'Per-site hash rotates every 24 hours. No monthly linkability.' },
   { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
@@ -18,9 +18,9 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Both are open source — the philosophy is where they split', b: 'Umami and ghostanalytics are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, ghostanalytics refuses to build it.' },
-  { n: '02', h: 'Aggregate-only, on purpose', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. ghostanalytics deliberately will never add any of them — there is no per-person timeline to reconstruct.' },
-  { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. ghostanalytics rotates its per-site hash every 24 hours, so activity cannot be linked across days — a materially shorter linkability window.' },
+  { n: '01', h: 'Both are open source — the philosophy is where they split', b: 'Umami and analyticshq are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, analyticshq refuses to build it.' },
+  { n: '02', h: 'Aggregate-only, on purpose', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. analyticshq deliberately will never add any of them — there is no per-person timeline to reconstruct.' },
+  { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. analyticshq rotates its per-site hash every 24 hours, so activity cannot be linked across days — a materially shorter linkability window.' },
 ]
 
 const metrics = [
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Umami</span>
+        <span class="kicker">analyticshq vs Umami</span>
         <h1>Open source, but strictly aggregate.</h1>
-        <p>Umami and ghostanalytics are both open-source and cookieless. The difference is where the line is drawn: Umami v3 moved toward individual-level tracking with session replay and user profiles, while ghostanalytics stays aggregate-only — and rotates identity every 24 hours instead of monthly.</p>
+        <p>Umami and analyticshq are both open-source and cookieless. The difference is where the line is drawn: Umami v3 moved toward individual-level tracking with session replay and user profiles, while analyticshq stays aggregate-only — and rotates identity every 24 hours instead of monthly.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">Umami vs ghostanalytics</p>
+          <p class="eyebrow">Umami vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">

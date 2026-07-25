@@ -5,9 +5,9 @@
     (see the .mega rules in /marketing.css). -->
 <nav class="nav">
   <div class="nav-inner shell">
-    <a class="brand" href="/" aria-label="ghostanalytics home">
+    <a class="brand" href="/" aria-label="analyticshq home">
       <span class="brand-mark">g</span>
-      <span class="brand-name">ghostanalytics</span>
+      <span class="brand-name">analyticshq</span>
     </a>
 
     <div class="nav-links" aria-label="Primary navigation">
@@ -28,7 +28,7 @@
       <div class="mega">
         <a class="mega-trigger" href="/use-cases" data-no-router aria-haspopup="true">Use cases</a>
         <div class="mega-panel" role="menu" aria-label="Use cases">
-          <a role="menuitem" href="/use-cases" data-no-router><span class="mega-t">All use cases</span><span class="mega-d">How different teams put ghostanalytics to work.</span></a>
+          <a role="menuitem" href="/use-cases" data-no-router><span class="mega-t">All use cases</span><span class="mega-d">How different teams put analyticshq to work.</span></a>
           <a role="menuitem" href="/use-cases/saas" data-no-router><span class="mega-t">SaaS</span><span class="mega-d">From first visit to activated, no cookie banner.</span></a>
           <a role="menuitem" href="/use-cases/ecommerce" data-no-router><span class="mega-t">Ecommerce</span><span class="mega-d">Tie every order to the click that earned it.</span></a>
           <a role="menuitem" href="/use-cases/agencies" data-no-router><span class="mega-t">Agencies</span><span class="mega-d">Every client site in one clean dashboard.</span></a>
@@ -40,7 +40,7 @@
       <a href="/pricing" data-no-router>Pricing</a>
       <a href="/compare" data-no-router>Compare</a>
       <a href="/docs" data-no-router>Docs</a>
-      <a href="https://github.com/stacksjs/ghostanalytics" data-no-router>GitHub</a>
+      <a href="https://github.com/stacksjs/analyticshq" data-no-router>GitHub</a>
     </div>
 
     <a class="nav-login" href="/login">Log in</a>
@@ -71,7 +71,7 @@
         <a href="/pricing" data-no-router>Pricing</a>
         <a href="/compare" data-no-router>Compare</a>
         <a href="/docs" data-no-router>Docs</a>
-        <a href="https://github.com/stacksjs/ghostanalytics" data-no-router>GitHub</a>
+        <a href="https://github.com/stacksjs/analyticshq" data-no-router>GitHub</a>
         <a href="/login">Log in</a>
         <a class="btn primary sm" href="/register">Sign up</a>
       </div>

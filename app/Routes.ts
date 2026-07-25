@@ -3,7 +3,7 @@
  *
  * The key becomes the URL prefix; an explicit `prefix: ''` mounts a route
  * file at the root. This is an analytics-only app, so we register just the
- * ghostanalytics ingest + stats API — whose paths are already absolute
+ * analyticshq ingest + stats API — whose paths are already absolute
  * (`/collect`, `/health`, `/script.js`, `/api/sites/*`) — at the root.
  *
  * (We intentionally do NOT spread the framework demo defaults `api`/`v1`;

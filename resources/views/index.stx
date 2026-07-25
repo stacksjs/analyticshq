@@ -1,5 +1,5 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 const siteMode = 'live'
 const comingSoonBypassEnabled = true
 const comingSoonBypassToken = 'trailhead'
@@ -67,9 +67,9 @@ function pickFramework(e) {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="ghostanalytics is privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.">
+    <meta name="description" content="analyticshq is privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.">
     <meta name="theme-color" content="#0a0c0e">
-    <title>ghostanalytics - Privacy-first web analytics</title>
+    <title>analyticshq - Privacy-first web analytics</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
@@ -193,24 +193,24 @@ function pickFramework(e) {
                   <option value="next">Next.js</option>
                 </select>
               </div>
-              <pre :style="framework() === 'html' ? 'display:block' : 'display:none'">&lt;!-- ghostanalytics --&gt;
-&lt;<span class="tok">script</span> defer src="https://cdn.ghostanalytics.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :style="framework() === 'vue' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- ghostanalytics · add to your index.html --&gt;</span>
-&lt;<span class="tok">script</span> defer src="https://cdn.ghostanalytics.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :style="framework() === 'react' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- ghostanalytics · add to index.html (or public/index.html) --&gt;</span>
-&lt;<span class="tok">script</span> defer src="https://cdn.ghostanalytics.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+              <pre :style="framework() === 'html' ? 'display:block' : 'display:none'">&lt;!-- analyticshq --&gt;
+&lt;<span class="tok">script</span> defer src="https://cdn.analyticshq.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+              <pre :style="framework() === 'vue' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- analyticshq · add to your index.html --&gt;</span>
+&lt;<span class="tok">script</span> defer src="https://cdn.analyticshq.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+              <pre :style="framework() === 'react' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- analyticshq · add to index.html (or public/index.html) --&gt;</span>
+&lt;<span class="tok">script</span> defer src="https://cdn.analyticshq.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
               <pre :style="framework() === 'nuxt' ? 'display:block' : 'display:none'"><span class="cmt">// npm i @stacksjs/ts-analytics — official Nuxt module</span>
 <span class="tok">export default</span> defineNuxtConfig({
   modules: [<span class="str">'@stacksjs/ts-analytics/nuxt'</span>],
   tsAnalytics: {
     appId: <span class="str">'YOUR_SITE_ID'</span>,
-    apiEndpoint: <span class="str">'https://cdn.ghostanalytics.com'</span>,
+    apiEndpoint: <span class="str">'https://cdn.analyticshq.com'</span>,
   },
 })</pre>
               <pre :style="framework() === 'next' ? 'display:block' : 'display:none'"><span class="tok">import</span> Script <span class="tok">from</span> <span class="str">'next/script'</span>
 
 &lt;Script
-  src=<span class="str">"https://cdn.ghostanalytics.com/script.js"</span>
+  src=<span class="str">"https://cdn.analyticshq.com/script.js"</span>
   data-site=<span class="str">"YOUR_SITE_ID"</span>
   strategy=<span class="str">"afterInteractive"</span>
 /&gt;</pre>
@@ -225,9 +225,9 @@ function pickFramework(e) {
 
         <section id="compare" class="reveal section shell" aria-labelledby="compare-heading">
           <div class="section-head">
-            <p class="eyebrow">GA4 vs ghostanalytics</p>
+            <p class="eyebrow">GA4 vs analyticshq</p>
             <h2 id="compare-heading" class="section-title">Why teams leave Google Analytics.</h2>
-            <p class="section-intro">GA4 was built to feed an ad network. ghostanalytics was built to answer one question, how your site is doing, and to answer it without touching your visitors' privacy.</p>
+            <p class="section-intro">GA4 was built to feed an ad network. analyticshq was built to answer one question, how your site is doing, and to answer it without touching your visitors' privacy.</p>
           </div>
           <div class="cmp">
             @foreach (comparison as row)

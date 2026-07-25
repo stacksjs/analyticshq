@@ -4,14 +4,14 @@
 const description = 'Privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.'
 
 export default {
-  name: 'ghostanalytics',
-  url: 'https://ghostanalytics.org',
+  name: 'analyticshq',
+  url: 'https://analyticshq.org',
   description,
   seo: {
-    siteName: 'ghostanalytics',
-    title: 'ghostanalytics - Privacy-first web analytics',
+    siteName: 'analyticshq',
+    title: 'analyticshq - Privacy-first web analytics',
     description,
-    image: 'https://ghostanalytics.org/og.png',
+    image: 'https://analyticshq.org/og.png',
     favicon: '/favicon.svg',
     locale: 'en_US',
     type: 'website',
@@ -19,47 +19,47 @@ export default {
   },
   pages: {
     '/': {
-      title: 'ghostanalytics - Privacy-first web analytics',
+      title: 'analyticshq - Privacy-first web analytics',
       description,
     },
     '/dashboard': {
-      title: 'Dashboard - ghostanalytics',
+      title: 'Dashboard - analyticshq',
       description: 'Real-time visitors, page views, sessions, top pages, and traffic sources for your site.',
     },
     '/account': {
-      title: 'Account - ghostanalytics',
-      description: 'Your ghostanalytics profile, plan, and sign-in method.',
+      title: 'Account - analyticshq',
+      description: 'Your analyticshq profile, plan, and sign-in method.',
     },
     '/use-cases': {
-      title: 'Use cases - ghostanalytics',
+      title: 'Use cases - analyticshq',
       description: 'How SaaS teams, agencies, ecommerce stores, publishers, and open-source projects use cookieless analytics that respects visitors.',
     },
     '/features/real-time': {
-      title: 'Real-time visitors - ghostanalytics',
+      title: 'Real-time visitors - analyticshq',
       description: 'See who is on your site right now, which pages they are reading, and where they came from. Live, cookieless, no reload.',
     },
     '/features/metrics': {
-      title: 'Pageviews, sessions and bounce - ghostanalytics',
+      title: 'Pageviews, sessions and bounce - analyticshq',
       description: 'Every hit rolls up into sessions with entry and exit paths, duration, and bounce rate. Exact counts, never sampled.',
     },
     '/features/sources': {
-      title: 'Traffic sources and referrers - ghostanalytics',
+      title: 'Traffic sources and referrers - analyticshq',
       description: 'Search, social, direct, and campaign traffic separated automatically, with UTM support and clean referrer classification.',
     },
     '/features/goals': {
-      title: 'Goals, events and campaigns - ghostanalytics',
+      title: 'Goals, events and campaigns - analyticshq',
       description: 'Track conversions with a one-line ghost() call and tie UTM campaigns to the outcomes that matter.',
     },
     '/features/geography': {
-      title: 'Geography and devices - ghostanalytics',
+      title: 'Geography and devices - analyticshq',
       description: 'Country, device, browser, and OS. Country resolves from your CDN edge headers, never a third-party lookup.',
     },
     '/features/web-vitals': {
-      title: 'Core Web Vitals - ghostanalytics',
+      title: 'Core Web Vitals - analyticshq',
       description: 'Real-user LCP, INP, and CLS next to your traffic, so a slow page shows up before it costs you visitors.',
     },
     '/features/privacy': {
-      title: 'Privacy by design - ghostanalytics',
+      title: 'Privacy by design - analyticshq',
       description: 'No cookies, no consent banner, no personal data. GDPR, CCPA, and PECR friendly because there is nothing personal to store.',
     },
   },

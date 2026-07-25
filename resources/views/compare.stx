@@ -1,15 +1,15 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs the alternatives - every option compared',
-  description: 'How ghostanalytics compares to Google Analytics, Plausible, Fathom, Simple Analytics, Umami, Matomo, Cloudflare Web Analytics, and Mixpanel. Cookieless, exact, and privacy-first by design.',
+  title: 'analyticshq vs the alternatives - every option compared',
+  description: 'How analyticshq compares to Google Analytics, Plausible, Fathom, Simple Analytics, Umami, Matomo, Cloudflare Web Analytics, and Mixpanel. Cookieless, exact, and privacy-first by design.',
 }
 
 const alternatives = [
   { slug: 'google-analytics', name: 'vs Google Analytics', desc: 'The GA4 alternative with no cookie banner, no sampling, and one-click import.' },
   { slug: 'plausible', name: 'vs Plausible', desc: 'Two cookieless tools — how the reports, pricing, and ownership differ.' },
-  { slug: 'fathom', name: 'vs Fathom', desc: 'Both privacy-first. Where ghostanalytics goes further on data ownership.' },
+  { slug: 'fathom', name: 'vs Fathom', desc: 'Both privacy-first. Where analyticshq goes further on data ownership.' },
   { slug: 'simple-analytics', name: 'vs Simple Analytics', desc: 'Aggregate-only analytics, compared feature for feature.' },
   { slug: 'umami', name: 'vs Umami', desc: 'Open-source analytics, and where the privacy lines are drawn.' },
   { slug: 'matomo', name: 'vs Matomo', desc: 'The lighter, cookieless alternative to the classic GA replacement.' },

@@ -20,11 +20,11 @@
 
       <section class="feat-hero shell">
         <span class="kicker">Docs</span>
-        <h1>Ship ghostanalytics in one line.</h1>
+        <h1>Ship analyticshq in one line.</h1>
         <p>One first-party script under 2 KB, a tiny client call for custom events, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/register">Get your site ID</a>
-          <a class="btn ghost" href="https://github.com/stacksjs/ghostanalytics" data-no-router>View on GitHub</a>
+          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq" data-no-router>View on GitHub</a>
         </div>
       </section>
 
@@ -36,7 +36,7 @@
         <div class="code" style="max-width: 680px">
           <div class="code-bar"><span class="chart-cap">Add to every page, once</span></div>
           <pre class="code-body"><code>&lt;script defer
-  src="https://ghostanalytics.org/script.js"
+  src="https://analyticshq.org/script.js"
   data-site="YOUR_SITE_ID"&gt;&lt;/script&gt;</code></pre>
         </div>
       </section>
@@ -69,7 +69,7 @@ GET /api/sites/{siteId}/pages        // top pages
 GET /api/sites/{siteId}/referrers    // top sources
 
 // example
-fetch('https://ghostanalytics.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-07-10')
+fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-07-10')
   .then(r =&gt; r.json())
 // { "views": 8, "visitors": 4, "sessions": 4 }</code></pre>
         </div>
@@ -81,7 +81,7 @@ fetch('https://ghostanalytics.org/api/sites/demo/stats?from=2026-07-01&amp;to=20
           <p class="section-intro">Every event lands in your own PostgreSQL database, so the numbers never leave your infrastructure and there is no third party to trust. The whole stack is open source.</p>
         </div>
         <div class="hero-actions">
-          <a class="btn ghost" href="https://github.com/stacksjs/ghostanalytics" data-no-router>Read the source on GitHub</a>
+          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq" data-no-router>Read the source on GitHub</a>
         </div>
       </section>
 

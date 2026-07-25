@@ -1,5 +1,5 @@
 /**
- * Import historical analytics from Fathom into a ghostanalytics site.
+ * Import historical analytics from Fathom into a analyticshq site.
  *
  *   bun scripts/analytics/import-fathom.ts \
  *     --token=<fathom-api-token> --fathom-site=<XXXXX> --site=<ghost-site-id> \

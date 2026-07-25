@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Analytics for blogs and publishers - ghostanalytics</title>
-    <meta name="description" content="Cookieless analytics for blogs and publishers. See which posts hold attention, which referrers send readers who stay, and keep pages fast with a script under 2 KB. Powered by ghostanalytics.">
+    <title>Analytics for blogs and publishers - analyticshq</title>
+    <meta name="description" content="Cookieless analytics for blogs and publishers. See which posts hold attention, which referrers send readers who stay, and keep pages fast with a script under 2 KB. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -91,7 +91,7 @@
           <div class="split-text">
             <h3>No ad-tech bloat weighing your pages down.</h3>
             <p>
-              Readers leave slow pages, and search rankings follow them. ghostanalytics is a single first-party script under 2 KB, loaded once and deferred, with no gtag.js weight and no third-party fetch storm behind it.
+              Readers leave slow pages, and search rankings follow them. analyticshq is a single first-party script under 2 KB, loaded once and deferred, with no gtag.js weight and no third-party fetch storm behind it.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>Under 2 KB, deferred, and served from your own domain.</li>

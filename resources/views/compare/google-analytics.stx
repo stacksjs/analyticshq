@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Google Analytics - privacy-first alternative',
+  title: 'analyticshq vs Google Analytics - privacy-first alternative',
   description: 'A cookieless, GDPR-friendly alternative to Google Analytics 4. Exact counts, no consent banner, your data in your own PostgreSQL, and one-click GA import.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'Consent', them: 'Cookie banner and Consent Mode v2 required in the EU', us: 'Cookieless. Nothing stored on the device, so no banner.' },
   { dim: 'Where your data goes', them: 'Into the Google ad graph, shared across Google products', us: 'Into your own PostgreSQL database, and nowhere else.' },
@@ -18,7 +18,7 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'GA4 answers to advertisers, not to you', b: 'Google Analytics exists to feed audience data into the ad network. The reports are a by-product. ghostanalytics has one job: tell you how your site is doing.' },
+  { n: '01', h: 'GA4 answers to advertisers, not to you', b: 'Google Analytics exists to feed audience data into the ad network. The reports are a by-product. analyticshq has one job: tell you how your site is doing.' },
   { n: '02', h: 'No cookie banner, no Consent Mode', b: 'Because nothing is written to a visitor device, there is no consent to collect and no banner to bolt on. Your pages load clean.' },
   { n: '03', h: 'Your numbers stay yours', b: 'Events land in a PostgreSQL database you control instead of Google’s. Nothing is sampled, sold, or cross-referenced against another property.' },
 ]
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Google Analytics</span>
+        <span class="kicker">analyticshq vs Google Analytics</span>
         <h1>The GA4 alternative that skips the cookie banner.</h1>
-        <p>Google Analytics was built to feed an ad network, which is why it needs consent, samples your data, and hands it to Google. ghostanalytics answers one question, how your site is doing, without touching your visitors’ privacy.</p>
+        <p>Google Analytics was built to feed an ad network, which is why it needs consent, samples your data, and hands it to Google. analyticshq answers one question, how your site is doing, without touching your visitors’ privacy.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/import" data-no-router>Import from GA</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">GA4 vs ghostanalytics</p>
+          <p class="eyebrow">GA4 vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">

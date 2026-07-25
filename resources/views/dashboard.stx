@@ -1,10 +1,10 @@
 <script server>
-// ghostanalytics dashboard. Queries PostgreSQL for the selected site + range;
+// analyticshq dashboard. Queries PostgreSQL for the selected site + range;
 // falls back to an empty state when the database isn't reachable yet, so the
 // page always renders. Populates for real once DB_CONNECTION=postgres points
 // at a live database. DB access is behind a dynamic import inside try/catch so a
 // standalone render (no DB module / no database) still produces the empty state.
-const meta = { title: 'ghostanalytics - Dashboard', description: 'Privacy-first web analytics' }
+const meta = { title: 'analyticshq - Dashboard', description: 'Privacy-first web analytics' }
 
 // Query params reach server scripts via globalThis.__stxServeSearch (the serve
 // layer stashes url.search there); there is no `request.query` in stx-serve.
@@ -744,7 +744,7 @@ const chart = buildChart(densify(series, from, to), compare ? densify(prevSeries
 // server-side; the nested closing tag is escaped so it can't end this block.
 const ownsActive = viewGranted && !shareMode
 const showSiteSelect = ownsActive && ownedSites.length > 1
-installSnippet = `<script defer\n  src="https://ghostanalytics.org/script.js"\n  data-site="${siteId}"><\/script>`
+installSnippet = `<script defer\n  src="https://analyticshq.org/script.js"\n  data-site="${siteId}"><\/script>`
 // eslint-disable-next-line no-unused-vars
 const activeSiteId = String(siteId)
 
@@ -929,7 +929,7 @@ function exportCsv() {
     (items || []).forEach(it => L.push(row(pick(it))))
     L.push('')
   }
-  L.push(row(['ghostanalytics export']))
+  L.push(row(['analyticshq export']))
   L.push(row(['Site', data.site]))
   L.push(row(['Range', data.range]))
   L.push(row(['Generated', data.generatedAt]))
@@ -970,7 +970,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `ghostanalytics-${data.site}-${data.range}.csv`
+  a.download = `analyticshq-${data.site}-${data.range}.csv`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
@@ -1005,7 +1005,7 @@ onMount(() => {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
 
 <style>
-/* ghostanalytics - Geist display + Geist Mono for numerics.
+/* analyticshq - Geist display + Geist Mono for numerics.
   One accent (emerald), off-black/off-white, auto light+dark, radius lock 12px. */
 :root {
   --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
@@ -1086,7 +1086,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <header class="flex flex-wrap gap-5 items-end justify-between mb-9">
       <div>
-        <h1 class="leading-none text-2xl md:text-[28px] wordmark">ghostanalytics</h1>
+        <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
         <p class="mt-2 text-sm text-text-3">
           Site <span class="mono text-text-2">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
         </p>
@@ -1176,7 +1176,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @if (ownsActive)
       <details class="mb-8 panel reveal border-border" {{ Number(kpis.views) ? '' : 'open' }}>
         <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
-          <span class="font-semibold text-sm">Install ghostanalytics on this site</span>
+          <span class="font-semibold text-sm">Install analyticshq on this site</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Snippet</span>
         </summary>
         <div class="pb-5 px-5">
@@ -1656,7 +1656,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @endif
 
     <footer class="mt-12 text-center text-xs text-text-3">
-      Privacy-first, cookieless analytics on Stacks and PostgreSQL. <span class="mono">ghostanalytics.org</span>
+      Privacy-first, cookieless analytics on Stacks and PostgreSQL. <span class="mono">analyticshq.org</span>
     </footer>
 
   </div>

@@ -107,7 +107,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
 <div class="min-h-[100dvh]">
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
-    <a href="/" class="text-lg wordmark">ghostanalytics</a>
+    <a href="/" class="text-lg wordmark">analyticshq</a>
     <div class="flex gap-2.5 items-center">
       <a href="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</a>
       <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>

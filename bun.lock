@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "ghostanalytics",
+      "name": "analyticshq",
       "dependencies": {
         "@ts-analytics/tracking": "^0.1.7",
         "stacks": "^0.70.77",

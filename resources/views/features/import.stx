@@ -1,14 +1,14 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'Import from Google Analytics - ghostanalytics',
-  description: 'Move off Google Analytics without losing your history. Import your GA data into ghostanalytics and keep the charts you already track — no gaps, no lock-in.',
+  title: 'Import from Google Analytics - analyticshq',
+  description: 'Move off Google Analytics without losing your history. Import your GA data into analyticshq and keep the charts you already track — no gaps, no lock-in.',
 }
 
 const flow = [
   { n: '01', h: 'Point us at your GA property', b: 'Connect the Google Analytics property you are leaving. Nothing changes on your live site, and your existing GA account is untouched.' },
-  { n: '02', h: 'We map GA to ghostanalytics', b: 'Sessions, pageviews, sources, campaigns, and countries are mapped onto the ghostanalytics model, so the reports you rely on line up.' },
+  { n: '02', h: 'We map GA to analyticshq', b: 'Sessions, pageviews, sources, campaigns, and countries are mapped onto the analyticshq model, so the reports you rely on line up.' },
   { n: '03', h: 'Your history backfills', b: 'Past traffic lands in your own PostgreSQL database alongside new events, so the timeline is continuous the day you switch.' },
 ]
 
@@ -51,16 +51,16 @@ const related = [
       <section class="feat-hero shell">
         <span class="kicker">GA import</span>
         <h1>Leave Google Analytics. Keep every chart.</h1>
-        <p>Switching should not mean starting your history from zero. Import your Google Analytics data into ghostanalytics, keep the trends you already watch, and never touch a cookie banner again.</p>
+        <p>Switching should not mean starting your history from zero. Import your Google Analytics data into analyticshq, keep the trends you already watch, and never touch a cookie banner again.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/compare/google-analytics" data-no-router>ghostanalytics vs GA</a>
+          <a class="btn ghost" href="/compare/google-analytics" data-no-router>analyticshq vs GA</a>
         </div>
       </section>
 
       <section class="reveal section shell" aria-labelledby="how-heading">
         <div class="section-head">
-          <h2 id="how-heading" class="section-title">From GA to ghostanalytics in three steps.</h2>
+          <h2 id="how-heading" class="section-title">From GA to analyticshq in three steps.</h2>
         </div>
         <div class="flow">
           @foreach (flow as step)

@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Fathom Analytics - two cookieless tools compared',
-  description: 'Both privacy-first and cookieless. Where ghostanalytics differs from Fathom: open source, self-hostable on your own PostgreSQL, and country-only geo by design.',
+  title: 'analyticshq vs Fathom Analytics - two cookieless tools compared',
+  description: 'Both privacy-first and cookieless. Where analyticshq differs from Fathom: open source, self-hostable on your own PostgreSQL, and country-only geo by design.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'Source', them: 'Closed-source SaaS', us: 'Open source, and you can read every line.' },
   { dim: 'Where your data lives', them: 'Fathom’s infrastructure, reports handed back to you', us: 'Your own PostgreSQL — you hold the raw events, not just charts.' },
@@ -18,9 +18,9 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. ghostanalytics writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
-  { n: '02', h: 'Country-only, held on principle', b: 'Fathom resolves visitors to city level. ghostanalytics deliberately stops at country, from your CDN edge headers, keeping the aggregate-only line as strict as it goes.' },
-  { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; ghostanalytics trades that polish for openness and full data ownership.' },
+  { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
+  { n: '02', h: 'Country-only, held on principle', b: 'Fathom resolves visitors to city level. analyticshq deliberately stops at country, from your CDN edge headers, keeping the aggregate-only line as strict as it goes.' },
+  { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; analyticshq trades that polish for openness and full data ownership.' },
 ]
 
 const metrics = [
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Fathom</span>
+        <span class="kicker">analyticshq vs Fathom</span>
         <h1>Two cookieless tools. One you can host yourself.</h1>
-        <p>Fathom is a respected, privacy-first analytics product — cookieless, exact, and easy on the eye. ghostanalytics shares those foundations and adds open source, full data ownership in your own PostgreSQL, and a country-only geo line that never moves.</p>
+        <p>Fathom is a respected, privacy-first analytics product — cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and a country-only geo line that never moves.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">Fathom vs ghostanalytics</p>
+          <p class="eyebrow">Fathom vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">
@@ -87,7 +87,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="why-heading">
         <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where ghostanalytics goes further.</h2>
+          <h2 id="why-heading" class="section-title">Where analyticshq goes further.</h2>
         </div>
         <div class="flow">
           @foreach (reasons as step)

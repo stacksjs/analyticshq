@@ -26,7 +26,7 @@ export default new Action({
 
     const body = (request as any).jsonBody ?? {}
     const interval = body.interval === 'yearly' ? 'yearly' : 'monthly'
-    const lookupKey = interval === 'yearly' ? 'ghostanalytics_pro_yearly' : 'ghostanalytics_pro_monthly'
+    const lookupKey = interval === 'yearly' ? 'analyticshq_pro_yearly' : 'analyticshq_pro_monthly'
 
     try {
       const price = await getPrice(lookupKey)

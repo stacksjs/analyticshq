@@ -1,6 +1,6 @@
 /**
  * Import historical analytics from a Google Analytics (GA4) export into a
- * ghostanalytics site.
+ * analyticshq site.
  *
  *   bun scripts/analytics/import-ga.ts \
  *     --site=<ghost-site-id> --file=<ga4-export.csv> \
@@ -53,7 +53,7 @@ function splitCsv(line: string): string[] {
   return out
 }
 
-// Map a ghostanalytics field to the GA4 column names it may appear under
+// Map a analyticshq field to the GA4 column names it may appear under
 // (normalized: lowercased, non-alphanumerics stripped).
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 const ALIASES: Record<string, string[]> = {

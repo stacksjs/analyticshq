@@ -1,12 +1,12 @@
 <script server>
-const appName = 'ghostanalytics'
+const appName = 'analyticshq'
 
 const meta = {
-  title: 'ghostanalytics vs Matomo - the lightweight, always-cookieless alternative',
-  description: 'Matomo is a powerful, full behavioral suite. ghostanalytics is the lightweight, always-cookieless, aggregate-only alternative: no consent banner, under 2 KB, data in your own PostgreSQL.',
+  title: 'analyticshq vs Matomo - the lightweight, always-cookieless alternative',
+  description: 'Matomo is a powerful, full behavioral suite. analyticshq is the lightweight, always-cookieless, aggregate-only alternative: no consent banner, under 2 KB, data in your own PostgreSQL.',
 }
 
-// dim / competitor / ghostanalytics — reuses the home comparison grid styling.
+// dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'Cookies and consent', them: 'Sets cookies when behavioral features are on; can run cookieless with reduced accuracy', us: 'Always cookieless. Nothing stored on the device, so no banner.' },
   { dim: 'Script weight', them: 'Heavy tracker plus a full PHP/MySQL or cloud stack to run', us: 'Under 2 KB, first-party, on a lean Postgres and Stacks stack.' },
@@ -18,9 +18,9 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Cookieless without an asterisk', b: 'Matomo can run cookieless, but you trade away accuracy and features to get there, and the full suite sets cookies. ghostanalytics is cookieless on every plan, with no banner and nothing to configure.' },
-  { n: '02', h: 'Light where Matomo is heavy', b: 'Matomo is a full LAMP application with a large tracker. ghostanalytics is an under-2 KB first-party script writing to a Postgres table, so there is far less to run, host, and keep patched.' },
-  { n: '03', h: 'Aggregate on purpose', b: 'Matomo records and replays individual sessions. ghostanalytics never does — it answers how your site is doing at the aggregate level, which is exactly why there is no personal data to manage.' },
+  { n: '01', h: 'Cookieless without an asterisk', b: 'Matomo can run cookieless, but you trade away accuracy and features to get there, and the full suite sets cookies. analyticshq is cookieless on every plan, with no banner and nothing to configure.' },
+  { n: '02', h: 'Light where Matomo is heavy', b: 'Matomo is a full LAMP application with a large tracker. analyticshq is an under-2 KB first-party script writing to a Postgres table, so there is far less to run, host, and keep patched.' },
+  { n: '03', h: 'Aggregate on purpose', b: 'Matomo records and replays individual sessions. analyticshq never does — it answers how your site is doing at the aggregate level, which is exactly why there is no personal data to manage.' },
 ]
 
 const metrics = [
@@ -60,9 +60,9 @@ const related = [
       </nav>
 
       <section class="feat-hero shell">
-        <span class="kicker">ghostanalytics vs Matomo</span>
+        <span class="kicker">analyticshq vs Matomo</span>
         <h1>The privacy suite, minus the weight.</h1>
-        <p>Matomo is a powerful open-source GA replacement with a full behavioral suite — recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. ghostanalytics goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.</p>
+        <p>Matomo is a powerful open-source GA replacement with a full behavioral suite — recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. analyticshq goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
           <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
@@ -71,7 +71,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="cmp-heading">
         <div class="section-head">
-          <p class="eyebrow">Matomo vs ghostanalytics</p>
+          <p class="eyebrow">Matomo vs analyticshq</p>
           <h2 id="cmp-heading" class="section-title">Point for point.</h2>
         </div>
         <div class="cmp">
@@ -87,7 +87,7 @@ const related = [
 
       <section class="reveal section shell" aria-labelledby="why-heading">
         <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where ghostanalytics fits instead.</h2>
+          <h2 id="why-heading" class="section-title">Where analyticshq fits instead.</h2>
         </div>
         <div class="flow">
           @foreach (reasons as step)

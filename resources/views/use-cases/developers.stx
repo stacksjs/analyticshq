@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Analytics for developers - ghostanalytics</title>
-    <meta name="description" content="Cookieless analytics for developers and indie hackers. A one-line script, a one-function events API, self-hostable on PostgreSQL, and privacy-first by default. Powered by ghostanalytics.">
+    <title>Analytics for developers - analyticshq</title>
+    <meta name="description" content="Cookieless analytics for developers and indie hackers. A one-line script, a one-function events API, self-hostable on PostgreSQL, and privacy-first by default. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -133,8 +133,8 @@
         <div class="code-grid">
           <div class="code">
             <div class="code-bar"><span>index.html</span><span>HTML</span></div>
-            <pre>&lt;!-- ghostanalytics --&gt;
-&lt;<span class="tok">script</span> defer src="https://cdn.ghostanalytics.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+            <pre>&lt;!-- analyticshq --&gt;
+&lt;<span class="tok">script</span> defer src="https://cdn.analyticshq.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
           </div>
           <div class="code">
             <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>

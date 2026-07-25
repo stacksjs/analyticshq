@@ -13,13 +13,13 @@ import type { SaasConfig } from '@stacksjs/types'
 export default {
   plans: [
     {
-      productName: 'ghostanalytics Pro',
+      productName: 'analyticshq Pro',
       description: 'Unlimited sites and events, full retention, and priority support.',
       pricing: [
-        { key: 'ghostanalytics_pro_monthly', price: 1900, interval: 'month', currency: 'usd' },
-        { key: 'ghostanalytics_pro_yearly', price: 19000, interval: 'year', currency: 'usd' },
+        { key: 'analyticshq_pro_monthly', price: 1900, interval: 'month', currency: 'usd' },
+        { key: 'analyticshq_pro_yearly', price: 19000, interval: 'year', currency: 'usd' },
       ],
-      metadata: { createdBy: 'ghostanalytics', version: '1.0.0' },
+      metadata: { createdBy: 'analyticshq', version: '1.0.0' },
     },
   ],
 } satisfies SaasConfig

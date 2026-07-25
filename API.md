@@ -1,4 +1,4 @@
-# ghostanalytics Stats API
+# analyticshq Stats API
 
 A JSON HTTP API over your analytics data. Every site-scoped endpoint is
 **owner-gated** — you can only read or manage sites you own.
