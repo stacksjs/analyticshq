@@ -729,7 +729,20 @@ export const tsCloud: TsCloudConfig = {
       // slot on the shared box (localhost-only; rpx fronts it by domain).
       start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
       port: 3024,
-      preStart: ['bun install'],
+      // Install, then migrate. Without the migrate step a fresh box served the
+      // app against an empty schema: ts-cloud creates the role + database from
+      // `appDatabase`, but nothing ever created the tables, so every ingest
+      // write failed against a database with zero relations.
+      //
+      // Migrate runs ONLY here, on `main`. The `api` site shares the same
+      // database, so migrating from both would race two writers over one
+      // schema on every deploy. Additive migrations re-apply as a no-op; a
+      // destructive change is refused in this non-interactive context and
+      // logged rather than silently dropping columns.
+      preStart: [
+        'bun install',
+        'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
+      ],
       // Pin the proxy target. `buddy serve` otherwise falls back to
       // 127.0.0.1:3008, which on this SHARED box is the `stacks` project's own
       // API — analyticshq's `POST /collect` would silently cross tenants.
