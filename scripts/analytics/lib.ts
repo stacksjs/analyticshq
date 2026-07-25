@@ -62,11 +62,11 @@ export function isoStamp(d: Date): string {
 }
 
 /**
- * Days of analytics history to keep, from `GHOST_RETENTION_DAYS`. A positive
+ * Days of analytics history to keep, from `ANALYTICSHQ_RETENTION_DAYS`. A positive
  * integer enables retention; unset, 0, or invalid means disabled (keep forever).
  */
 export function retentionDays(env: Record<string, string | undefined> = process.env): number {
-  const raw = Number(env.GHOST_RETENTION_DAYS ?? 0)
+  const raw = Number(env.ANALYTICSHQ_RETENTION_DAYS ?? 0)
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0
 }
 

@@ -6,16 +6,16 @@ import { retentionCutoff, retentionDays } from '../../scripts/analytics/lib'
 
 describe('retentionDays', () => {
   test('a positive integer enables retention', () => {
-    expect(retentionDays({ GHOST_RETENTION_DAYS: '395' })).toBe(395)
+    expect(retentionDays({ ANALYTICSHQ_RETENTION_DAYS: '395' })).toBe(395)
   })
   test('floors fractional values', () => {
-    expect(retentionDays({ GHOST_RETENTION_DAYS: '30.7' })).toBe(30)
+    expect(retentionDays({ ANALYTICSHQ_RETENTION_DAYS: '30.7' })).toBe(30)
   })
   test('unset / 0 / negative / non-numeric = disabled (0)', () => {
     expect(retentionDays({})).toBe(0)
-    expect(retentionDays({ GHOST_RETENTION_DAYS: '0' })).toBe(0)
-    expect(retentionDays({ GHOST_RETENTION_DAYS: '-5' })).toBe(0)
-    expect(retentionDays({ GHOST_RETENTION_DAYS: 'forever' })).toBe(0)
+    expect(retentionDays({ ANALYTICSHQ_RETENTION_DAYS: '0' })).toBe(0)
+    expect(retentionDays({ ANALYTICSHQ_RETENTION_DAYS: '-5' })).toBe(0)
+    expect(retentionDays({ ANALYTICSHQ_RETENTION_DAYS: 'forever' })).toBe(0)
   })
 })
 

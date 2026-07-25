@@ -1,9 +1,9 @@
 /**
  * Retention purge — delete analytics rows older than the retention window.
  *
- *   GHOST_RETENTION_DAYS=395 bun scripts/analytics/prune.ts [--dry-run]
+ *   ANALYTICSHQ_RETENTION_DAYS=395 bun scripts/analytics/prune.ts [--dry-run]
  *
- * Scheduled to run daily (see app/Scheduler.ts). With `GHOST_RETENTION_DAYS`
+ * Scheduled to run daily (see app/Scheduler.ts). With `ANALYTICSHQ_RETENTION_DAYS`
  * unset or 0, retention is DISABLED and nothing is deleted — data is kept
  * indefinitely until an operator opts in to a window. Visitor rows are already
  * pseudonymous (24h-rotating hash, no stored IP), so this is data-minimisation,
@@ -28,7 +28,7 @@ const days = retentionDays()
 const cutoff = retentionCutoff(days)
 
 if (!cutoff) {
-  log('[retention] GHOST_RETENTION_DAYS unset or 0 — retention disabled, nothing pruned.')
+  log('[retention] ANALYTICSHQ_RETENTION_DAYS unset or 0 — retention disabled, nothing pruned.')
   process.exit(0)
 }
 

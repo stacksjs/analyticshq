@@ -16,7 +16,7 @@ export default function () {
     .hourly()
     .setTimeZone('America/Los_Angeles')
 
-  // Data retention: prune analytics rows older than GHOST_RETENTION_DAYS (a no-op
+  // Data retention: prune analytics rows older than ANALYTICSHQ_RETENTION_DAYS (a no-op
   // when that env var is unset or 0). Keeps the store to the configured window.
   // See scripts/analytics/prune.ts and issue #4.
   schedule
