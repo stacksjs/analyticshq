@@ -48,7 +48,7 @@ export default {
     },
     '/features/goals': {
       title: 'Goals, events and campaigns - analyticshq',
-      description: 'Track conversions with a one-line ghost() call and tie UTM campaigns to the outcomes that matter.',
+      description: 'Track conversions with a one-line analyticshq() call and tie UTM campaigns to the outcomes that matter.',
     },
     '/features/geography': {
       title: 'Geography and devices - analyticshq',

@@ -79,7 +79,7 @@ const related = [
             <div class="cmp-cell">
               <span class="cmp-dim">{{ row.dim }}</span>
               <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ghost">{{ row.us }}</span>
+              <span class="cmp-ours">{{ row.us }}</span>
             </div>
           @endforeach
         </div>

@@ -3,7 +3,7 @@
  * analyticshq site.
  *
  *   bun scripts/analytics/import-ga.ts \
- *     --site=<ghost-site-id> --file=<ga4-export.csv> \
+ *     --site=<analyticshq-site-id> --file=<ga4-export.csv> \
  *     [--from=2023-01-01] [--to=2026-07-01] [--replace] [--dry-run]
  *
  * GA4 (like Fathom) only exports AGGREGATES, so individual pageviews can't be
@@ -21,7 +21,7 @@
  */
 import { connect, isoStamp, log, parseArgs, requireArg, requireSite, shortHash } from './lib'
 
-const USAGE = 'usage: import-ga --site=<ghost-id> --file=<ga4-export.csv> [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--replace] [--dry-run]'
+const USAGE = 'usage: import-ga --site=<analyticshq-id> --file=<ga4-export.csv> [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--replace] [--dry-run]'
 const args = parseArgs()
 const siteId = requireArg(args, 'site', USAGE)
 const file = requireArg(args, 'file', USAGE)

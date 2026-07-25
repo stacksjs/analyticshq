@@ -9,7 +9,7 @@ const featureCells = [
   { slug: 'real-time', cls: 'cell lead', title: 'Real-time visitors', body: 'See who is on your site right now, which pages they are reading, and where they arrived from. Updated live, with no refresh.', spark: true },
   { slug: 'metrics', cls: 'cell b tint', title: 'Pageviews, sessions and bounce', body: 'Every hit rolls up into sessions with entry and exit paths, duration, and bounce rate.' },
   { slug: 'sources', cls: 'cell c', title: 'Sources and referrers', body: 'Each referrer is classified automatically, so search, social, and direct traffic separate at a glance.' },
-  { slug: 'goals', cls: 'cell d', title: 'Goals, events and campaigns', body: 'Tag inbound links with UTM parameters and fire a conversion with a one-line ghost() call.' },
+  { slug: 'goals', cls: 'cell d', title: 'Goals, events and campaigns', body: 'Tag inbound links with UTM parameters and fire a conversion with a one-line analyticshq() call.' },
   { slug: 'geography', cls: 'cell e tint', title: 'Geography and devices', body: 'Country, device, browser, and OS. Country resolves from your CDN edge headers, never a third-party lookup.' },
   { slug: 'web-vitals', cls: 'cell f', title: 'Core Web Vitals', body: 'Real-user LCP, INP, and CLS beside your traffic, so a slow page shows up before it costs you visitors.' },
 ]
@@ -24,7 +24,7 @@ const chartBars = rawSeries.map((v, i) => {
 
 const topPages = [
   { path: '/pricing', count: '214' },
-  { path: '/blog/ghost-vs-ga', count: '168' },
+  { path: '/blog/analyticshq-vs-ga', count: '168' },
   { path: '/', count: '132' },
 ]
 
@@ -43,11 +43,11 @@ const privacyChips = [
 ]
 
 const comparison = [
-  { dim: 'Consent', ga: 'Cookie banner and Consent Mode required', ghost: 'Cookieless. Nothing to consent to.' },
-  { dim: 'Your data', ga: 'Flows into the Google ad graph', ghost: 'Stays in your PostgreSQL database' },
-  { dim: 'Accuracy', ga: 'Sampled and thresholded reports', ghost: 'Every event counted, exact numbers' },
-  { dim: 'Weight', ga: 'About 50 KB gtag.js, often blocked', ghost: 'Under 2 KB, first-party, resilient' },
-  { dim: 'Leaving', ga: 'Export is a project', ghost: 'One-click GA import, both ways' },
+  { dim: 'Consent', ga: 'Cookie banner and Consent Mode required', ours: 'Cookieless. Nothing to consent to.' },
+  { dim: 'Your data', ga: 'Flows into the Google ad graph', ours: 'Stays in your PostgreSQL database' },
+  { dim: 'Accuracy', ga: 'Sampled and thresholded reports', ours: 'Every event counted, exact numbers' },
+  { dim: 'Weight', ga: 'About 50 KB gtag.js, often blocked', ours: 'Under 2 KB, first-party, resilient' },
+  { dim: 'Leaving', ga: 'Export is a project', ours: 'One-click GA import, both ways' },
 ]
 </script>
 
@@ -217,7 +217,7 @@ function pickFramework(e) {
             </div>
             <div class="code">
               <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>
-              <pre><span class="tok">ghost</span>('signup', { plan: 'pro' })</pre>
+              <pre><span class="tok">analyticshq</span>('signup', { plan: 'pro' })</pre>
             </div>
           </div>
           <p class="code-note">Track a conversion from anywhere in your app, no SDK and no init call. The script and your data live on the same host you control: beacons <code>POST</code> to <code>/collect</code> and aggregates come back from your own PostgreSQL database. Serve it first-party and even ad-blockers count.</p>
@@ -234,7 +234,7 @@ function pickFramework(e) {
               <div class="cmp-cell">
                 <span class="cmp-dim">{{ row.dim }}</span>
                 <span class="cmp-ga">{{ row.ga }}</span>
-                <span class="cmp-ghost">{{ row.ghost }}</span>
+                <span class="cmp-ours">{{ row.ours }}</span>
               </div>
             @endforeach
           </div>

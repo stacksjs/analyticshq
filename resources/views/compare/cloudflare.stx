@@ -9,7 +9,7 @@ const meta = {
 // dim / competitor / analyticshq — reuses the home comparison grid styling.
 const rows = [
   { dim: 'Cookies and consent', them: 'Cookieless, no banner. A genuine privacy peer.', us: 'Cookieless, no banner, no personal data stored.' },
-  { dim: 'Custom events and goals', them: 'None. Pageviews, referrers, and top paths only.', us: 'One-line ghost() events, goals, and UTM campaigns.' },
+  { dim: 'Custom events and goals', them: 'None. Pageviews, referrers, and top paths only.', us: 'One-line analyticshq() events, goals, and UTM campaigns.' },
   { dim: 'Where your data lives', them: 'Inside Cloudflare. You read it, you do not hold it.', us: 'Your own PostgreSQL database, and nowhere else.' },
   { dim: 'Open source and self-host', them: 'Proprietary and hosted. No self-host option.', us: 'MIT-licensed and self-hostable on your own box.' },
   { dim: 'Ties to one provider', them: 'At its best when your site is proxied through Cloudflare.', us: 'Works on any host or CDN with one script tag.' },
@@ -18,7 +18,7 @@ const rows = [
 ]
 
 const reasons = [
-  { n: '01', h: 'Events, not just a pageview counter', b: 'Cloudflare Web Analytics counts pages and referrers and stops there. analyticshq fires a conversion with a one-line ghost() call, so signups, purchases, and custom events sit beside your traffic.' },
+  { n: '01', h: 'Events, not just a pageview counter', b: 'Cloudflare Web Analytics counts pages and referrers and stops there. analyticshq fires a conversion with a one-line analyticshq() call, so signups, purchases, and custom events sit beside your traffic.' },
   { n: '02', h: 'You hold the data, not just a dashboard', b: 'Cloudflare shows you the numbers but keeps them. With analyticshq every raw event lands in a PostgreSQL database you own, ready to query, export, or self-host.' },
   { n: '03', h: 'Not tied to one network', b: 'Cloudflare Analytics is happiest when your site already runs behind Cloudflare. analyticshq is a single first-party script that works on any host, CDN, or framework.' },
 ]
@@ -79,7 +79,7 @@ const related = [
             <div class="cmp-cell">
               <span class="cmp-dim">{{ row.dim }}</span>
               <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ghost">{{ row.us }}</span>
+              <span class="cmp-ours">{{ row.us }}</span>
             </div>
           @endforeach
         </div>

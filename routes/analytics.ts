@@ -880,7 +880,7 @@ route.get('/script.js', (request: any) => {
     ['source','medium','campaign','content','term'].forEach(function(k){var v=q.get('utm_'+k);if(v)b['utm_'+k]=v});
     fetch('${origin}/collect',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
   }catch(_){}}
-  w.ghost=function(name,props){send(name,props)};
+  w.analyticshq=function(name,props){send(name,props)};
   var DLRE=/\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i;
   function onLink(ev){
     if(ev.type==='auxclick'&&ev.button!==1)return;

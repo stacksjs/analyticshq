@@ -139,13 +139,13 @@
           <div class="code">
             <div class="code-bar"><span>onboarding.ts</span><span>JavaScript</span></div>
             <pre><span class="cmt">// when the account is created</span>
-<span class="tok">ghost</span>('signup', { plan: 'pro', source: 'product-hunt' })
+<span class="tok">analyticshq</span>('signup', { plan: 'pro', source: 'product-hunt' })
 
 <span class="cmt">// later, when they reach the aha moment</span>
-<span class="tok">ghost</span>('activated', { plan: 'pro' })</pre>
+<span class="tok">analyticshq</span>('activated', { plan: 'pro' })</pre>
           </div>
         </div>
-        <p class="code-note">The <code>ghost()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, and the beacon <code>POST</code>s to your own <code>/collect</code> endpoint.</p>
+        <p class="code-note">The <code>analyticshq()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, and the beacon <code>POST</code>s to your own <code>/collect</code> endpoint.</p>
       </section>
 
       <section class="reveal section shell" aria-label="Get started">

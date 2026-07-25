@@ -544,14 +544,14 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
       }
-      .cmp-ga, .cmp-ghost {
+      .cmp-ga, .cmp-ours {
         padding-left: 0.75rem;
         border-left: 2px solid var(--line);
         font-size: 0.92rem;
         line-height: 1.45;
       }
       .cmp-ga { color: var(--muted); font-weight: 300; }
-      .cmp-ghost { color: var(--ink); border-left-color: var(--accent); }
+      .cmp-ours { color: var(--ink); border-left-color: var(--accent); }
 
       /* final cta */
       .cta-band {

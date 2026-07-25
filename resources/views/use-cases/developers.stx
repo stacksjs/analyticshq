@@ -39,7 +39,7 @@
             <span class="live"><span class="live-dot" aria-hidden="true"></span>Custom events, live</span>
             <span class="panel-tag">Sample data</span>
           </div>
-          <svg viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A real-time chart of custom events with recent ghost() calls arriving" style="display:block;width:100%;height:auto;margin-top:1.1rem">
+          <svg viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A real-time chart of custom events with recent analyticshq() calls arriving" style="display:block;width:100%;height:auto;margin-top:1.1rem">
             <rect x="0.5" y="0.5" width="359" height="167" rx="12" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
             <text x="20" y="28" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">EVENTS · LAST HOUR</text>
             <circle cx="300" cy="24" r="4" fill="#46d3c0">
@@ -57,13 +57,13 @@
             <line x1="0" y1="196" x2="360" y2="196" stroke="rgba(233,238,240,0.07)"></line>
             <line x1="0" y1="238" x2="360" y2="238" stroke="rgba(233,238,240,0.07)"></line>
             <circle cx="16" cy="184" r="3.5" fill="#46d3c0"></circle>
-            <text x="32" y="188" fill="#eef2f3" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">ghost('plan_upgraded', { to: 'pro' })</text>
+            <text x="32" y="188" fill="#eef2f3" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">analyticshq('plan_upgraded', { to: 'pro' })</text>
             <text x="352" y="188" text-anchor="end" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="9.5">2s</text>
             <circle cx="16" cy="226" r="3.5" fill="#46d3c0" fill-opacity="0.62"></circle>
-            <text x="32" y="230" fill="#c7cfd2" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">ghost('export_created', { rows: 4820 })</text>
+            <text x="32" y="230" fill="#c7cfd2" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">analyticshq('export_created', { rows: 4820 })</text>
             <text x="352" y="230" text-anchor="end" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="9.5">14s</text>
             <circle cx="16" cy="268" r="3.5" fill="#46d3c0" fill-opacity="0.4"></circle>
-            <text x="32" y="272" fill="#9aa4a9" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">ghost('signup', { plan: 'free' })</text>
+            <text x="32" y="272" fill="#9aa4a9" font-family="'Geist Mono',ui-monospace,monospace" font-size="10.5">analyticshq('signup', { plan: 'free' })</text>
             <text x="352" y="272" text-anchor="end" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="9.5">31s</text>
           </svg>
         </aside>
@@ -139,13 +139,13 @@
           <div class="code">
             <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>
             <pre><span class="cmt">// a custom event with whatever properties you want</span>
-<span class="tok">ghost</span>('plan_upgraded', { from: 'free', to: 'pro', seats: 3 })
+<span class="tok">analyticshq</span>('plan_upgraded', { from: 'free', to: 'pro', seats: 3 })
 
 <span class="cmt">// read your numbers back over the API</span>
 <span class="tok">fetch</span>('/api/stats?range=30d').then(r =&gt; r.json())</pre>
           </div>
         </div>
-        <p class="code-note">The <code>ghost()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, the beacon <code>POST</code>s to your own <code>/collect</code> endpoint, and everything is readable back over the <code>/api</code> routes you host.</p>
+        <p class="code-note">The <code>analyticshq()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, the beacon <code>POST</code>s to your own <code>/collect</code> endpoint, and everything is readable back over the <code>/api</code> routes you host.</p>
       </section>
 
       <section class="reveal section shell" aria-labelledby="dev-track">
@@ -154,7 +154,7 @@
           <p class="section-intro">Enough to answer real product questions, none of the dashboard bloat you never open.</p>
         </div>
         <div class="qa-grid">
-          <div class="qa"><h4>Custom events</h4><p>Fire <code>ghost('event', {...})</code> from anywhere and it becomes a filterable breakdown, no schema to declare first.</p></div>
+          <div class="qa"><h4>Custom events</h4><p>Fire <code>analyticshq('event', {...})</code> from anywhere and it becomes a filterable breakdown, no schema to declare first.</p></div>
           <div class="qa"><h4>A real API</h4><p>Pull stats over HTTP to build your own status page, Slack digest, or public metrics badge.</p></div>
           <div class="qa"><h4>Your own data</h4><p>Every raw event lands in a database you own, so you can query, export, or delete on your terms.</p></div>
         </div>

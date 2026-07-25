@@ -2,7 +2,7 @@
  * Import historical analytics from Fathom into a analyticshq site.
  *
  *   bun scripts/analytics/import-fathom.ts \
- *     --token=<fathom-api-token> --fathom-site=<XXXXX> --site=<ghost-site-id> \
+ *     --token=<fathom-api-token> --fathom-site=<XXXXX> --site=<analyticshq-site-id> \
  *     [--from=2021-03-01] [--to=2026-07-01] [--replace] [--dry-run] [--with-utm] \
  *     [--mock=aggs.json]
  *
@@ -23,7 +23,7 @@
 import { connect, isoStamp, log, parseArgs, requireArg, requireSite, shortHash } from './lib'
 
 const FATHOM_API = 'https://api.usefathom.com/v1/aggregations'
-const USAGE = 'usage: import-fathom --token=<t> --fathom-site=<id> --site=<ghost-id> [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--replace] [--dry-run] [--with-utm] [--mock=file]'
+const USAGE = 'usage: import-fathom --token=<t> --fathom-site=<id> --site=<analyticshq-id> [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--replace] [--dry-run] [--with-utm] [--mock=file]'
 
 const args = parseArgs()
 const siteId = requireArg(args, 'site', USAGE)

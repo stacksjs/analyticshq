@@ -132,7 +132,7 @@
               <circle cx="294" cy="66" r="3" fill="#46d3c0"></circle>
               <circle cx="382" cy="52" r="3" fill="#46d3c0"></circle>
               <circle cx="452" cy="42" r="5" fill="#46d3c0"></circle>
-              <text x="30" y="150" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="10.5">ghost('plan_upgraded', { to: 'pro' })</text>
+              <text x="30" y="150" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="10.5">analyticshq('plan_upgraded', { to: 'pro' })</text>
             </svg>
             <div class="usecase-body">
               <h3>Developers</h3>

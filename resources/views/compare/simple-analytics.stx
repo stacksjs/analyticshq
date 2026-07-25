@@ -11,7 +11,7 @@ const rows = [
   { dim: 'Data ownership', them: 'Closed-source SaaS (Netherlands). No self-host.', us: 'Open and self-hostable. Raw data in your own PostgreSQL.' },
   { dim: 'Bounce rate', them: 'Not reported', us: 'Bounce rate on every page and entry point' },
   { dim: 'Entry and exit pages', them: 'Not reported', us: 'Entry and exit paths, per session' },
-  { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line ghost() goals with conversion rate and value' },
+  { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line analyticshq() goals with conversion rate and value' },
   { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country only, from your CDN edge headers' },
   { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Anonymous by design; DNT respect is on the roadmap' },
   { dim: 'Cookies and consent', them: 'Cookieless, no banner, never touches the IP', us: 'Cookieless, no banner, IP hashed then discarded' },
@@ -79,7 +79,7 @@ const related = [
             <div class="cmp-cell">
               <span class="cmp-dim">{{ row.dim }}</span>
               <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ghost">{{ row.us }}</span>
+              <span class="cmp-ours">{{ row.us }}</span>
             </div>
           @endforeach
         </div>

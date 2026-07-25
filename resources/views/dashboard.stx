@@ -210,7 +210,7 @@ let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
 // are rendered from the current user's OWN sites, resolved server-side from the
-// ghost_token cookie the client bootstrap mirrors out of localStorage.
+// analyticshq_token cookie the client bootstrap mirrors out of localStorage.
 let user = null
 let ownedSites = []
 let installSnippet = ''
@@ -236,11 +236,11 @@ async function loadData() {
   // appears in any SQL string here, so the blanket rewrite is safe.
   const IS_PG = ((globalThis.process && globalThis.process.env && globalThis.process.env.DB_CONNECTION) || 'postgres') === 'postgres'
   const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
-  // Server-authenticate from the ghost_token cookie (mirrored from localStorage by
+  // Server-authenticate from the analyticshq_token cookie (mirrored from localStorage by
   // the client bootstrap at the bottom of the page), so the switcher + setup panel
   // are scoped to the caller's OWN sites — same shape as bughq's dashboard.
   // requestContext is guarded: it's absent in a prefetch/standalone render.
-  const authToken = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('ghost_token')) || ''
+  const authToken = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('analyticshq_token')) || ''
   if (authToken) {
     try {
       const { Auth } = await import('@stacksjs/auth')
@@ -815,7 +815,7 @@ function authHeaders(json) {
 function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
-  document.cookie = 'ghost_token=; path=/; max-age=0'
+  document.cookie = 'analyticshq_token=; path=/; max-age=0'
   window.location.assign('/login')
 }
 
@@ -1507,7 +1507,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endif
     </div>
 
-    <!-- Top events: custom events (ghost('Name', props) → custom_events) for the
+    <!-- Top events: custom events (analyticshq('Name', props) → custom_events) for the
         resolved site over the range window — per event NAME, count (with a
         proportion bar) and distinct visitors. Scoped by site+range only (custom_events
         lacks the page_views filter columns), like the Goals panel above. Empty by
@@ -1663,15 +1663,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 </div>
 
 <!-- Pre-render bootstrap: token guard + mirror the localStorage token into the
-    ghost_token cookie (so the <script server> block can owner-scope the switcher
+    analyticshq_token cookie (so the <script server> block can owner-scope the switcher
     + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
     manipulation; all interactivity is stx directives via the <script client> above. -->
 <script>
 (function () {
   var t = localStorage.getItem('token')
   if (!t) { window.location.replace('/login'); return }
-  if (!/(^|;)\s*ghost_token=/.test(document.cookie)) {
-    document.cookie = 'ghost_token=' + t + '; path=/; max-age=2592000; samesite=lax'
+  if (!/(^|;)\s*analyticshq_token=/.test(document.cookie)) {
+    document.cookie = 'analyticshq_token=' + t + '; path=/; max-age=2592000; samesite=lax'
     window.location.reload()
   }
 })()

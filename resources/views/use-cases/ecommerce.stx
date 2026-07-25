@@ -146,13 +146,13 @@
           <div class="code">
             <div class="code-bar"><span>checkout.ts</span><span>JavaScript</span></div>
             <pre><span class="cmt">// on the order confirmation page</span>
-<span class="tok">ghost</span>('purchase', { value: 68.00, currency: 'USD', items: 2 })
+<span class="tok">analyticshq</span>('purchase', { value: 68.00, currency: 'USD', items: 2 })
 
 <span class="cmt">// or a lighter signal earlier in the flow</span>
-<span class="tok">ghost</span>('add_to_cart', { product: 'tote', value: 34.00 })</pre>
+<span class="tok">analyticshq</span>('add_to_cart', { product: 'tote', value: 34.00 })</pre>
           </div>
         </div>
-        <p class="code-note">The <code>ghost()</code> function ships with the tracking script, so there is nothing extra to import. Properties like <code>value</code> become breakdowns in your dashboard, and the beacon <code>POST</code>s to your own <code>/collect</code> endpoint, so even ad-blockers count the sale.</p>
+        <p class="code-note">The <code>analyticshq()</code> function ships with the tracking script, so there is nothing extra to import. Properties like <code>value</code> become breakdowns in your dashboard, and the beacon <code>POST</code>s to your own <code>/collect</code> endpoint, so even ad-blockers count the sale.</p>
       </section>
 
       <section class="reveal section shell" aria-label="Get started">

@@ -22,7 +22,7 @@
       <section class="feat-hero shell">
         <span class="kicker">Conversions</span>
         <h1>Turn a visit into a tracked outcome.</h1>
-        <p>Fire a conversion with a single ghost() call, attach a value, and tie it back to the campaign that earned it. No tag manager, no extra pageview.</p>
+        <p>Fire a conversion with a single analyticshq() call, attach a value, and tie it back to the campaign that earned it. No tag manager, no extra pageview.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/dashboard">See a live dashboard</a>
           <a class="btn ghost" href="/#install">Get your script tag</a>
@@ -33,7 +33,7 @@
         <div class="code" style="max-width: 680px">
           <div class="code-bar"><span class="chart-cap">Track a signup conversion</span></div>
           <pre class="code-body"><code>// anywhere in your app, on the event that matters
-ghost('signup', {
+analyticshq('signup', {
   plan: 'pro',
   value: 19,
 })
@@ -59,7 +59,7 @@ ghost('signup', {
             <span class="flow-num">02</span>
             <div>
               <h3>Fire it in one line</h3>
-              <p>Call ghost() with a name and optional value on the moment it happens. It piggybacks on the same first-party endpoint.</p>
+              <p>Call analyticshq() with a name and optional value on the moment it happens. It piggybacks on the same first-party endpoint.</p>
             </div>
           </div>
           <div class="flow-step">
@@ -76,7 +76,7 @@ ghost('signup', {
         <div class="metrics">
           <div class="metric">
             <div class="m-value">One line</div>
-            <div class="m-label">A single ghost() call records a conversion, with an optional monetary value.</div>
+            <div class="m-label">A single analyticshq() call records a conversion, with an optional monetary value.</div>
           </div>
           <div class="metric">
             <div class="m-value">Attributed</div>
