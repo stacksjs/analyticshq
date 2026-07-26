@@ -76,8 +76,7 @@ the dashboard. `scripts/account.ts` manages that from the box (or anywhere with
 `DB_*` pointed at it):
 
 ```sh
-./buddy                                   # or: bun scripts/account.ts …
-bun scripts/account.ts --list                                    # users, their sites, unowned sites
+bun scripts/account.ts --list   # users, their sites, unowned sites
 bun scripts/account.ts --create --email=you@example.com --name="You"
 bun scripts/account.ts --rotate --email=you@example.com           # new password + revoke live tokens
 bun scripts/account.ts --attach --site=zig-utils --email=you@example.com

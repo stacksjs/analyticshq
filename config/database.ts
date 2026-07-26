@@ -23,14 +23,6 @@ export default {
       prefix: '',
     },
 
-    dynamodb: {
-      key: env.AWS_ACCESS_KEY_ID || '',
-      secret: env.AWS_SECRET_ACCESS_KEY || '',
-      region: env.AWS_DEFAULT_REGION || 'us-east-1',
-      prefix: env.DB_DATABASE || 'stacks',
-      endpoint: env.DB_PORT ? `http://localhost:${env.DB_PORT}` : 'http://localhost:8000',
-    },
-
     mysql: {
       name: env.DB_DATABASE || 'stacks',
       host: env.DB_HOST || '127.0.0.1',
