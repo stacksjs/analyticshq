@@ -67,7 +67,10 @@
     "test:coverage": "./buddy test:coverage",
     "test:types": "./buddy test:types",
     "bud": "./buddy",
-    "stx": "./buddy"
+    "stx": "./buddy",
+    "account": "bun scripts/account.ts",
+    "account:list": "bun scripts/account.ts --list",
+    "account:rotate": "bun scripts/account.ts --rotate"
   },
   "system": {
     "bun": "^1.3.0",

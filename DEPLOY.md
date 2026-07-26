@@ -69,6 +69,25 @@ so they apply to Postgres unchanged:
 > rather than SQLite because ingest is append-heavy and concurrent with the
 > dashboard's aggregate reads, which a single-writer file lock would serialize.
 
+## Accounts and credentials
+
+Sites are owner-scoped — a site with no owner collects data but is invisible in
+the dashboard. `scripts/account.ts` manages that from the box (or anywhere with
+`DB_*` pointed at it):
+
+```sh
+./buddy                                   # or: bun scripts/account.ts …
+bun scripts/account.ts --list                                    # users, their sites, unowned sites
+bun scripts/account.ts --create --email=you@example.com --name="You"
+bun scripts/account.ts --rotate --email=you@example.com           # new password + revoke live tokens
+bun scripts/account.ts --attach --site=zig-utils --email=you@example.com
+bun scripts/account.ts --revoke-tokens --email=you@example.com
+```
+
+A generated password is printed once to stdout and stored nowhere else.
+Rotating always revokes existing access and refresh tokens — otherwise the old
+session keeps working and the rotation locks nobody out.
+
 ## Deploy
 
 Push to `main` — GitHub Actions runs the production deploy. Or locally:
