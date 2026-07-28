@@ -97,7 +97,7 @@ if [ -x "${PANTRY_LOCAL_BIN}/bun" ] && [ "${STACKS_FORCE_PANTRY:-}" != "1" ]; th
 fi
 
 if [ -d "${PANTRY_DIR}" ] && command -v bun >/dev/null 2>&1 && [ "${STACKS_FORCE_PANTRY:-}" != "1" ]; then
-  run_buddy bun "$@"
+  run_buddy "$(command -v bun)" "$@"
 fi
 
 # Pantry not set up — bootstrap it
@@ -119,7 +119,7 @@ if [ -x "${PANTRY_LOCAL_BIN}/bun" ]; then
 fi
 
 if command -v bun >/dev/null 2>&1; then
-  run_buddy bun "$@"
+  run_buddy "$(command -v bun)" "$@"
 fi
 
 echo "Pantry did not provide a local bun runtime." >&2
