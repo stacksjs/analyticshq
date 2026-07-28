@@ -7,7 +7,7 @@
   <div class="footer-top">
     <div class="footer-brand">
       <a class="brand" href="/" aria-label="analyticshq home">
-        <span class="brand-mark">g</span>
+        <span class="brand-mark">a</span>
         <span class="brand-name">analyticshq</span>
       </a>
       <p>Privacy-first web analytics, powered by Stacks + PostgreSQL.</p>

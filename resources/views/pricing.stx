@@ -31,79 +31,121 @@ async function upgrade() {
 }
 </script>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="/marketing.css">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pricing - analyticshq</title>
+    <meta name="description" content="Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.">
+    <meta name="theme-color" content="#0a0c0e">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/marketing.css">
+    <style>
+      /* Pricing-specific pieces, built on the shared marketing.css tokens so the
+         page stays dark-locked and on the same teal accent as the rest of the site.
+         No token redefinition, no light-mode override. */
+      .price-toggle-row { display: flex; justify-content: center; margin-bottom: 2.75rem; }
+      .price-toggle { display: inline-flex; gap: 0.25rem; padding: 0.28rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
+      .price-toggle button { appearance: none; border: 0; cursor: pointer; padding: 0.5rem 1.15rem; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; font-size: 0.9rem; transition: color 0.16s ease, background 0.16s ease; }
+      .price-toggle button:hover { color: var(--ink); }
+      .price-toggle button.on { background: var(--accent); color: var(--accent-ink); }
+      .price-toggle .save { font-size: 0.78rem; opacity: 0.85; }
 
-<style>
-/* Dark by default to match the always-dark marketing site + shared nav/footer. */
-:root { --bg:#0a0c0e; --panel:#101317; --border:rgba(233,238,240,0.12); --text:#eef2f3; --text-2:#9aa4a9; --text-3:#6d777c; --accent:#46d3c0; --accent-ink:#04201c; --sans:'Geist', ui-sans-serif, system-ui, sans-serif; }
-:root[data-theme="light"] { --bg:#fbfbfc; --panel:#ffffff; --border:rgba(15,23,42,0.08); --text:#0b1220; --text-2:#4b5563; --text-3:#98a2b3; --accent:#059669; --accent-ink:#ffffff; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; }
-.card-pro { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 12px 40px color-mix(in srgb, var(--accent) 12%, transparent); }
-.btn { border-radius: 10px; transition: transform .12s ease, opacity .15s ease; font-weight: 600; }
-.btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--accent); color: var(--accent-ink); }
-.btn-primary:disabled { opacity: .6; cursor: default; }
-.btn-ghost { border: 1px solid var(--border); color: var(--text-2); }
-.check { color: var(--accent); }
-.seg { border: 1px solid var(--border); border-radius: 999px; }
-.seg button { border-radius: 999px; cursor: pointer; background: transparent; color: var(--text-2); border: none; }
-.seg button.on { background: var(--accent); color: var(--accent-ink); }
-.err { color: #ef4444; }
-</style>
+      .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
+      .plan { position: relative; padding: 1.9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+      .plan.featured { border-color: var(--accent-line); box-shadow: 0 18px 60px color-mix(in srgb, var(--accent) 12%, transparent); }
+      .plan-eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+      .plan.featured .plan-eyebrow { color: var(--accent); }
+      .plan-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: 0.3rem; }
+      .plan-amt { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
+      .plan-per { color: var(--faint); font-size: 0.9rem; }
+      .plan-desc { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
+      .plan-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.65rem; }
+      .plan-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.92rem; color: var(--ink); }
+      .plan-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
+      .plan .btn { width: 100%; justify-content: center; margin-top: 1.75rem; }
+      .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: #f87171; }
+      .self-host { margin: 2.75rem auto 0; text-align: center; color: var(--faint); font-size: 0.85rem; }
 
-@include('site-nav')
+      @media (max-width: 640px) {
+        .plans { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    @include('site-nav')
 
-<div class="px-5 py-14 md:px-10">
-  <div class="mx-auto max-w-3xl">
-    <header class="mb-10 text-center">
-      <a href="/" class="text-2xl wordmark">analyticshq</a>
-      <h1 class="mt-6 text-3xl md:text-4xl wordmark" style="letter-spacing:-0.035em">Simple, honest pricing</h1>
-      <p class="mt-3 text-base" style="color: var(--text-3)">Start free. Upgrade when you outgrow it. Self-host free forever.</p>
-      <div class="inline-flex gap-1 items-center mt-6 p-1 text-sm seg">
-        <button @click="pick('monthly')" :class="interval() === 'monthly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Monthly</button>
-        <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on px-4 py-1.5 font-medium' : 'px-4 py-1.5 font-medium'">Yearly <span style="opacity:.8">-17%</span></button>
-      </div>
-    </header>
+    <main>
+      <nav class="shell subnav" aria-label="Breadcrumb">
+        <a href="/">Home</a><span class="sep">/</span>
+        <span>Pricing</span>
+      </nav>
 
-    <div class="grid gap-5 md:grid-cols-2">
-      <div class="p-7 card">
-        <div class="font-semibold text-sm tracking-wider uppercase" style="color: var(--text-3)">Free</div>
-        <div class="mt-3"><span class="text-4xl wordmark">$0</span><span class="text-sm" style="color: var(--text-3)"> / forever</span></div>
-        <p class="mt-2 text-sm" style="color: var(--text-2)">Everything you need to get started.</p>
-        <ul class="mt-6 space-y-2.5 text-sm">
-          <li class="flex gap-2 items-center"><span class="check">✓</span> 1 site</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> 10k events / mo</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> 30-day retention</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> Community support</li>
-        </ul>
-        <a href="/register" class="block mt-7 py-2.5 w-full text-center text-sm btn btn-ghost">Get started</a>
-      </div>
+      <section class="feat-hero shell">
+        <span class="kicker">Pricing</span>
+        <h1>Simple, honest pricing.</h1>
+        <p>Start free and upgrade when you outgrow it. Every plan is cookieless and exact, and self-hosting is free forever.</p>
+      </section>
 
-      <div class="p-7 card card-pro">
-        <div class="font-semibold text-sm tracking-wider uppercase" style="color: var(--accent)">Pro</div>
-        <div class="mt-3">
-          <span class="text-4xl wordmark">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span><span class="text-sm" style="color: var(--text-3)">{{ interval() === 'yearly' ? ' / year' : ' / month' }}</span>
+      <section class="reveal section shell" aria-label="Plans and pricing">
+        <div class="price-toggle-row">
+          <div class="price-toggle" role="group" aria-label="Billing interval">
+            <button @click="pick('monthly')" :class="interval() === 'monthly' ? 'on' : ''">Monthly</button>
+            <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on' : ''">Yearly <span class="save">Save 17%</span></button>
+          </div>
         </div>
-        <p class="mt-2 text-sm" style="color: var(--text-2)">For teams and sites that are growing.</p>
-        <ul class="mt-6 space-y-2.5 text-sm">
-          <li class="flex gap-2 items-center"><span class="check">✓</span> Unlimited sites</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> Unlimited events</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> Full retention</li>
-          <li class="flex gap-2 items-center"><span class="check">✓</span> Priority support</li>
-        </ul>
-        <button @click="upgrade" :disabled="loading()" class="mt-7 py-2.5 w-full text-sm btn btn-primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
-        @if (err())
-          <p class="mt-3 text-center text-xs err">{{ err() }}</p>
-        @endif
-      </div>
-    </div>
-    <p class="mt-10 text-center text-xs" style="color: var(--text-3)">Prefer to self-host? analyticshq is open source and free to run yourself.</p>
-  </div>
-</div>
 
-@include('site-footer')
+        <div class="plans">
+          <div class="plan">
+            <span class="plan-eyebrow">Free</span>
+            <div class="plan-price"><span class="plan-amt">$0</span><span class="plan-per">/ forever</span></div>
+            <p class="plan-desc">Everything you need to get started.</p>
+            <ul class="plan-list">
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 1 site</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 10k events / mo</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 30-day retention</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Community support</li>
+            </ul>
+            <a href="/register" class="btn ghost">Get started</a>
+          </div>
+
+          <div class="plan featured">
+            <span class="plan-eyebrow">Pro</span>
+            <div class="plan-price">
+              <span class="plan-amt">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span>
+              <span class="plan-per">{{ interval() === 'yearly' ? '/ year' : '/ month' }}</span>
+            </div>
+            <p class="plan-desc">For teams and sites that are growing.</p>
+            <ul class="plan-list">
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited sites</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited events</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Full retention</li>
+              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Priority support</li>
+            </ul>
+            <button @click="upgrade" :disabled="loading()" class="btn primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
+            @if (err())
+              <p class="price-err">{{ err() }}</p>
+            @endif
+          </div>
+        </div>
+
+        <p class="self-host">Prefer to self-host? analyticshq is open source and free to run yourself.</p>
+      </section>
+
+      <section class="reveal section shell" aria-label="Get started">
+        <div class="cta-band">
+          <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
+          <div class="cta-actions">
+            <a class="btn primary" href="/#install">Get your script tag</a>
+            <a class="btn ghost" href="/compare" data-no-router>Compare the alternatives</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    @include('site-footer')
+  </body>
+</html>

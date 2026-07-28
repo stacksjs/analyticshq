@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Docs - analyticshq</title>
+    <meta name="description" content="Ship analyticshq in one line: a first-party script under 2 KB, a one-function events API, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.">
     <meta name="theme-color" content="#0a0c0e">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +46,7 @@
       <section class="reveal section shell" aria-label="Track custom events">
         <div class="section-head">
           <h2 class="section-title">Track custom events</h2>
-          <p class="section-intro">Once the script has loaded it puts a analyticshq() function on the page. Call it on any event that matters, with optional properties, to record a conversion beside your traffic.</p>
+          <p class="section-intro">Once the script has loaded it puts an analyticshq() function on the page. Call it on any event that matters, with optional properties, to record a conversion beside your traffic.</p>
         </div>
         <div class="code" style="max-width: 680px">
           <div class="code-bar"><span class="chart-cap">On the event that matters</span></div>

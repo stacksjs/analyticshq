@@ -26,7 +26,7 @@
         <p>The same cookieless script fits a solo blog or a funded SaaS. Here is how different teams put analyticshq to work, and which features carry the weight.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+          <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
         </div>
       </section>
 
@@ -149,7 +149,7 @@
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
           </div>
         </div>
       </section>

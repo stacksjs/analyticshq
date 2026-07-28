@@ -8,7 +8,7 @@ const meta = {
 
 const alternatives = [
   { slug: 'google-analytics', name: 'vs Google Analytics', desc: 'The GA4 alternative with no cookie banner, no sampling, and one-click import.' },
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Two cookieless tools — how the reports, pricing, and ownership differ.' },
+  { slug: 'plausible', name: 'vs Plausible', desc: 'Two cookieless tools. How the reports, pricing, and ownership differ.' },
   { slug: 'fathom', name: 'vs Fathom', desc: 'Both privacy-first. Where analyticshq goes further on data ownership.' },
   { slug: 'simple-analytics', name: 'vs Simple Analytics', desc: 'Aggregate-only analytics, compared feature for feature.' },
   { slug: 'umami', name: 'vs Umami', desc: 'Open-source analytics, and where the privacy lines are drawn.' },
