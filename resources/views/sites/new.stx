@@ -89,7 +89,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
 </style>
 
-<div class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
+<main class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
   <div class="max-w-md w-full">
     <div class="mb-8 text-center">
       <a href="/dashboard" class="text-2xl wordmark">analyticshq</a>
@@ -123,4 +123,4 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       <a href="/dashboard" class="font-medium text-accent">← Back to dashboard</a>
     </p>
   </div>
-</div>
+</main>
