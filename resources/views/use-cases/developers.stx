@@ -134,7 +134,7 @@
           <div class="code">
             <div class="code-bar"><span>index.html</span><span>HTML</span></div>
             <pre>&lt;!-- analyticshq --&gt;
-&lt;<span class="tok">script</span> defer src="https://cdn.analyticshq.com/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+&lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
           </div>
           <div class="code">
             <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>
