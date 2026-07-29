@@ -92,3 +92,6 @@ storage/framework/cache/
 # The Stacks framework is a dependency (provided by stacksjs/stacks + buddy setup),
 # not app source. Do not vendor it (or its test fixtures) into the app repo.
 /storage/framework/
+
+# Machine-local ts-cloud state and dashboard credentials.
+/storage/cloud/

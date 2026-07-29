@@ -727,7 +727,7 @@ export const tsCloud: TsCloudConfig = {
       // Resolve the framework CLI from node_modules (@stacksjs/buddy) — no
       // vendored storage/framework/core needed. Port 3024 is analyticshq's
       // slot on the shared box (localhost-only; rpx fronts it by domain).
-      start: 'bun node_modules/@stacksjs/buddy/dist/cli.js serve',
+      start: 'bun storage/framework/runtime/production/serve.js',
       port: 3024,
       // Install, then migrate. Without the migrate step a fresh box served the
       // app against an empty schema: ts-cloud creates the role + database from
@@ -741,6 +741,8 @@ export const tsCloud: TsCloudConfig = {
       // logged rather than silently dropping columns.
       preStart: [
         'bun install',
+        'mkdir -p storage/framework/runtime/production',
+        'bun build --production --target=bun --packages=external app/ProductionServer.ts --outdir storage/framework/runtime/production --entry-naming serve.js',
         'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
       ],
       // Pin the proxy target. `buddy serve` otherwise falls back to
