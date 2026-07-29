@@ -23,7 +23,7 @@ const { curFrom, curTo, prevFrom, prevTo } = periodWindows(days)
 async function totals(from: string, to: string): Promise<{ visitors: number, views: number, sessions: number }> {
   const r = (await sql.unsafe(
     `SELECT COUNT(DISTINCT visitor_id)::int AS visitors, COUNT(*)::int AS views, COUNT(DISTINCT session_id)::int AS sessions
-     FROM page_views WHERE site_id = $1 AND "timestamp" >= $2 AND "timestamp" <= $3`,
+    FROM page_views WHERE site_id = $1 AND "timestamp" >= $2 AND "timestamp" <= $3`,
     [siteId, from, to],
   ))[0]
   return { visitors: r?.visitors ?? 0, views: r?.views ?? 0, sessions: r?.sessions ?? 0 }
@@ -32,8 +32,8 @@ async function totals(from: string, to: string): Promise<{ visitors: number, vie
 async function top(column: string, from: string, to: string): Promise<{ name: string, views: number }[]> {
   return await sql.unsafe(
     `SELECT ${column} AS name, COUNT(*)::int AS views FROM page_views
-     WHERE site_id = $1 AND "timestamp" >= $2 AND "timestamp" <= $3 AND ${column} IS NOT NULL AND ${column} <> ''
-     GROUP BY ${column} ORDER BY views DESC LIMIT 5`,
+    WHERE site_id = $1 AND "timestamp" >= $2 AND "timestamp" <= $3 AND ${column} IS NOT NULL AND ${column} <> ''
+    GROUP BY ${column} ORDER BY views DESC LIMIT 5`,
     [siteId, from, to],
   )
 }

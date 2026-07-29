@@ -49,7 +49,7 @@
         sw: screen.width,
         sh: screen.height,
       }
-      ;['source', 'medium', 'campaign', 'content', 'term'].forEach(function (k) {
+      ;['source', 'medium', 'campaign', 'content', 'term'].forEach(function (_k) {
         var v = q.get('utm_' + k)
         if (v) b['utm_' + k] = v
       })

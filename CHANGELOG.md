@@ -1,5 +1,168 @@
 # Stacks Changelog
 
+## v0.70.53
+
+## ✨ Features
+
+- **account**: manage users, ownership and credential rotation ([7b682af](https://github.com/stacksjs/analyticshq/commit/7b682af)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **analytics**: Google Analytics (GA4) import ([e57cffd](https://github.com/stacksjs/analyticshq/commit/e57cffd)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **api**: filter parity for the Stats API ([958a7cc](https://github.com/stacksjs/analyticshq/commit/958a7cc)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: auto-refreshing live visitor count ([c175b85](https://github.com/stacksjs/analyticshq/commit/c175b85)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: custom date-range picker ([d2d4543](https://github.com/stacksjs/analyticshq/commit/d2d4543)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: bucket the time-series in the site's timezone ([72cdfb2](https://github.com/stacksjs/analyticshq/commit/72cdfb2)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **analytics**: per-site digest data layer (weekly summary) ([031c8d6](https://github.com/stacksjs/analyticshq/commit/031c8d6)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **api**: expose the remaining dashboard dimensions as Stats API endpoints ([5c829b1](https://github.com/stacksjs/analyticshq/commit/5c829b1)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **api**: site management — rename/edit + cascade delete ([6eebfcf](https://github.com/stacksjs/analyticshq/commit/6eebfcf)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **privacy**: data deletion / erasure endpoints ([af8c184](https://github.com/stacksjs/analyticshq/commit/af8c184)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: compare pages + /features index + real use-case visuals ([134f7d4](https://github.com/stacksjs/analyticshq/commit/134f7d4)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **privacy**: data-retention window + daily purge job ([20bef80](https://github.com/stacksjs/analyticshq/commit/20bef80)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: Compare section with a page per competitor + nav/footer fixes ([0370210](https://github.com/stacksjs/analyticshq/commit/0370210)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **privacy**: add privacy charter + enforceable guardrail tests ([0a20a20](https://github.com/stacksjs/analyticshq/commit/0a20a20)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **landing**: framework install dropdown (HTML/Vue/Nuxt/React/Next) ([256c9e4](https://github.com/stacksjs/analyticshq/commit/256c9e4)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: add All-time range with monthly bucketing ([223ec39](https://github.com/stacksjs/analyticshq/commit/223ec39)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **analytics**: import/export CLI tooling (Fathom import, site export/restore) ([983b8fb](https://github.com/stacksjs/analyticshq/commit/983b8fb)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: shareable read-only dashboard links ([00fa26b](https://github.com/stacksjs/analyticshq/commit/00fa26b)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: site switcher + add-site UI ([741aba0](https://github.com/stacksjs/analyticshq/commit/741aba0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **sites**: owner-scoped site management + goals ownership guard ([7d49065](https://github.com/stacksjs/analyticshq/commit/7d49065)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: per-page bounce rate on the Top pages panel ([ba4816d](https://github.com/stacksjs/analyticshq/commit/ba4816d)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: goals management (create + delete from the Goals panel) ([3f8994d](https://github.com/stacksjs/analyticshq/commit/3f8994d)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: UTM content & term panels ([97852a3](https://github.com/stacksjs/analyticshq/commit/97852a3)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: avg visit time KPI (unblocked by Postgres) ([ac2e2a8](https://github.com/stacksjs/analyticshq/commit/ac2e2a8)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **db**: migrate ghostanalytics data layer from MySQL/SingleStore to PostgreSQL ([4e61a44](https://github.com/stacksjs/analyticshq/commit/4e61a44)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: views-per-visit KPI (pages per session) ([922df80](https://github.com/stacksjs/analyticshq/commit/922df80)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: top referrers panel (full referring URLs) ([833a128](https://github.com/stacksjs/analyticshq/commit/833a128)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: top outbound links & file downloads panels ([872c268](https://github.com/stacksjs/analyticshq/commit/872c268)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: compare-to-previous-period chart overlay ([8d0f974](https://github.com/stacksjs/analyticshq/commit/8d0f974)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: per-entry-page bounce rate (+ fix entry/exit filter corruption) ([47ce18a](https://github.com/stacksjs/analyticshq/commit/47ce18a)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: hourly chart granularity for the 24h range ([8629066](https://github.com/stacksjs/analyticshq/commit/8629066)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: entry & exit pages panels ([eede67e](https://github.com/stacksjs/analyticshq/commit/eede67e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **analytics**: outbound link + file download auto-tracking + Events panel ([2f53a30](https://github.com/stacksjs/analyticshq/commit/2f53a30)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **analytics**: goals & conversions end-to-end ([c7b199c](https://github.com/stacksjs/analyticshq/commit/c7b199c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: interactive filtering / segmentation ([c20c9fe](https://github.com/stacksjs/analyticshq/commit/c20c9fe)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **analytics**: UTM/campaign tracking end-to-end ([f74e747](https://github.com/stacksjs/analyticshq/commit/f74e747)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: real-time visitors, referrer channels, SVG chart, CSV export ([fc735a5](https://github.com/stacksjs/analyticshq/commit/fc735a5)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: period-over-period trend deltas on KPIs ([781a4b8](https://github.com/stacksjs/analyticshq/commit/781a4b8)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: add bounce rate KPI + Browsers and OS panels ([1935d9e](https://github.com/stacksjs/analyticshq/commit/1935d9e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: add Top countries and Devices panels ([6f22537](https://github.com/stacksjs/analyticshq/commit/6f22537)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **docs**: add a real /docs page (fixes the dead Docs nav link) ([650c7f0](https://github.com/stacksjs/analyticshq/commit/650c7f0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **use-cases**: add SaaS, ecommerce, agencies, publishers, developers pages ([7e9ef0e](https://github.com/stacksjs/analyticshq/commit/7e9ef0e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **nav**: shared mega-menu nav for Features and Use Cases ([fbf4457](https://github.com/stacksjs/analyticshq/commit/fbf4457)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: add Log in / Sign up to the top nav across all pages ([f14b9a3](https://github.com/stacksjs/analyticshq/commit/f14b9a3)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **auth**: add GitHub/Google SSO, account page, and /api-prefixed auth endpoints ([bffd7c5](https://github.com/stacksjs/analyticshq/commit/bffd7c5)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **marketing**: add per-feature pages + use-cases, shared marketing stylesheet ([5c20b0e](https://github.com/stacksjs/analyticshq/commit/5c20b0e)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **billing**: sync Stripe subscriptions via webhook and reflect Pro status ([321e588](https://github.com/stacksjs/analyticshq/commit/321e588)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **billing**: Stripe free + Pro plans (checkout, webhook, pricing page) ([008d7f4](https://github.com/stacksjs/analyticshq/commit/008d7f4)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **auth**: email/password signup + login (token guard) ([b284e67](https://github.com/stacksjs/analyticshq/commit/b284e67)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **seo**: add site.config.ts with accurate title/OG/Twitter meta ([69e271e](https://github.com/stacksjs/analyticshq/commit/69e271e)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🐛 Bug Fixes
+
+- pin production runtime environment ([4db8633](https://github.com/stacksjs/analyticshq/commit/4db8633)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **auth**: give login/register/sites-new a <main> so SPA nav swaps instead of full-reloading ([26c453a](https://github.com/stacksjs/analyticshq/commit/26c453a)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: move shared partials to resources/partials so @include resolves ([713a079](https://github.com/stacksjs/analyticshq/commit/713a079)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: point the footer Bluesky handle at the canonical analyticshq.org ([dbe0284](https://github.com/stacksjs/analyticshq/commit/dbe0284)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: serve the tracker from the canonical analyticshq.org domain ([386b6ff](https://github.com/stacksjs/analyticshq/commit/386b6ff)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **buddy**: preserve healthy Bun fallback ([449c361](https://github.com/stacksjs/analyticshq/commit/449c361)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **tsconfig**: drop obsolete vendored-router pin ([d59e9c1](https://github.com/stacksjs/analyticshq/commit/d59e9c1)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deploy**: migrate the database on deploy ([063326a](https://github.com/stacksjs/analyticshq/commit/063326a)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **env**: rotate the production dotenv keypair to encrypted:v2 ([e7a2f38](https://github.com/stacksjs/analyticshq/commit/e7a2f38)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **api**: run the ingest API on Postgres and make its routes reachable ([4a05515](https://github.com/stacksjs/analyticshq/commit/4a05515)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **privacy**: remove the dormant city/region geolocation capability ([ac9280f](https://github.com/stacksjs/analyticshq/commit/ac9280f)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **privacy**: strip query strings/fragments from stored referrers ([e7cae1e](https://github.com/stacksjs/analyticshq/commit/e7cae1e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **security**: owner-gate the site stats read API ([6b5daf5](https://github.com/stacksjs/analyticshq/commit/6b5daf5)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **config**: stop auto-importing deleted scaffold functions ([d96126d](https://github.com/stacksjs/analyticshq/commit/d96126d)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: read-gate analytics to the site owner (server-side) ([845a2b0](https://github.com/stacksjs/analyticshq/commit/845a2b0)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **auth**: resolve and cache the user on the bearer-token path ([58ebdfa](https://github.com/stacksjs/analyticshq/commit/58ebdfa)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **router**: pin @stacksjs/router to vendored core; drop the bun patch ([6fff001](https://github.com/stacksjs/analyticshq/commit/6fff001)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **router**: patch @stacksjs/router to a single instance so routes serve ([c15f2df](https://github.com/stacksjs/analyticshq/commit/c15f2df)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **cache**: default cache driver to memory (Postgres pivot) ([e7adfc6](https://github.com/stacksjs/analyticshq/commit/e7adfc6)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **collect**: server-side sessionization (cookieless, no per-pageview split) ([ad0638e](https://github.com/stacksjs/analyticshq/commit/ad0638e)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deploy**: key primary site by project, upgrade framework to 0.70.76 ([6733d27](https://github.com/stacksjs/analyticshq/commit/6733d27)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **ci**: point buddy npm script at the ./buddy shim ([08aaf22](https://github.com/stacksjs/analyticshq/commit/08aaf22)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **env**: drop PORT from .env — the shared-box slot (3024) comes from ts-cloud ([ffd8077](https://github.com/stacksjs/analyticshq/commit/ffd8077)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **billing**: resolve user from bearer token in checkout; verify webhook signature result ([9d347e0](https://github.com/stacksjs/analyticshq/commit/9d347e0)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **dashboard**: read site/range from __stxServeSearch, not request.query ([7e8b3ee](https://github.com/stacksjs/analyticshq/commit/7e8b3ee)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **collect**: self-register the site row before child inserts ([ab48139](https://github.com/stacksjs/analyticshq/commit/ab48139)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **api**: correct MySQL/SingleStore read-query bugs found via e2e ([bf70bdb](https://github.com/stacksjs/analyticshq/commit/bf70bdb)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **api**: use parameterized db.unsafe for reads ([17125d1](https://github.com/stacksjs/analyticshq/commit/17125d1)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## ⚡ Performance Improvements
+
+- use a dedicated production server ([d6c7612](https://github.com/stacksjs/analyticshq/commit/d6c7612)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **schema**: tighten analytics column widths ([ad6b6a3](https://github.com/stacksjs/analyticshq/commit/ad6b6a3)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **analytics**: apply Fathom SingleStore optimizations ([b652313](https://github.com/stacksjs/analyticshq/commit/b652313)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **models**: add SingleStore distribution keys to analytics tables ([e7b6a64](https://github.com/stacksjs/analyticshq/commit/e7b6a64)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## ♻️ Code Refactoring
+
+- rename the ghost() tracker global and analyticshq_token cookie ([a059c28](https://github.com/stacksjs/analyticshq/commit/a059c28)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **retention**: rename GHOST_RETENTION_DAYS to ANALYTICSHQ_RETENTION_DAYS ([2d952fe](https://github.com/stacksjs/analyticshq/commit/2d952fe)) _(by Chris <chrisbreuer93@gmail.com>)_
+- rename ghostanalytics to analyticshq ([157d68b](https://github.com/stacksjs/analyticshq/commit/157d68b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **views**: use natural crosswind color tokens (text/accent), fix false note ([d583a3c](https://github.com/stacksjs/analyticshq/commit/d583a3c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **views**: convert theme-color inline styles to crosswind utilities ([c4288ca](https://github.com/stacksjs/analyticshq/commit/c4288ca)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **account,login**: convert client-rendered DOM to stx signals + directives ([71cd284](https://github.com/stacksjs/analyticshq/commit/71cd284)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: replace vanilla DOM wiring with stx directives ([f55737b](https://github.com/stacksjs/analyticshq/commit/f55737b)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **dashboard**: server-render the site switcher + setup, reactive add-site (stx, bughq parity) ([61438dd](https://github.com/stacksjs/analyticshq/commit/61438dd)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **ui**: auth + pricing use stx <script client> directives (no workaround) ([386b962](https://github.com/stacksjs/analyticshq/commit/386b962)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **tracking**: use @ts-analytics/tracking from the @ts-analytics org ([4d09dd9](https://github.com/stacksjs/analyticshq/commit/4d09dd9)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **tracking**: consume @stacksjs/ts-analytics primitives ([a8076f4](https://github.com/stacksjs/analyticshq/commit/a8076f4)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 📝 Documentation
+
+- link the community as stacksjs.com/discord ([7625183](https://github.com/stacksjs/analyticshq/commit/7625183)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **api**: Stats API reference ([5d98e8b](https://github.com/stacksjs/analyticshq/commit/5d98e8b)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## 💄 Styles
+
+- **auth**: dark-lock login/register/sites-new onto the shared teal palette ([457ed94](https://github.com/stacksjs/analyticshq/commit/457ed94)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **marketing**: sweep secondary pages onto the shared design system ([4c3f552](https://github.com/stacksjs/analyticshq/commit/4c3f552)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **lint**: satisfy pickier sort-tailwind-classes (0 warnings) ([96bdbae](https://github.com/stacksjs/analyticshq/commit/96bdbae)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **ui**: replace em-dashes with hyphens in views ([0a409d3](https://github.com/stacksjs/analyticshq/commit/0a409d3)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 👷 Build System
+
+- **deploy**: vendor SingleStore bun-query-builder + ts-analytics; scope cloud to the app ([145eaf1](https://github.com/stacksjs/analyticshq/commit/145eaf1)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🔧 Chores
+
+- **deps**: update buddy dashboard integration ([2ba7c0e](https://github.com/stacksjs/analyticshq/commit/2ba7c0e)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: update ts-cloud to 0.7.78 ([3edf92b](https://github.com/stacksjs/analyticshq/commit/3edf92b)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: sync Stacks framework to 0.70.190 ([6a669bf](https://github.com/stacksjs/analyticshq/commit/6a669bf)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **env**: drop the AWS credentials analyticshq never uses ([1ee3824](https://github.com/stacksjs/analyticshq/commit/1ee3824)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: upgrade stacks 0.70.77 -> 0.70.163 ([c9f4d21](https://github.com/stacksjs/analyticshq/commit/c9f4d21)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **env**: point production at the co-located Postgres ([5d8e346](https://github.com/stacksjs/analyticshq/commit/5d8e346)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **dev**: fast local dev via scripts/dev.ts (skip buddy's 30s phantom-frontend wait) ([2403696](https://github.com/stacksjs/analyticshq/commit/2403696)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **framework**: adopt framework-as-dependencies, drop vendored core ([949ee00](https://github.com/stacksjs/analyticshq/commit/949ee00)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **copy**: SingleStore -> PostgreSQL in marketing copy + SEO ([27f844a](https://github.com/stacksjs/analyticshq/commit/27f844a)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deploy**: use natural 'main' site key on stacks framework 0.70.77 ([d032a6c](https://github.com/stacksjs/analyticshq/commit/d032a6c)) _(by Chris <chrisbreuer93@gmail.com>)_
+- depend on the stacks meta only, drop redundant @stacksjs/* deps ([f9ce1da](https://github.com/stacksjs/analyticshq/commit/f9ce1da)) _(by Chris <chrisbreuer93@gmail.com>)_
+- upgrade framework to 0.70.73 ([0017d55](https://github.com/stacksjs/analyticshq/commit/0017d55)) _(by Chris <chrisbreuer93@gmail.com>)_
+- upgrade framework to 0.70.72 + green CI ([15cb935](https://github.com/stacksjs/analyticshq/commit/15cb935)) _(by Chris <chrisbreuer93@gmail.com>)_
+- run framework from node_modules @ 0.70.64 (self-deploy) ([6dcb2c3](https://github.com/stacksjs/analyticshq/commit/6dcb2c3)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **dev**: default dev domain to ghostanalytics.localhost ([f0bf778](https://github.com/stacksjs/analyticshq/commit/f0bf778)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **mail**: default outbound sender to noreply@ghostanalytics.org + add noreply mailbox ([6890ee3](https://github.com/stacksjs/analyticshq/commit/6890ee3)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **mail**: host mail on ghostanalytics.org with chris@ and hello@ mailboxes ([2ee69a9](https://github.com/stacksjs/analyticshq/commit/2ee69a9)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deploy**: encrypt production env (SingleStore, secrets, coming-soon off) ([c9f5d52](https://github.com/stacksjs/analyticshq/commit/c9f5d52)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: un-vendor ts-analytics, install from npm ([0d08938](https://github.com/stacksjs/analyticshq/commit/0d08938)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: un-vendor bun-query-builder, install from npm ([2bd1884](https://github.com/stacksjs/analyticshq/commit/2bd1884)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deploy**: use owned ghostanalytics.org domain ([73299dd](https://github.com/stacksjs/analyticshq/commit/73299dd)) _(by Chris <chrisbreuer93@gmail.com>)_
+- **deps**: refresh bun.lock to pick up pickier 0.1.37 ([aac360c](https://github.com/stacksjs/analyticshq/commit/aac360c)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- wip ([403dad6](https://github.com/stacksjs/analyticshq/commit/403dad6)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **routes**: remove demo route files (api/v1/users) ([14eb6f5](https://github.com/stacksjs/analyticshq/commit/14eb6f5)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **ui**: remove desktop-demo scaffold (components, layouts, assets) ([ee41406](https://github.com/stacksjs/analyticshq/commit/ee41406)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **db**: regenerate clean MySQL migrations from models ([f0d2b47](https://github.com/stacksjs/analyticshq/commit/f0d2b47)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+- **deploy**: wire ts-cloud + Porkbun DNS for ghostanalytics ([2e4fd56](https://github.com/stacksjs/analyticshq/commit/2e4fd56)) _(by Chris <chrisbreuer93@gmail.com>)_
+- scaffold ghostanalytics on Stacks + SingleStore ([93e9de8](https://github.com/stacksjs/analyticshq/commit/93e9de8)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## 🎉 Miscellaneous
+
+- Revert "chore(framework): adopt framework-as-dependencies, drop vendored core" ([0434eb5](https://github.com/stacksjs/analyticshq/commit/0434eb5)) _(by glennmichael123 <gtorregosa@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+- _glennmichael123 <gtorregosa@gmail.com>_
+
 ## v0.70.51
 
 [compare changes](https://github.com/stacksjs/stacks/compare/v0.70.50...v0.70.51)
