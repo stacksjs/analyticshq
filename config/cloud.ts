@@ -746,7 +746,7 @@ export const tsCloud: TsCloudConfig = {
       // Pin the proxy target. `buddy serve` otherwise falls back to
       // 127.0.0.1:3008, which on this SHARED box is the `stacks` project's own
       // API — analyticshq's `POST /collect` would silently cross tenants.
-      env: { API_URL: 'http://127.0.0.1:3025' },
+      env: { API_URL: 'http://127.0.0.1:3025', APP_ENV: 'production', NODE_ENV: 'production' },
     },
 
     // The ingest + stats API (bun-router), behind `buddy serve`'s same-origin
@@ -772,7 +772,7 @@ export const tsCloud: TsCloudConfig = {
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
       port: 3025,
       preStart: ['bun install'],
-      env: { HOST: '127.0.0.1', APP_ENV: 'production' },
+      env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production' },
     },
 
     // www → apex redirect.
