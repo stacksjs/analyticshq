@@ -17,16 +17,16 @@
  *   <script defer src="https://analyticshq.org/script.js" data-site="SITE_ID"></script>
  */
 (function () {
-  var d = document
-  var w = window
+  const d = document
+  const w = window
   // `currentScript` is only non-null while this file is executing, so both the
   // site id and the origin must be read here — not inside `send`, which runs
   // later from event handlers and history hooks.
-  var s = d.currentScript
-  var site = s && s.getAttribute('data-site')
+  const s = d.currentScript
+  const site = s && s.getAttribute('data-site')
   if (!site) return
 
-  var endpoint
+  let endpoint
   try {
     endpoint = new URL(s.src, location.href).origin + '/collect'
   }
@@ -38,8 +38,8 @@
   // visitor hash + a 30-min window, keeping the tracker consent-free.
   function send(e, p) {
     try {
-      var q = new URLSearchParams(location.search)
-      var b = {
+      const q = new URLSearchParams(location.search)
+      const b = {
         s: site,
         e: e,
         p: p || {},
@@ -49,8 +49,8 @@
         sw: screen.width,
         sh: screen.height,
       }
-      ;['source', 'medium', 'campaign', 'content', 'term'].forEach(function (_k) {
-        var v = q.get('utm_' + k)
+      ;['source', 'medium', 'campaign', 'content', 'term'].forEach((k) => {
+        const v = q.get('utm_' + k)
         if (v) b['utm_' + k] = v
       })
       fetch(endpoint, {
@@ -65,20 +65,20 @@
 
   w.analyticshq = function (name, props) { send(name, props) }
 
-  var DLRE = /\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i
+  const DLRE = /\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i
   function onLink(ev) {
     if (ev.type === 'auxclick' && ev.button !== 1) return
     try {
-      var t = ev.target
-      var a = t && t.closest ? t.closest('a') : null
+      const t = ev.target
+      const a = t && t.closest ? t.closest('a') : null
       if (!a) return
-      var href = a.getAttribute('href')
+      const href = a.getAttribute('href')
       if (!href) return
       if (/^(javascript:|mailto:|tel:)/i.test(href)) return
-      var url = new URL(a.href, location.href)
+      const url = new URL(a.href, location.href)
       if (url.protocol !== 'http:' && url.protocol !== 'https:') return
-      var cross = url.hostname !== location.hostname
-      var path = url.pathname
+      const cross = url.hostname !== location.hostname
+      const path = url.pathname
       if ((a.hasAttribute('download') && !cross) || DLRE.test(path)) {
         send('File Download', { url: a.href })
         return
@@ -92,7 +92,7 @@
 
   function pv() { send('pageview') }
   pv()
-  var push = history.pushState
+  const push = history.pushState
   history.pushState = function () { push.apply(this, arguments); pv() }
   w.addEventListener('popstate', pv)
 })()
