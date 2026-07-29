@@ -1,5 +1,19 @@
 # Stacks Changelog
 
+[Compare changes](https://github.com/stacksjs/analyticshq/compare/v0.70.53...v0.70.54)
+
+## 🐛 Bug Fixes
+
+- preserve tracker campaign fields ([40c5fd4](https://github.com/stacksjs/analyticshq/commit/40c5fd4)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## ⚡ Performance Improvements
+
+- bypass the CLI in production ([2f99a68](https://github.com/stacksjs/analyticshq/commit/2f99a68)) _(by Chris <chrisbreuer93@gmail.com>)_
+
+## Contributors
+
+- _Chris <chrisbreuer93@gmail.com>_
+
 ## v0.70.53
 
 ## ✨ Features
