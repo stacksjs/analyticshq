@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Analytics for blogs and publishers - analyticshq</title>
     <meta name="description" content="Cookieless analytics for blogs and publishers. See which posts hold attention, which referrers send readers who stay, and keep pages fast with a script under 2 KB. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">

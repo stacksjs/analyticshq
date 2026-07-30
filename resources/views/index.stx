@@ -67,6 +67,7 @@ function pickFramework(e) {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <meta name="description" content="analyticshq is privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.">
     <meta name="theme-color" content="#0a0c0e">
     <title>analyticshq - Privacy-first web analytics</title>

@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Analytics for developers - analyticshq</title>
     <meta name="description" content="Cookieless analytics for developers and indie hackers. A one-line script, a one-function events API, self-hostable on PostgreSQL, and privacy-first by default. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">

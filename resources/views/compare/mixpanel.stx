@@ -41,6 +41,7 @@ const related = [
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>{{ meta.title }}</title>
     <meta name="description" content="{{ meta.description }}">
     <meta name="theme-color" content="#0a0c0e">

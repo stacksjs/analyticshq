@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Analytics for agencies - analyticshq</title>
     <meta name="description" content="Cookieless analytics for agencies and freelancers. Manage every client site from one clean dashboard, share reports in a link, and skip the per-client GA and consent setup. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">

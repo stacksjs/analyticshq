@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Analytics for SaaS - analyticshq</title>
     <meta name="description" content="Cookieless analytics for SaaS. Follow visitors from landing page to signup and activation, attribute revenue to channels, and skip the consent banner. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">

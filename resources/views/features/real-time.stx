@@ -37,6 +37,7 @@ const related = [
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Real-time visitors - analyticshq</title>
     <meta name="description" content="See who is on your site right now, which pages they are reading, and where they came from. Live visitor tracking with no cookies and no reload, powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">

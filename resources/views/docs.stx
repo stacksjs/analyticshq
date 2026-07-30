@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Docs - analyticshq</title>
     <meta name="description" content="Ship analyticshq in one line: a first-party script under 2 KB, a one-function events API, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.">
     <meta name="theme-color" content="#0a0c0e">

@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Use cases - analyticshq</title>
     <meta name="description" content="How different teams put analyticshq to work: SaaS, ecommerce, agencies, publishers, and developers. The same cookieless script, from a solo blog to a funded product.">
     <meta name="theme-color" content="#0a0c0e">

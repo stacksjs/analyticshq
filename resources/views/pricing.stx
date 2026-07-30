@@ -36,6 +36,7 @@ async function upgrade() {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="stx-layout" content="marketing">
     <title>Pricing - analyticshq</title>
     <meta name="description" content="Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.">
     <meta name="theme-color" content="#0a0c0e">
