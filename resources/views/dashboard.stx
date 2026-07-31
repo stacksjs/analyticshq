@@ -1195,8 +1195,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @endif
 
     <!-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
-        Signals live in the <script client> block; shareUrl is seeded from the
-        server-bridged existing token so the current link shows on load. -->
+        Signals live in the script-client block; shareUrl is seeded from the
+        server-bridged existing token so the current link shows on load.
+        NOTE: never write a literal script tag in a comment here — stx's script
+        classifier does not skip comments, so it treats one as a real opening tag
+        and deletes everything through the next closing tag. -->
     @if (ownsActive)
       <div class="mb-8 p-5 panel reveal">
         <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -1664,9 +1667,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 </div>
 
 <!-- Pre-render bootstrap: token guard + mirror the localStorage token into the
-    analyticshq_token cookie (so the <script server> block can owner-scope the switcher
+    analyticshq_token cookie (so the script-server block can owner-scope the switcher
     + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
-    manipulation; all interactivity is stx directives via the <script client> above. -->
+    manipulation; all interactivity is stx directives via the script-client block above.
+    NOTE: the tag names are spelled without angle brackets on purpose. stx's script
+    classifier does not skip HTML comments, so a literal one here is read as a real
+    opening tag and everything through the next closing tag — including this
+    comment's terminator and the bootstrap below — is silently deleted. -->
 <script>
 (function () {
   var t = localStorage.getItem('token')
