@@ -1,17 +1,115 @@
 import type { StxOptions as UiOptions } from '@stacksjs/stx'
 
 /**
- * STX Configuration for Stacks
- * Note: Dashboard mode overrides these settings via serve() options
+ * stx / UI topology for analyticshq.
+ *
+ * Verified against the INSTALLED @stacksjs/stx 0.2.146 + bun-plugin-stx 0.2.146.
+ * Every file:line below was checked on the installed dist, not on documentation.
+ *
+ * THIS FILE IS READ BY TWO LOADERS THAT DO NOT AGREE:
+ *   Loader A — @stacksjs/stx loadStxConfig()  → post-processes the object: applies
+ *              resolveStxRoot (config.js:363-374) and then prefixes componentsDir /
+ *              layoutsDir / partialsDir with `root` a SECOND time (config.js:411-419).
+ *              Used by stx build, the SSG, store-loader, composable-loader, crosswind.
+ *   Loader B — bun-plugin-stx serve()         → reads this file RAW via its own bundled
+ *              bunfig and uses these literal strings as the fallback at
+ *              serve.js:8973-8975 (`options.X ?? stxConfig.X ?? defaultStxConfig.X`).
+ *              It never calls resolveStxRoot. Used on every dev/prod request.
+ *
+ * Because Loader A prefixes and Loader B does not, a relative directory value can only
+ * be correct in both when `root` is '.'. That is why root is pinned below and every path
+ * is written project-root-relative. Before this was pinned, root was INFERRED as
+ * 'resources' from the mere existence of resources/layouts (config.js:367-369) and all
+ * three template dirs resolved to 'resources/resources/*', none of which exist —
+ * which is why 54 @include('site-nav'|'site-footer') calls failed during the static
+ * build and 27 files in dist/ shipped ANSI-coloured `include error:` banners as page
+ * content. Verify with scripts/check-stx-topology.ts.
+ *
+ * StxOptions = Partial<StxConfig> (types/config-types.d.ts:394). Key declarations:
+ * root :260, pagesDir :262, componentsDir :273, layoutsDir :275, storesDir :276,
+ * composablesDir :277, publicDir :280, strict :311.
  */
-
 export default {
-  // Components directory - for user-defined components
+  // Pinned so resolveStxRoot returns immediately (config.js:365-366) instead of sniffing
+  // the filesystem (config.js:367-369). '.' also fails the `root !== '.'` guard at
+  // config.js:411, which is what disables the double-prefix. Note the sniff reads
+  // process.cwd(), NOT the cwd passed to loadStxConfig — so it was never reliable.
+  root: '.',
+
+  // Dev/prod-INERT: routing comes from serve()'s `patterns` (fed by
+  // @stacksjs/actions/dist/dev/views.js:59 and @stacksjs/buddy production-server.js:114);
+  // `stxConfig.pagesDir` is not read by serve.js. Declared for the build/SSG path, where
+  // build.js:10 computes path.join(config.root || '.', config.pagesDir || ...). Without it,
+  // root:'.' would make Loader A report 'pages' — a directory this app does not have.
+  pagesDir: 'resources/views',
+
+  // Render-inert on the live paths (views.js:71 and production-server.js:121 both pass an
+  // explicit componentsDir, and options wins at serve.js:8973). Declared because it is
+  // Loader B's fallback and the value every non-serve entry point sees.
   componentsDir: 'resources/components',
 
-  // Layouts directory - for layout templates
+  // MUST stay outside pagesDir. Route discovery and the SSG have no exclusion for layout
+  // directories, so a layout under resources/views/ is a public URL that gets built to
+  // HTML and listed in the sitemap. resources/views/layouts/ is deleted for that reason;
+  // with it gone both live selectors agree with this value — dev's
+  // firstExistingPath(['resources/views/layouts','resources/layouts']) (views.js:59-62,
+  // :115-123) returns resources/layouts, and prod's existsSync ternary
+  // (production-server.js:114) falls through to the same. Empty today; the layouts stage
+  // fills it. NOTE views.js:120 prefers whichever candidate actually contains a .stx, so
+  // resurrecting resources/views/layouts later would silently win in dev only.
   layoutsDir: 'resources/layouts',
 
-  // Partials directory - for partial templates
+  // The only partials candidate that contains templates (site-nav.stx, site-footer.stx),
+  // so both loaders already select it — only the double-prefix made this key a lie.
   partialsDir: 'resources/partials',
+
+  // LIVE on every top-level render, and the reason `root` is not merely cosmetic:
+  // storesDir is absent from serve()'s allowlist, so store-loader.js:5-11 falls to
+  // `path.resolve(config.root || process.cwd(), config.storesDir || 'stores')` off
+  // Loader A. Under root:'.' the bare default would move discovery to <app>/stores;
+  // this value keeps it at <app>/resources/stores. Empty for now: with no *.ts inside,
+  // getStoreScript returns null and no bundle is injected.
+  // Caveat for the state stage: that null is memoised (store-loader.js:12+) and nothing
+  // calls clearStoreCache(), so the FIRST store file needs a dev-server restart.
+  storesDir: 'resources/stores',
+
+  // Same mechanism — read from Loader A at render time and resolved against `root`
+  // (composable-loader.js probeDefaultDirs). Pinned because root:'.' would otherwise
+  // change where stx probes: the default candidates are ['composables','functions']
+  // resolved against root, and resources/functions is where Stacks' `buddy make:function`
+  // writes. Inert today (the directory is empty, so the loader returns null either way).
+  composablesDir: 'resources/functions',
+
+  // The one directory key the dev server actually honours: neither views.js nor
+  // production-server.js passes publicDir, so serve.js:8976 falls through to this value.
+  // 'public' equals the default it replaces, so declaring it is a zero-delta truth claim.
+  publicDir: 'public',
+
+  // stx's client-script DOM guard (25 rules, script-validation.js:1-127). serve.js
+  // forwards it ONLY when the key is literally present — `..."strict" in stxConfig`
+  // at :9567 and :9745 — so without this key every violation is collected and silently
+  // discarded (script-validation.js:148). Warn-only: rendered HTML is untouched.
+  //
+  // failOnViolation MUST stay false. The throw at script-validation.js:154 is a plain
+  // Error that processDirectives catches and replaces the ENTIRE page with
+  // `<!-- Template Processing failed: ... -->` served at HTTP 200 — a blank page, not a 500.
+  //
+  // allowPatterns is deliberately absent: it is a rule-GLOBAL substring filter matched
+  // against the message OR the regex source (script-validation.js:131), so exempting
+  // 'location.replace()' for the pre-paint auth guards would also silence every other
+  // location rule across the app.
+  //
+  // Gated to non-production because there is no render cache on either server, so
+  // validateClientScript re-runs per request (process.js:782) with no memoisation —
+  // measured at ~2 warning blocks per GET / and 6 per full 32-route sweep. That is
+  // useful in dev and pure stderr noise in prod.
+  //
+  // This flag is NOT the enforcement gate: signal-using <script client> blocks are
+  // re-tagged data-stx-scoped by processScriptSetup and then skipped by process.js's
+  // skipAttrs, so it sees only 2 of the app's 7 violating blocks. The standalone
+  // scanner in the enforcement stage is the real gate.
+  strict: {
+    enabled: process.env.APP_ENV !== 'production',
+    failOnViolation: false,
+  },
 } satisfies UiOptions
