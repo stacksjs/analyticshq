@@ -22,23 +22,14 @@ const pillars = [
   { h: 'You own the data', b: 'Every event lands in your own PostgreSQL database. It is never sampled, sold, or shared with an ad network.' },
   { h: 'Exact, not estimated', b: 'Every event is counted. No sampling, no thresholds, no “data not available” once your traffic grows.' },
 ]
+
+useSeoMeta(meta)
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>{{ meta.title }}</title>
-    <meta name="description" content="{{ meta.description }}">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+@extends('marketing')
 
-    <main>
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <span>Compare</span>
@@ -95,8 +86,4 @@ const pillars = [
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

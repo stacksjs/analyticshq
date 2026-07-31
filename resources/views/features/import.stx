@@ -23,23 +23,14 @@ const related = [
   { slug: 'sources', name: 'Sources and referrers', desc: 'Where your historical traffic came from.' },
   { slug: 'privacy', name: 'Privacy by design', desc: 'Why the switch needs no cookie banner.' },
 ]
+
+useSeoMeta(meta)
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>{{ meta.title }}</title>
-    <meta name="description" content="{{ meta.description }}">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+@extends('marketing')
 
-    <main>
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <a href="/features" data-no-router>Features</a><span class="sep">/</span>
@@ -107,8 +98,4 @@ const related = [
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

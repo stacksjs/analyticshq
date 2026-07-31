@@ -1,16 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+<script server>
+useSeoMeta({
+  title: "Geography and devices - analyticshq",
+  description: "Country, device, browser, and operating system, resolved at the edge from your CDN header. See who visits without tracking who they are — no cookie, no stored IP.",
+})
+</script>
 
-    <main>
+@extends('marketing')
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <a href="/features" data-no-router>Features</a><span class="sep">/</span>
@@ -128,8 +125,4 @@
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

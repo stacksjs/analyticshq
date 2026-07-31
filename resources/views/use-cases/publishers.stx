@@ -1,18 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>Analytics for blogs and publishers - analyticshq</title>
-    <meta name="description" content="Cookieless analytics for blogs and publishers. See which posts hold attention, which referrers send readers who stay, and keep pages fast with a script under 2 KB. Powered by analyticshq.">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+<script server>
+useSeoMeta({
+  title: "Analytics for blogs and publishers - analyticshq",
+  description: "Cookieless analytics for blogs and publishers. See which posts hold attention, which referrers send readers who stay, and keep pages fast with a script under 2 KB. Powered by analyticshq.",
+})
+</script>
 
-    <main>
+@extends('marketing')
+
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <a href="/use-cases" data-no-router>Use cases</a><span class="sep">/</span>
@@ -161,8 +157,4 @@
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

@@ -23,23 +23,17 @@ const promises = [
   { h: 'Under 2 KB, loaded once', b: 'A single deferred first-party script. No gtag.js weight, no render blocking, no third-party fetch storm.' },
   { h: 'Your data, your database', b: 'Every event lands in a PostgreSQL database you control. It is never shared with an ad network.' },
 ]
+
+useSeoMeta({
+  title: "Features - analyticshq",
+  description: "Every analyticshq feature in one place: real-time visitors, pageviews and sessions, sources, goals and events, geography and devices, Core Web Vitals, and privacy by design. Cookieless and exact.",
+})
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>Features - analyticshq</title>
-    <meta name="description" content="Every analyticshq feature in one place: real-time visitors, pageviews and sessions, sources, goals and events, geography and devices, Core Web Vitals, and privacy by design. Cookieless and exact.">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+@extends('marketing')
 
-    <main>
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <span>Features</span>
@@ -107,8 +101,4 @@ const promises = [
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

@@ -30,23 +30,17 @@ const related = [
   { slug: 'metrics', name: 'Pageviews and sessions', desc: 'How live hits roll up into sessions and bounce.' },
   { slug: 'goals', name: 'Goals and events', desc: 'Turn a live visit into a tracked conversion.' },
 ]
+
+useSeoMeta({
+  title: "Real-time visitors - analyticshq",
+  description: "See who is on your site right now, which pages they are reading, and where they came from. Live visitor tracking with no cookies and no reload, powered by analyticshq.",
+})
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>Real-time visitors - analyticshq</title>
-    <meta name="description" content="See who is on your site right now, which pages they are reading, and where they came from. Live visitor tracking with no cookies and no reload, powered by analyticshq.">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+@extends('marketing')
 
-    <main>
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <a href="/features" data-no-router>Features</a><span class="sep">/</span>
@@ -131,8 +125,4 @@ const related = [
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

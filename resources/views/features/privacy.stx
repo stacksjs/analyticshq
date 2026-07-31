@@ -1,3 +1,10 @@
+<script server>
+useSeoMeta({
+  title: "Privacy by design - analyticshq",
+  description: "No cookie, no stored IP, no cross-site profile, and nothing to consent to. The whole product is built so there is no personal data in the first place.",
+})
+</script>
+
 @extends('marketing')
 
 @section('content')

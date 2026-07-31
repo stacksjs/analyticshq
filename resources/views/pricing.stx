@@ -1,3 +1,10 @@
+<script server>
+useSeoMeta({
+  title: "Pricing - analyticshq",
+  description: "Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.",
+})
+</script>
+
 <script client>
 // Pricing / upgrade via stx client directives. Interval + state are signals; the
 // Upgrade button starts a Stripe Checkout (external redirect via location).
@@ -31,52 +38,44 @@ async function upgrade() {
 }
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>Pricing - analyticshq</title>
-    <meta name="description" content="Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-    <style>
-      /* Pricing-specific pieces, built on the shared marketing.css tokens so the
-         page stays dark-locked and on the same teal accent as the rest of the site.
-         No token redefinition, no light-mode override. */
-      .price-toggle-row { display: flex; justify-content: center; margin-bottom: 2.75rem; }
-      .price-toggle { display: inline-flex; gap: 0.25rem; padding: 0.28rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
-      .price-toggle button { appearance: none; border: 0; cursor: pointer; padding: 0.5rem 1.15rem; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; font-size: 0.9rem; transition: color 0.16s ease, background 0.16s ease; }
-      .price-toggle button:hover { color: var(--ink); }
-      .price-toggle button.on { background: var(--accent); color: var(--accent-ink); }
-      .price-toggle .save { font-size: 0.78rem; opacity: 0.85; }
+@extends('marketing')
 
-      .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
-      .plan { position: relative; padding: 1.9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-      .plan.featured { border-color: var(--accent-line); box-shadow: 0 18px 60px color-mix(in srgb, var(--accent) 12%, transparent); }
-      .plan-eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
-      .plan.featured .plan-eyebrow { color: var(--accent); }
-      .plan-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: 0.3rem; }
-      .plan-amt { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
-      .plan-per { color: var(--faint); font-size: 0.9rem; }
-      .plan-desc { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
-      .plan-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.65rem; }
-      .plan-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.92rem; color: var(--ink); }
-      .plan-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
-      .plan .btn { width: 100%; justify-content: center; margin-top: 1.75rem; }
-      .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: #f87171; }
-      .self-host { margin: 2.75rem auto 0; text-align: center; color: var(--faint); font-size: 0.85rem; }
 
-      @media (max-width: 640px) {
-        .plans { grid-template-columns: 1fr; }
-      }
-    </style>
-  </head>
-  <body>
-    @include('site-nav')
+@push('styles')
+<style>
+  /* Pricing-specific pieces, built on the shared marketing.css tokens so the
+     page stays dark-locked and on the same teal accent as the rest of the site.
+     No token redefinition, no light-mode override. */
+  .price-toggle-row { display: flex; justify-content: center; margin-bottom: 2.75rem; }
+  .price-toggle { display: inline-flex; gap: 0.25rem; padding: 0.28rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
+  .price-toggle button { appearance: none; border: 0; cursor: pointer; padding: 0.5rem 1.15rem; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; font-size: 0.9rem; transition: color 0.16s ease, background 0.16s ease; }
+  .price-toggle button:hover { color: var(--ink); }
+  .price-toggle button.on { background: var(--accent); color: var(--accent-ink); }
+  .price-toggle .save { font-size: 0.78rem; opacity: 0.85; }
 
-    <main>
+  .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
+  .plan { position: relative; padding: 1.9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+  .plan.featured { border-color: var(--accent-line); box-shadow: 0 18px 60px color-mix(in srgb, var(--accent) 12%, transparent); }
+  .plan-eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  .plan.featured .plan-eyebrow { color: var(--accent); }
+  .plan-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: 0.3rem; }
+  .plan-amt { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
+  .plan-per { color: var(--faint); font-size: 0.9rem; }
+  .plan-desc { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
+  .plan-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.65rem; }
+  .plan-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.92rem; color: var(--ink); }
+  .plan-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
+  .plan .btn { width: 100%; justify-content: center; margin-top: 1.75rem; }
+  .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: #f87171; }
+  .self-host { margin: 2.75rem auto 0; text-align: center; color: var(--faint); font-size: 0.85rem; }
+
+  @media (max-width: 640px) {
+    .plans { grid-template-columns: 1fr; }
+  }
+</style>
+@endpush
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         <a href="/">Home</a><span class="sep">/</span>
         <span>Pricing</span>
@@ -142,8 +141,4 @@ async function upgrade() {
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection
