@@ -1,0 +1,37 @@
+{{-- Marketing chrome. Layout group 'marketing'.
+
+     This file is a FRAGMENT, not a document. stx synthesises <!DOCTYPE>, <html lang>,
+     <head> and <body> from config/ui.ts app.head merged with each page's head — see
+     generateDocumentShell. Writing a DOCTYPE or an html tag here (even inside a
+     comment, because the test is an unanchored regex over the rendered string) makes
+     hasDocumentShell() true, turns ensureDocumentShell into a no-op, and every page's
+     title/description is dropped on the floor. Never add one.
+
+     Comments here are {{-- --}}, which are removed before any gate runs. An HTML
+     comment would survive into the response and be re-parsed by four separate
+     consumers downstream.
+
+     The name of this file IS the router's layout group: crossing between 'marketing'
+     and the app shell makes the router do a full-document swap, which is the only
+     path that carries stylesheet links across a navigation. --}}
+
+@head
+{{-- Marketing-only. Deliberately NOT in config/ui.ts app.head, which is global and
+     would push these onto the 5 app/auth pages that intentionally do without them. --}}
+<meta name="theme-color" content="#0a0c0e">
+<link rel="stylesheet" href="/marketing.css">
+@stack('styles')
+@endhead
+
+@include('site-nav')
+
+{{-- The single router container. Pages must NOT declare their own <main>: fragment
+     extraction slices from the first <main> to the LAST </main>, so a second one
+     makes the router swap the wrong span and duplicate the chrome. --}}
+<main>
+@yield('content')
+</main>
+
+@include('site-footer')
+
+@stack('scripts')
