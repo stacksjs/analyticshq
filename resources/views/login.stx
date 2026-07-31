@@ -33,9 +33,15 @@ async function handleSubmit(e) {
       error.set(data.message || 'Invalid email or password.')
       return
     }
-    localStorage.setItem('token', data.token || data.access_token || '')
+    const token = data.token || data.access_token || ''
+    localStorage.setItem('token', token)
     if (data.user)
       localStorage.setItem('user', JSON.stringify(data.user))
+    // The dashboard renders its owner-scoped view on the SERVER, which cannot
+    // read localStorage — it authenticates from this cookie. Set it here rather
+    // than relying on the dashboard's own bootstrap to mirror it, so a fresh
+    // login lands on data instead of the signed-out gate.
+    document.cookie = `analyticshq_token=${token}; path=/; max-age=2592000; samesite=lax`
     navigate('/dashboard')
   }
   catch {
