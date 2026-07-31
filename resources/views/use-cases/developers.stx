@@ -7,9 +7,6 @@
     <title>Analytics for developers - analyticshq</title>
     <meta name="description" content="Cookieless analytics for developers and indie hackers. A one-line script, a one-function events API, self-hostable on PostgreSQL, and privacy-first by default. Powered by analyticshq.">
     <meta name="theme-color" content="#0a0c0e">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/marketing.css">
   </head>
   <body>

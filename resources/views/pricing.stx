@@ -40,9 +40,6 @@ async function upgrade() {
     <title>Pricing - analyticshq</title>
     <meta name="description" content="Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.">
     <meta name="theme-color" content="#0a0c0e">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
     <link rel="stylesheet" href="/marketing.css">
     <style>
       /* Pricing-specific pieces, built on the shared marketing.css tokens so the

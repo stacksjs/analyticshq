@@ -112,4 +112,50 @@ export default {
     enabled: process.env.APP_ENV !== 'production',
     failOnViolation: false,
   },
+
+  /**
+   * The document head every page shares. Reaches BOTH page shapes:
+   *   - fragments (login, register, account, dashboard, sites/new) via
+   *     generateDocumentShell, which renders `link` into <head>;
+   *   - the 27 marketing pages, which own a <!DOCTYPE> and so are topped up by
+   *     injectConfigHeadTags instead — it skips any <link> whose exact href is
+   *     already in the head, so config and per-page copies cannot double.
+   *
+   * ONLY genuinely universal tags belong here. Deliberately NOT centralized:
+   *
+   *   charset / viewport — generateDocumentShell PREPENDS its own hardcoded pair
+   *     (document-shell.js:91-92) and then spreads config `meta` with no dedup,
+   *     unlike injectConfigHeadTags which dedups by name (:143). Declaring them
+   *     here yields TWO of each on every fragment page — measured. The marketing
+   *     pages keep their own until the layouts stage removes their <head>
+   *     entirely, at which point the shell supplies both for free.
+   *
+   *   /marketing.css — present on exactly the 27 marketing pages and deliberately
+   *     absent from the 5 app/auth pages. `app.head` is global, so putting it here
+   *     would push marketing CSS onto the app shell. It belongs in the marketing
+   *     layout's @head block (layouts stage).
+   *
+   *   theme-color — stx already injects a media-scoped light/dark pair
+   *     (data-stx-theme-meta="1"); the app's un-scoped #0a0c0e is a third tag that
+   *     competes with them. Reconciling that is a fix, not a move.
+   *
+   *   title — injectConfigHeadTags never writes <title>, so a config title would
+   *     reach fragments only. The 6 features/* pages that render stx's
+   *     "stx Project" placeholder need real titles (SEO stage); `skipDefaultSeoTags`
+   *     must NOT be set before then or they end up with no <title> at all.
+   */
+  app: {
+    head: {
+      // Present on all 32 views today. The stylesheet URL is the SUPERSET of the
+      // three variants that were in the tree (Geist 800 and Mono 600 appeared only
+      // on the marketing set), so the 5 app/auth pages gain those two weights and
+      // every page now requests one identical URL — which also means crossing the
+      // marketing/app boundary reuses the font cache entry instead of refetching.
+      link: [
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap' },
+      ],
+    },
+  },
 } satisfies UiOptions
