@@ -1074,13 +1074,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         <p class="mt-2 text-sm text-text-3">
           Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
         </p>
-        <!-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
+        {{-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
             <select> navigates by rewriting ?site=; the plain-text line above is
             the no-JS / no-owned-sites fallback. "+ Add site" is a link to the
-            reactive create page, not an in-page modal. -->
-        <!-- No nested @if (stx miscounts @endif for @if nested inside a non-top-level
+            reactive create page, not an in-page modal. --}}
+        {{-- No nested @if (stx miscounts @endif for @if nested inside a non-top-level
             @if); the multi-site <select> is gated by a precomputed `showSiteSelect`
-            flag as its OWN block, and "+ Add site" always shows to the owner. -->
+            flag as its OWN block, and "+ Add site" always shows to the owner. --}}
         @if (showSiteSelect)
           <div class="mt-3">
             <select onchange="location.href = '?site=' + encodeURIComponent(this.value) + '&range={{ range }}'"
@@ -1131,8 +1131,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </nav>
     </header>
 
-    <!-- Active filters: click a breakdown row to add one; each pill removes itself,
-        "Clear all" returns to the unfiltered site+range view. Empty when none. -->
+    {{-- Active filters: click a breakdown row to add one; each pill removes itself,
+        "Clear all" returns to the unfiltered site+range view. Empty when none. --}}
     @if (activeFilters.length)
       <div class="flex flex-wrap gap-2 items-center mb-6 reveal">
         @foreach (activeFilters as f)
@@ -1153,10 +1153,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     @endif
 
-    <!-- Setup panel: shown to the site's owner so they can grab the install
+    {{-- Setup panel: shown to the site's owner so they can grab the install
         snippet. Open by default until the first pageview lands. Native <details>,
         server-rendered — no client JS. {{ }} HTML-escapes the snippet so the tag
-        shows as text rather than executing. -->
+        shows as text rather than executing. --}}
     @if (ownsActive)
       <details class="mb-8 border-border panel reveal" {{ Number(kpis.views) ? '' : 'open' }}>
         <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
@@ -1177,12 +1177,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     @endif
 
-    <!-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
+    {{-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
         Signals live in the script-client block; shareUrl is seeded from the
         server-bridged existing token so the current link shows on load.
         NOTE: never write a literal script tag in a comment here — stx's script
         classifier does not skip comments, so it treats one as a real opening tag
-        and deletes everything through the next closing tag. -->
+        and deletes everything through the next closing tag. --}}
     @if (ownsActive)
       <div class="mb-8 p-5 panel reveal">
         <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -1190,8 +1190,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             <div class="font-semibold text-sm">Share this dashboard</div>
             <div class="mt-0.5 text-text-3 text-xs">A read-only link — anyone with it can view, but not manage, this site.</div>
           </div>
-          <!-- No @if here (a client-signal @if nested inside a server @if breaks
-              stx's @endif matching); reactive :style toggles the two states. -->
+          {{-- No @if here (a client-signal @if nested inside a server @if breaks
+              stx's @endif matching); reactive :style toggles the two states. --}}
           <div class="flex flex-wrap gap-2 items-center" :style="shareUrl() ? 'display:flex' : 'display:none'">
             <input readonly :value="shareUrl()" aria-label="Share link" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
             <button type="button" @click="copyShare" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareCopied() ? 'Copied' : 'Copy' }}</button>
@@ -1202,12 +1202,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     @endif
 
-    <!-- Everything below the header is owner-only. When the view isn't granted the
+    {{-- Everything below the header is owner-only. When the view isn't granted the
         server ran no queries, so there's nothing to leak here — we show a gated card
-        (below, @else) instead of the panels. -->
+        (below, @else) instead of the panels. --}}
     @if (viewGranted)
 
-    <!-- KPIs: hairline-separated, mono numerics, no heavy card chrome -->
+    {{-- KPIs: hairline-separated, mono numerics, no heavy card chrome --}}
     <div class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal">
       @foreach (kpiCards as kpi)
         <div class="px-5 py-5 border-border">
@@ -1222,7 +1222,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endforeach
     </div>
 
-    <!-- Timeseries: page views (area) + unique visitors (line) -->
+    {{-- Timeseries: page views (area) + unique visitors (line) --}}
     <div class="mb-6 p-5 panel reveal">
       <div class="flex flex-wrap gap-3 items-center justify-between mb-5">
         <h2 class="font-semibold text-text-3 text-xs tracking-wider uppercase">Traffic over time</h2>
@@ -1250,7 +1250,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             <path d="{{ chart.viewsLine }}" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
             <path d="{{ chart.visitorsLine }}" fill="none" stroke="var(--text-3)" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>
           </svg>
-          <!-- CSS-only hover: one transparent full-height column per day -->
+          {{-- CSS-only hover: one transparent full-height column per day --}}
           <div class="flex absolute inset-0">
             @foreach (chart.pts as pt)
               <div class="relative flex-1 ga-col">
@@ -1281,7 +1281,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
 
     <div class="grid gap-6 md:grid-cols-2">
-      <!-- Top pages -->
+      {{-- Top pages --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top pages</h2>
         @forelse (pages as p)
@@ -1298,7 +1298,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- Top sources -->
+      {{-- Top sources --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top sources</h2>
         @forelse (referrers as r)
@@ -1313,12 +1313,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     </div>
 
-    <!-- Entry / exit pages: the first / last page of each session, derived from
+    {{-- Entry / exit pages: the first / last page of each session, derived from
         page_views (session lifecycle columns aren't maintained). Display-only —
         not clickable filters, since the path filter targets page_views, not the
-        session's entry/exit page. -->
+        session's entry/exit page. --}}
     <div class="grid gap-6 md:grid-cols-2 mt-6">
-      <!-- Entry pages -->
+      {{-- Entry pages --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Entry pages</h2>
         @forelse (entryPages as e)
@@ -1336,7 +1336,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- Exit pages -->
+      {{-- Exit pages --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Exit pages</h2>
         @forelse (exitPages as e)
@@ -1355,7 +1355,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
-      <!-- Top countries -->
+      {{-- Top countries --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top countries</h2>
         @forelse (countries as c)
@@ -1369,7 +1369,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- Devices -->
+      {{-- Devices --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Devices</h2>
         @forelse (devices as d)
@@ -1385,7 +1385,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
-      <!-- Browsers -->
+      {{-- Browsers --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Browsers</h2>
         @forelse (browsers as b)
@@ -1399,7 +1399,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- Operating systems -->
+      {{-- Operating systems --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Operating systems</h2>
         @forelse (systems as s)
@@ -1414,7 +1414,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     </div>
 
-    <!-- Referrer channels: Search / Social / Direct / Referral -->
+    {{-- Referrer channels: Search / Social / Direct / Referral --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrer channels</h2>
       @forelse (channels as c)
@@ -1431,9 +1431,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endforelse
     </div>
 
-    <!-- Top referrers: the actual referring URLs (full referrer), a drill-down beneath the
+    {{-- Top referrers: the actual referring URLs (full referrer), a drill-down beneath the
         normalized Top sources / channels. Clickable to filter; excludes empty/direct traffic.
-        {{ }} escapes the (beacon-supplied) url. -->
+        {{ }} escapes the (beacon-supplied) url. --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
@@ -1450,9 +1450,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endforelse
     </div>
 
-    <!-- Goals & conversions: per active goal in range — conversions (with a
+    {{-- Goals & conversions: per active goal in range — conversions (with a
         proportion bar), conversion rate (converters / distinct visitors), and
-        total value. Empty by default (no goals seeded) → "No goals yet." -->
+        total value. Empty by default (no goals seeded) → "No goals yet." --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Goals</h2>
       @forelse (goals as g)
@@ -1471,9 +1471,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @empty
         <div class="py-8 text-center text-sm text-text-3">No goals yet.</div>
       @endforelse
-      <!-- Add-goal management form (owner-only; hidden for share viewers): POST
+      {{-- Add-goal management form (owner-only; hidden for share viewers): POST
           /api/sites/{site}/goals via @submit=addGoal. Pattern is the event NAME for
-          event goals or the URL PATH for pageview goals. -->
+          event goals or the URL PATH for pageview goals. --}}
       @if (ownsActive)
       <form @submit="addGoal" class="flex flex-wrap gap-2 items-center mt-4 pt-4" style="border-top:1px solid var(--border)">
         <input name="name" required maxlength="255" placeholder="Goal name" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
@@ -1494,11 +1494,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endif
     </div>
 
-    <!-- Top events: custom events (analyticshq('Name', props) → custom_events) for the
+    {{-- Top events: custom events (analyticshq('Name', props) → custom_events) for the
         resolved site over the range window — per event NAME, count (with a
         proportion bar) and distinct visitors. Scoped by site+range only (custom_events
         lacks the page_views filter columns), like the Goals panel above. Empty by
-        default (custom_events nearly empty) → "No events yet." -->
+        default (custom_events nearly empty) → "No events yet." --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Events</h2>
       @forelse (events as e)
@@ -1515,9 +1515,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endforelse
     </div>
 
-    <!-- Top outbound links / file downloads: the URLs behind the auto-tracked Outbound
+    {{-- Top outbound links / file downloads: the URLs behind the auto-tracked Outbound
         Link / File Download events (properties.url). GROUP BY properties (dialect-portable,
-        no JSON_EXTRACT); site+range scoped like Events. Display-only; {{ }} escapes the url. -->
+        no JSON_EXTRACT); site+range scoped like Events. Display-only; {{ }} escapes the url. --}}
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Outbound links</h2>
@@ -1552,7 +1552,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
     </div>
 
-    <!-- Campaigns (UTM): full-width Top campaigns + a 2-up grid of UTM sources / mediums -->
+    {{-- Campaigns (UTM): full-width Top campaigns + a 2-up grid of UTM sources / mediums --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top campaigns</h2>
       @forelse (campaigns as c)
@@ -1567,7 +1567,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
-      <!-- UTM sources -->
+      {{-- UTM sources --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign sources</h2>
         @forelse (utmSources as s)
@@ -1581,7 +1581,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- UTM mediums -->
+      {{-- UTM mediums --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign mediums</h2>
         @forelse (utmMediums as m)
@@ -1595,7 +1595,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- UTM content -->
+      {{-- UTM content --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign content</h2>
         @forelse (utmContents as c)
@@ -1609,7 +1609,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         @endforelse
       </div>
 
-      <!-- UTM terms -->
+      {{-- UTM terms --}}
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign terms</h2>
         @forelse (utmTerms as t)
@@ -1625,10 +1625,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
 
     @else
-    <!-- Gated: no authenticated owner for this site. The client guard normally
+    {{-- Gated: no authenticated owner for this site. The client guard normally
         redirects a signed-out visitor to /login before this shows; it remains for
         a signed-in user who has no sites yet, and as the server-side wall that
-        keeps a bare curl from ever seeing another tenant's data. -->
+        keeps a bare curl from ever seeing another tenant's data. --}}
     <div class="mt-6 p-10 text-center panel reveal">
       @if (user)
         <h2 class="mb-2 font-semibold text-lg">No site to show yet</h2>
@@ -1649,14 +1649,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   </div>
 </main>
 
-<!-- Pre-render bootstrap: token guard + mirror the localStorage token into the
+{{-- Pre-render bootstrap: token guard + mirror the localStorage token into the
     analyticshq_token cookie (so the script-server block can owner-scope the switcher
     + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
     manipulation; all interactivity is stx directives via the script-client block above.
     NOTE: the tag names are spelled without angle brackets on purpose. stx's script
     classifier does not skip HTML comments, so a literal one here is read as a real
     opening tag and everything through the next closing tag — including this
-    comment's terminator and the bootstrap below — is silently deleted. -->
+    comment's terminator and the bootstrap below — is silently deleted. --}}
 <script>
 ;(function () {
   // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,

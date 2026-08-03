@@ -1,8 +1,8 @@
-<!-- Shared marketing nav. Pull it into a page with the stx include directive
+{{-- Shared marketing nav. Pull it into a page with the stx include directive
     and the name "site-nav". One source of truth for the top nav across every
     marketing page, with two CSS-only mega-menu dropdowns (Features, Use cases).
     No JS: panels reveal on hover and on keyboard focus via :focus-within
-    (see the .mega rules in /marketing.css). -->
+    (see the .mega rules in /marketing.css). --}}
 <nav class="nav">
   <div class="nav-inner shell">
     <a class="brand" href="/" aria-label="analyticshq home">

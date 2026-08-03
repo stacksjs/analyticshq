@@ -1,8 +1,8 @@
-<!-- Shared marketing footer. Pull it into a page with the stx include directive
+{{-- Shared marketing footer. Pull it into a page with the stx include directive
     and the name "site-footer" (resolves to partials/site-footer.stx). One
     source of truth for the footer across every marketing page, including the
     ohdear-style "Compare" column linking every competitor page. Static markup
-    only, so it renders the same regardless of the including page's scope. -->
+    only, so it renders the same regardless of the including page's scope. --}}
 <footer class="footer shell">
   <div class="footer-top">
     <div class="footer-brand">
