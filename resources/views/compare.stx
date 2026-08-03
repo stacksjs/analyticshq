@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare',
   title: 'analyticshq vs the alternatives - every option compared',
   description: 'How analyticshq compares to Google Analytics, Plausible, Fathom, Simple Analytics, Umami, Matomo, Cloudflare Web Analytics, and Mixpanel. Cookieless, exact, and privacy-first by design.',
 }

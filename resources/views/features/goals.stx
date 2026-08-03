@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/features/goals',
   title: "Goals and conversions - analyticshq",
   description: "Turn a visit into a tracked outcome. Fire a conversion with a single analyticshq() call, attach a value, and tie it back to the campaign that earned it.",
 })

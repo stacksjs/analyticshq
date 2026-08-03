@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/simple-analytics',
   title: 'analyticshq vs Simple Analytics - privacy-first, with the full report set',
   description: 'Both are cookieless and aggregate-only. analyticshq adds bounce rate, entry and exit pages, goals, and real-time — plus self-hosting and Postgres data ownership.',
 }

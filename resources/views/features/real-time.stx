@@ -32,6 +32,7 @@ const related = [
 ]
 
 useSeoMeta({
+  canonical: 'https://analyticshq.org/features/real-time',
   title: "Real-time visitors - analyticshq",
   description: "See who is on your site right now, which pages they are reading, and where they came from. Live visitor tracking with no cookies and no reload, powered by analyticshq.",
 })

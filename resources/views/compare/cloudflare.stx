@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/cloudflare',
   title: 'analyticshq vs Cloudflare Web Analytics - the privacy-first alternative',
   description: 'Cloudflare Web Analytics is free and cookieless, but read-only on pageviews and locked to Cloudflare. analyticshq adds custom events, data you own in PostgreSQL, and self-hosting, while staying cookieless.',
 }

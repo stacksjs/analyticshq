@@ -13,7 +13,6 @@
 // the hand-rolled `await import()` form buys nothing and loses that.
 import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
 
-const meta = { title: 'analyticshq - Dashboard', description: 'Privacy-first web analytics' }
 
 // The serve layer injects the parsed query string onto the render context as `query`,
 // a plain Record<string, string> (serve.js:9219). This used to read
@@ -757,6 +756,13 @@ const exportPayload = {
   entryPages: entryPages.map(e => ({ path: e.path, entries: Number(e.entries || 0), visitors: Number(e.visitors || 0), bounces: Number(e.bounces || 0), bounce: Number(e.entries) ? Math.round((Number(e.bounces || 0) / Number(e.entries)) * 100) : 0 })),
   exitPages: exitPages.map(e => ({ path: e.path, exits: Number(e.exits || 0), visitors: Number(e.visitors || 0) })),
 }
+
+useSeoMeta({
+  title: "Dashboard - analyticshq",
+  // Auth-walled. Without this these pages were advertised as indexable while
+  // shipping the shell default title.
+  robots: 'noindex, nofollow',
+})
 </script>
 
 <script client>

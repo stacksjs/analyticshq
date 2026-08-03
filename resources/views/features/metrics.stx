@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/features/metrics',
   title: "Pageviews and sessions - analyticshq",
   description: "Every hit counted once and exactly. Pageviews roll up into sessions with entry and exit paths, time on page, and bounce rate — no sampling, no estimates.",
 })

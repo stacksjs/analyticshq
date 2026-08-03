@@ -1,3 +1,12 @@
+<script server>
+useSeoMeta({
+  title: "Create your account - analyticshq",
+  // Auth-walled. Without this these pages were advertised as indexable while
+  // shipping the shell default title.
+  robots: 'noindex, nofollow',
+})
+</script>
+
 <script client>
 // Token auth via stx client directives. Uncontrolled inputs read from the submit
 // event; error/loading are signals.

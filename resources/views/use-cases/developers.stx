@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/use-cases/developers',
   title: "Analytics for developers - analyticshq",
   description: "Cookieless analytics for developers and indie hackers. A one-line script, a one-function events API, self-hostable on PostgreSQL, and privacy-first by default. Powered by analyticshq.",
 })

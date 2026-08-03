@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/google-analytics',
   title: 'analyticshq vs Google Analytics - privacy-first alternative',
   description: 'A cookieless, GDPR-friendly alternative to Google Analytics 4. Exact counts, no consent banner, your data in your own PostgreSQL, and one-click GA import.',
 }

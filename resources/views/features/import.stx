@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/features/import',
   title: 'Import from Google Analytics - analyticshq',
   description: 'Move off Google Analytics without losing your history. Import your GA data into analyticshq and keep the charts you already track — no gaps, no lock-in.',
 }

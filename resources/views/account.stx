@@ -1,3 +1,12 @@
+<script server>
+useSeoMeta({
+  title: "Account - analyticshq",
+  // Auth-walled. Without this these pages were advertised as indexable while
+  // shipping the shell default title.
+  robots: 'noindex, nofollow',
+})
+</script>
+
 <script client>
 // Account page — reactive. Fetches the current user from /api/me in onMount and
 // drives the view through signals (no imperative DOM). The pre-render guard below

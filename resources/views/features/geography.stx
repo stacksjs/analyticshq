@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/features/geography',
   title: "Geography and devices - analyticshq",
   description: "Country, device, browser, and operating system, resolved at the edge from your CDN header. See who visits without tracking who they are — no cookie, no stored IP.",
 })

@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/use-cases',
   title: "Use cases - analyticshq",
   description: "How different teams put analyticshq to work: SaaS, ecommerce, agencies, publishers, and developers. The same cookieless script, from a solo blog to a funded product.",
 })

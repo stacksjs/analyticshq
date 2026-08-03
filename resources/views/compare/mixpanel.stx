@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/mixpanel',
   title: 'analyticshq vs Mixpanel - privacy-first web analytics vs product analytics',
   description: 'Mixpanel is deep product analytics built on user-level tracking, cookies, and a heavy SDK. analyticshq is cookieless web analytics: lightweight, exact, and privacy-first, with no consent banner and data you own.',
 }

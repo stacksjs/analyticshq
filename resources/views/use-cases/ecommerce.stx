@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/use-cases/ecommerce',
   title: "Analytics for ecommerce - analyticshq",
   description: "Cookieless analytics for ecommerce. Attribute orders to the campaigns and referrers that earned them, keep checkout free of a consent wall, and stay GDPR-safe for EU shoppers. Powered by analyticshq.",
 })

@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/features/sources',
   title: "Traffic sources - analyticshq",
   description: "Know exactly where your traffic comes from. Every referrer is classified on arrival, so search, social, direct, and campaign traffic separate automatically.",
 })

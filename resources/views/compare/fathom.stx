@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/fathom',
   title: 'analyticshq vs Fathom Analytics - two cookieless tools compared',
   description: 'Both privacy-first and cookieless. Where analyticshq differs from Fathom: open source, self-hostable on your own PostgreSQL, and country-only geo by design.',
 }

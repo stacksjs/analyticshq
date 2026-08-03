@@ -1,0 +1,26 @@
+# analyticshq — crawl policy.
+#
+# The auth-walled routes below also send `robots: noindex, nofollow` from their own
+# useSeoMeta call, which is what actually keeps them out of an index once fetched.
+# This file stops well-behaved crawlers spending the request at all, and is the only
+# place that can speak for routes that never render HTML.
+#
+# stx ships a robots generator (site-builder/robots.js) but it only runs from the
+# site-builder build path, which this app does not execute — so this file is authored.
+
+User-agent: *
+
+Disallow: /dashboard
+Disallow: /account
+Disallow: /login
+Disallow: /register
+Disallow: /sites/
+
+# The tracking endpoint and the JSON API: no HTML, nothing to index, and crawling them
+# would write junk events.
+Disallow: /api/
+Disallow: /payments/
+
+Allow: /
+
+Sitemap: https://analyticshq.org/sitemap.xml

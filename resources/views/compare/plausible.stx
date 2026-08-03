@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/plausible',
   title: 'analyticshq vs Plausible - privacy-first analytics, compared',
   description: 'Two cookieless, privacy-first analytics tools compared. Where analyticshq goes further: your own PostgreSQL database and country-only geolocation.',
 }

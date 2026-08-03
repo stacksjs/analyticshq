@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/matomo',
   title: 'analyticshq vs Matomo - the lightweight, always-cookieless alternative',
   description: 'Matomo is a powerful, full behavioral suite. analyticshq is the lightweight, always-cookieless, aggregate-only alternative: no consent banner, under 2 KB, data in your own PostgreSQL.',
 }

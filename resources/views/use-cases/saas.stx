@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/use-cases/saas',
   title: "Analytics for SaaS - analyticshq",
   description: "Cookieless analytics for SaaS. Follow visitors from landing page to signup and activation, attribute revenue to channels, and skip the consent banner. Powered by analyticshq.",
 })

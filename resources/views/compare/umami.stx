@@ -2,6 +2,7 @@
 const appName = 'analyticshq'
 
 const meta = {
+  canonical: 'https://analyticshq.org/compare/umami',
   title: 'analyticshq vs Umami - aggregate-only, cookieless analytics',
   description: 'Two open-source, cookieless analytics tools compared. Where analyticshq stays strictly aggregate — 24h rotating IDs, no session replay, no individual profiles — and Umami does not.',
 }

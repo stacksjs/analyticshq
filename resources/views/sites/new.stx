@@ -1,3 +1,12 @@
+<script server>
+useSeoMeta({
+  title: "Add a site - analyticshq",
+  // Auth-walled. Without this these pages were advertised as indexable while
+  // shipping the shell default title.
+  robots: 'noindex, nofollow',
+})
+</script>
+
 <script client>
 // Add-site screen. Creates an owned site via POST /api/sites, then drops into that
 // site's dashboard, where the server-rendered setup panel shows the install snippet.

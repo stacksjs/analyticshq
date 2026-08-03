@@ -1,5 +1,6 @@
 <script server>
 useSeoMeta({
+  canonical: 'https://analyticshq.org/pricing',
   title: "Pricing - analyticshq",
   description: "Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.",
 })
