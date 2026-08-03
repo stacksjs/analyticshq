@@ -147,14 +147,74 @@ const theme = inject(ThemeKey, 'light')    // with default
 
 ## Browser Composables
 
-```typescript
-import {
-  useLocalStorage, useSessionStorage, useEventListener,
-  useClickOutside, useWindowSize, useMediaQuery,
-  usePrefersDark, useOnline
-} from '@stacksjs/stx'
+**Do not import them, and do not destructure the result.** Both were wrong in this file
+until 2026-08-03 and the destructure in particular is silently broken: it came from a
+third implementation (`browser-composables.ts`) that is not even exported, so in a
+`<script client>` block `const { value, remove } = useLocalStorage(...)` yields
+`undefined` for both and nothing tells you.
 
-const { value, remove } = useLocalStorage('key', defaultValue)
+These are auto-imported globals. `useLocalStorage` returns a **signal** — call it to
+read, `.set()` to write, bare name in a template:
+
+```stx
+<script client>
+const theme = useLocalStorage('theme', 'dark')
+
+theme()             // read  -> 'dark'
+theme.set('light')  // write -> persists to localStorage
+</script>
+
+<div x-text="theme"></div>   <!-- bare name; the template proxy unwraps it -->
+```
+
+Same in a `functions/*.ts` composable — still no import. The bundler marks `stx` external
+and the auto-import transform rewrites the bare name into a `window.stx` destructure:
+
+```ts
+// functions/useTheme.ts
+export function useTheme() {
+  const theme = useLocalStorage('theme', 'dark')
+  return { theme, toggle: () => theme.set(theme() === 'dark' ? 'light' : 'dark') }
+}
+```
+
+Writing `import { useLocalStorage } from 'stx'` does work at runtime (same rewrite) but
+TypeScript will complain, because the package index does not export it — that is
+stacksjs/stx#1797, not a mistake on your side.
+
+**Never** `import { useLocalStorage } from '@stacksjs/stx/composables'` for anything
+template-facing. That is a different implementation returning a `StorageRef`
+(`.value` / `.get()` / `.remove()`) which is **not a signal**, so nothing bound to it
+ever re-renders. Signals from one implementation are invisible to the other. It is a
+legitimate API for plain server/Node code and nothing else.
+
+Two caveats worth knowing:
+- `useLocalStorage` JSON-stringifies on write. Any non-composable code reading the same
+  key (a pre-paint guard, say) must `JSON.parse` it — a stored empty string is the
+  two-character value `""`, which is truthy.
+- `window.useSessionStorage` is not assigned even though `window.useLocalStorage` is, so
+  the two diverge outside the `<script client>` destructure. Fixed upstream, not yet in
+  0.2.152.
+
+For state shared **across pages**, use a store instead — it survives SPA navigation,
+which a page-local signal does not:
+
+```ts
+// stores/theme.ts
+export const useTheme = defineStore('theme', () => {
+  const mode = state('dark')
+  return { mode, toggle: () => mode.set(mode() === 'dark' ? 'light' : 'dark') }
+}, { persist: true })
+```
+
+Note stores do **not** get the auto-import destructure that client scripts and
+`functions/*.ts` composables get — `store-loader.js` never imports `STX_RUNTIME_GLOBALS`.
+Only names assigned directly to `window` resolve there (`state`, `effect`, `batch`,
+`navigate`, `defineStore`, `useLocalStorage`); `useCookie` and ~33 others live solely on
+`window.stx` and are a bare `ReferenceError` inside a store. See
+`resources/stores/session.ts` for the shape that works.
+
+```typescript
 const { width, height } = useWindowSize()
 const isDark = usePrefersDark()
 const isOnline = useOnline()
