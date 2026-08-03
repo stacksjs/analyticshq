@@ -1053,10 +1053,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 </style>
 
 {{-- <main>, not a <div>: this is the SPA router's swap container. router.container
-     defaults to 'main', and getContainer() returning null makes shouldIntercept bail,
-     so every link on this page was doing a full document load. The four sibling app
-     pages already declare their own <main>; the dashboard was the only one that did
-     not. Same element, same classes -- only the tag name changes. --}}
+    defaults to 'main', and getContainer() returning null makes shouldIntercept bail,
+    so every link on this page was doing a full document load. The four sibling app
+    pages already declare their own <main>; the dashboard was the only one that did
+    not. Same element, same classes -- only the tag name changes. --}}
 <main class="px-5 py-10 md:px-10 min-h-[100dvh]">
   {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
       viewer isn't signed in as the owner. Upgrade -> Pro swaps reactively (isPro). --}}
@@ -1072,7 +1072,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       <div>
         <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
         <p class="mt-2 text-sm text-text-3">
-          Site <span class="mono text-text-2">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
+          Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
         </p>
         <!-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
             <select> navigates by rewriting ?site=; the plain-text line above is
@@ -1097,10 +1097,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             <a href="/sites/new" class="px-3 py-1.5 font-medium text-xs border pill" style="color: var(--text-2); border-color: var(--border)">+ Add site</a>
           </div>
         @endif
-        <div class="inline-flex gap-2 items-center mt-3 px-2.5 py-1 border pill reveal border-border">
+        <div class="inline-flex gap-2 items-center mt-3 px-2.5 py-1 border border-border pill reveal">
           <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
           <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
-          <span class="text-xs text-text-3">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
+          <span class="text-text-3 text-xs">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
         </div>
       </div>
       <nav class="flex gap-1.5 items-center">
@@ -1116,7 +1116,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
           @endif
           <input type="date" name="from" value="{{ customFrom }}" aria-label="From date"
             class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
-          <span class="text-xs text-text-3">to</span>
+          <span class="text-text-3 text-xs">to</span>
           <input type="date" name="to" value="{{ customTo }}" aria-label="To date"
             class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
           <button type="submit" class="px-3.5 py-1.5 font-medium text-sm border pill"
@@ -1137,7 +1137,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       <div class="flex flex-wrap gap-2 items-center mb-6 reveal">
         @foreach (activeFilters as f)
           <a href="{{ removeFilterUrl(f.key) }}" class="font-medium text-xs filter-pill pill" title="Remove filter">
-            <span><span class="text-text-3">{{ f.label }}:</span> <span class="mono text-text">{{ f.value }}</span></span>
+            <span><span class="text-text-3">{{ f.label }}:</span> <span class="text-text mono">{{ f.value }}</span></span>
             <span class="fx" aria-hidden="true">×</span>
           </a>
         @endforeach
@@ -1146,10 +1146,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @endif
 
     @if (viewGranted && !live)
-      <div class="mb-8 px-4 py-3 text-sm panel reveal text-text-2">
+      <div class="mb-8 px-4 py-3 text-sm text-text-2 panel reveal">
         <span class="font-semibold text-text">Waiting for data.</span>
-        Point <span class="mono text-accent">DB_CONNECTION=postgres</span> at a live database and drop the
-        <span class="mono text-accent">/script.js</span> tracker on your site. Metrics appear here in real time.
+        Point <span class="text-accent mono">DB_CONNECTION=postgres</span> at a live database and drop the
+        <span class="text-accent mono">/script.js</span> tracker on your site. Metrics appear here in real time.
       </div>
     @endif
 
@@ -1158,7 +1158,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         server-rendered — no client JS. {{ }} HTML-escapes the snippet so the tag
         shows as text rather than executing. -->
     @if (ownsActive)
-      <details class="mb-8 panel reveal border-border" {{ Number(kpis.views) ? '' : 'open' }}>
+      <details class="mb-8 border-border panel reveal" {{ Number(kpis.views) ? '' : 'open' }}>
         <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
           <span class="font-semibold text-sm">Install analyticshq on this site</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Snippet</span>
@@ -1188,7 +1188,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <div class="font-semibold text-sm">Share this dashboard</div>
-            <div class="mt-0.5 text-xs text-text-3">A read-only link — anyone with it can view, but not manage, this site.</div>
+            <div class="mt-0.5 text-text-3 text-xs">A read-only link — anyone with it can view, but not manage, this site.</div>
           </div>
           <!-- No @if here (a client-signal @if nested inside a server @if breaks
               stx's @endif matching); reactive :style toggles the two states. -->
@@ -1208,10 +1208,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @if (viewGranted)
 
     <!-- KPIs: hairline-separated, mono numerics, no heavy card chrome -->
-    <div class="grid grid-cols-2 lg:grid-cols-7 mb-6 lg:divide-x panel reveal border-border">
+    <div class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal">
       @foreach (kpiCards as kpi)
         <div class="px-5 py-5 border-border">
-          <div class="mb-2 font-medium text-xs tracking-wider uppercase text-text-3">{{ kpi.label }}</div>
+          <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase">{{ kpi.label }}</div>
           <div class="font-semibold text-3xl tracking-tight mono">{{ kpi.value }}</div>
           @if (kpi.delta !== null)
             <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
@@ -1225,8 +1225,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <!-- Timeseries: page views (area) + unique visitors (line) -->
     <div class="mb-6 p-5 panel reveal">
       <div class="flex flex-wrap gap-3 items-center justify-between mb-5">
-        <h2 class="font-semibold text-xs tracking-wider uppercase text-text-3">Traffic over time</h2>
-        <div class="flex gap-4 items-center text-xs text-text-2">
+        <h2 class="font-semibold text-text-3 text-xs tracking-wider uppercase">Traffic over time</h2>
+        <div class="flex gap-4 items-center text-text-2 text-xs">
           <span class="flex gap-1.5 items-center"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--accent)"></span>Views</span>
           <span class="flex gap-1.5 items-center"><span style="display:inline-block;width:14px;height:0;border-top:2px solid var(--text-3)"></span>Visitors</span>
           @if (compare)
@@ -1258,7 +1258,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
                 <span class="ga-dot ga-dot-u" style="top: {{ pt.visTopPct }}%"></span>
                 <div class="ga-tip" style="top: {{ pt.viewsTopPct }}%">
                   <div class="ga-tip-day mono">{{ pt.label }}</div>
-                  <div class="ga-tip-row"><span class="ga-sw bg-accent"></span>Views <b class="mono">{{ pt.views.toLocaleString() }}</b></div>
+                  <div class="ga-tip-row"><span class="bg-accent ga-sw"></span>Views <b class="mono">{{ pt.views.toLocaleString() }}</b></div>
                   <div class="ga-tip-row"><span class="ga-sw" style="background: var(--text-3)"></span>Visitors <b class="mono">{{ pt.visitors.toLocaleString() }}</b></div>
                   @if (pt.prevViews !== null)
                     <div class="ga-tip-row" style="opacity: 0.7"><span class="ga-sw" style="background: var(--text-3); opacity: 0.5"></span>Prev views <b class="mono">{{ pt.prevViews.toLocaleString() }}</b></div>
@@ -1268,7 +1268,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             @endforeach
           </div>
         </div>
-        <div class="flex justify-between mt-2 text-xs mono text-text-3">
+        <div class="flex justify-between mt-2 text-text-3 text-xs mono">
           <span>{{ chart.firstLabel }}</span>
           @if (hourly)
             <span style="opacity: 0.7">{{ tzLabel }}</span>
@@ -1283,13 +1283,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <div class="grid gap-6 md:grid-cols-2">
       <!-- Top pages -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Top pages</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top pages</h2>
         @forelse (pages as p)
           <a href="{{ addFilterUrl('path', p.path) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ p.path }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ p.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums mono text-text-3" title="Bounce rate — of sessions that landed on this page, the share that bounced">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : '—' }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Bounce rate — of sessions that landed on this page, the share that bounced">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : '—' }}</span>
               <span class="font-medium tabular-nums mono">{{ Number(p.views).toLocaleString() }}</span>
             </span>
           </a>
@@ -1300,11 +1300,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- Top sources -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Top sources</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top sources</h2>
         @forelse (referrers as r)
           <a href="{{ addFilterUrl('source', r.source) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(r.views) / maxRef) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ r.source }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ r.source }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(r.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1320,14 +1320,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <!-- Entry pages -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Entry pages</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Entry pages</h2>
         @forelse (entryPages as e)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.entries) / maxEntry) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ e.path }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ e.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums mono text-text-3" title="Bounce rate">{{ Math.round((Number(e.bounces) / Number(e.entries)) * 100) }}%</span>
-              <span class="tabular-nums mono text-text-3" title="Unique visitors">{{ Number(e.visitors).toLocaleString() }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Bounce rate">{{ Math.round((Number(e.bounces) / Number(e.entries)) * 100) }}%</span>
+              <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(e.visitors).toLocaleString() }}</span>
               <span class="font-medium tabular-nums mono" title="Entries">{{ Number(e.entries).toLocaleString() }}</span>
             </span>
           </div>
@@ -1338,13 +1338,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- Exit pages -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Exit pages</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Exit pages</h2>
         @forelse (exitPages as e)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.exits) / maxExit) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ e.path }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ e.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums mono text-text-3">{{ Number(e.visitors).toLocaleString() }}</span>
+              <span class="tabular-nums text-text-3 mono">{{ Number(e.visitors).toLocaleString() }}</span>
               <span class="font-medium tabular-nums mono">{{ Number(e.exits).toLocaleString() }}</span>
             </span>
           </div>
@@ -1357,11 +1357,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <!-- Top countries -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Top countries</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top countries</h2>
         @forelse (countries as c)
           <a href="{{ addFilterUrl('country', c.country) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxCountry) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ flag(c.country) }} {{ c.country }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ flag(c.country) }} {{ c.country }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1371,11 +1371,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- Devices -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Devices</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Devices</h2>
         @forelse (devices as d)
           <a href="{{ addFilterUrl('device', d.device) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(d.views) / maxDevice) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 capitalize truncate ga-row-label text-text-2">{{ d.device }}</span>
+            <span class="relative pr-2 capitalize text-text-2 truncate ga-row-label">{{ d.device }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(d.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1387,11 +1387,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <!-- Browsers -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Browsers</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Browsers</h2>
         @forelse (browsers as b)
           <a href="{{ addFilterUrl('browser', b.browser) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(b.views) / maxBrowser) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ b.browser }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ b.browser }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(b.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1401,11 +1401,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- Operating systems -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Operating systems</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Operating systems</h2>
         @forelse (systems as s)
           <a href="{{ addFilterUrl('os', s.os) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(s.views) / maxSystem) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ s.os }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ s.os }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(s.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1416,13 +1416,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <!-- Referrer channels: Search / Social / Direct / Referral -->
     <div class="mt-6 p-5 panel reveal">
-      <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Referrer channels</h2>
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrer channels</h2>
       @forelse (channels as c)
         <a href="{{ addFilterUrl('channel', c.name) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxChannel) * 100) }}%; background: var(--bar);"></div>
-          <span class="relative pr-2 truncate ga-row-label text-text-2">{{ c.name }}</span>
+          <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ c.name }}</span>
           <span class="flex relative gap-2.5 items-baseline">
-            <span class="tabular-nums mono text-text-3">{{ Math.round((Number(c.views) / channelTotal) * 100) || (c.views ? '<1' : '0') }}%</span>
+            <span class="tabular-nums text-text-3 mono">{{ Math.round((Number(c.views) / channelTotal) * 100) || (c.views ? '<1' : '0') }}%</span>
             <span class="font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
           </span>
         </a>
@@ -1435,13 +1435,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         normalized Top sources / channels. Clickable to filter; excludes empty/direct traffic.
         {{ }} escapes the (beacon-supplied) url. -->
     <div class="mt-6 p-5 panel reveal">
-      <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Referrers</h2>
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
         <a href="{{ addFilterUrl('referrer', r.url) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(r.views) / maxReferrerUrl) * 100) }}%; background: var(--bar);"></div>
-          <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ r.url }}</span>
+          <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ r.url }}</span>
           <span class="flex relative gap-3.5 items-baseline">
-            <span class="tabular-nums mono text-text-3" title="Unique visitors">{{ Number(r.visitors).toLocaleString() }}</span>
+            <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(r.visitors).toLocaleString() }}</span>
             <span class="font-medium tabular-nums mono" title="Views">{{ Number(r.views).toLocaleString() }}</span>
           </span>
         </a>
@@ -1454,14 +1454,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         proportion bar), conversion rate (converters / distinct visitors), and
         total value. Empty by default (no goals seeded) → "No goals yet." -->
     <div class="mt-6 p-5 panel reveal">
-      <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Goals</h2>
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Goals</h2>
       @forelse (goals as g)
         <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(g.conversions) / maxGoal) * 100) }}%; background: var(--bar);"></div>
-          <span class="relative pr-2 truncate ga-row-label text-text-2">{{ g.name }}</span>
+          <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ g.name }}</span>
           <span class="flex relative gap-3.5 items-baseline">
-            <span class="tabular-nums mono text-text-3">${{ Number(g.total_value).toLocaleString() }}</span>
-            <span class="tabular-nums mono text-text-3">{{ Math.round(goalRate(g.converters)) || (Number(g.converters) ? '<1' : '0') }}%</span>
+            <span class="tabular-nums text-text-3 mono">${{ Number(g.total_value).toLocaleString() }}</span>
+            <span class="tabular-nums text-text-3 mono">{{ Math.round(goalRate(g.converters)) || (Number(g.converters) ? '<1' : '0') }}%</span>
             <span class="font-medium tabular-nums mono">{{ Number(g.conversions).toLocaleString() }}</span>
             @if (ownsActive)
               <button type="button" @click="deleteGoal('{{ g.id }}')" class="relative" title="Delete goal" aria-label="Delete goal {{ g.name }}" style="line-height:1;padding:0 3px;background:none;border:0;color:var(--text-3);cursor:pointer;font-size:16px">&times;</button>
@@ -1500,13 +1500,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         lacks the page_views filter columns), like the Goals panel above. Empty by
         default (custom_events nearly empty) → "No events yet." -->
     <div class="mt-6 p-5 panel reveal">
-      <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Events</h2>
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Events</h2>
       @forelse (events as e)
         <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.events) / maxEvent) * 100) }}%; background: var(--bar);"></div>
-          <span class="relative pr-2 truncate ga-row-label text-text-2">{{ e.name }}</span>
+          <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ e.name }}</span>
           <span class="flex relative gap-3.5 items-baseline">
-            <span class="tabular-nums mono text-text-3">{{ Number(e.visitors).toLocaleString() }}</span>
+            <span class="tabular-nums text-text-3 mono">{{ Number(e.visitors).toLocaleString() }}</span>
             <span class="font-medium tabular-nums mono">{{ Number(e.events).toLocaleString() }}</span>
           </span>
         </div>
@@ -1520,13 +1520,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
         no JSON_EXTRACT); site+range scoped like Events. Display-only; {{ }} escapes the url. -->
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Outbound links</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Outbound links</h2>
         @forelse (outboundLinks as l)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(l.clicks) / maxOutbound) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ l.url }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ l.url }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums mono text-text-3" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
               <span class="font-medium tabular-nums mono" title="Clicks">{{ Number(l.clicks).toLocaleString() }}</span>
             </span>
           </div>
@@ -1536,13 +1536,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
 
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">File downloads</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">File downloads</h2>
         @forelse (fileDownloads as l)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(l.clicks) / maxDownload) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ l.url }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ l.url }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums mono text-text-3" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
               <span class="font-medium tabular-nums mono" title="Downloads">{{ Number(l.clicks).toLocaleString() }}</span>
             </span>
           </div>
@@ -1554,11 +1554,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <!-- Campaigns (UTM): full-width Top campaigns + a 2-up grid of UTM sources / mediums -->
     <div class="mt-6 p-5 panel reveal">
-      <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Top campaigns</h2>
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top campaigns</h2>
       @forelse (campaigns as c)
         <a href="{{ addFilterUrl('campaign', c.campaign) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxCampaign) * 100) }}%; background: var(--bar);"></div>
-          <span class="relative pr-2 truncate ga-row-label mono text-text-2">{{ c.campaign }}</span>
+          <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ c.campaign }}</span>
           <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
         </a>
       @empty
@@ -1569,11 +1569,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <!-- UTM sources -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Campaign sources</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign sources</h2>
         @forelse (utmSources as s)
           <a href="{{ addFilterUrl('utmsource', s.source) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(s.views) / maxUtmSource) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ s.source }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ s.source }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(s.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1583,11 +1583,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- UTM mediums -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Campaign mediums</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign mediums</h2>
         @forelse (utmMediums as m)
           <a href="{{ addFilterUrl('utmmedium', m.medium) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(m.views) / maxUtmMedium) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ m.medium }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ m.medium }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(m.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1597,11 +1597,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- UTM content -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Campaign content</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign content</h2>
         @forelse (utmContents as c)
           <a href="{{ addFilterUrl('utmcontent', c.content) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxUtmContent) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ c.content }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ c.content }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1611,11 +1611,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
       <!-- UTM terms -->
       <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-xs tracking-wider uppercase text-text-3">Campaign terms</h2>
+        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign terms</h2>
         @forelse (utmTerms as t)
           <a href="{{ addFilterUrl('utmterm', t.term) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(t.views) / maxUtmTerm) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 truncate ga-row-label text-text-2">{{ t.term }}</span>
+            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ t.term }}</span>
             <span class="relative font-medium tabular-nums mono">{{ Number(t.views).toLocaleString() }}</span>
           </a>
         @empty
@@ -1642,7 +1642,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
     @endif
 
-    <footer class="mt-12 text-center text-xs text-text-3">
+    <footer class="mt-12 text-center text-text-3 text-xs">
       Privacy-first, cookieless analytics on Stacks and PostgreSQL. <span class="mono">analyticshq.org</span>
     </footer>
 

@@ -56,8 +56,8 @@ async function upgrade(): Promise<void> {
 @push('styles')
 <style>
   /* Pricing-specific pieces, built on the shared marketing.css tokens so the
-     page stays dark-locked and on the same teal accent as the rest of the site.
-     No token redefinition, no light-mode override. */
+    page stays dark-locked and on the same teal accent as the rest of the site.
+    No token redefinition, no light-mode override. */
   .price-toggle-row { display: flex; justify-content: center; margin-bottom: 2.75rem; }
   .price-toggle { display: inline-flex; gap: 0.25rem; padding: 0.28rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
   .price-toggle button { appearance: none; border: 0; cursor: pointer; padding: 0.5rem 1.15rem; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; font-size: 0.9rem; transition: color 0.16s ease, background 0.16s ease; }
@@ -131,7 +131,7 @@ async function upgrade(): Promise<void> {
             <a href="/register" class="btn ghost">Get started</a>
           </div>
 
-          <div class="plan featured">
+          <div class="featured plan">
             <span class="plan-eyebrow">Pro</span>
             <div class="plan-price">
               <span class="plan-amt">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span>

@@ -96,15 +96,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endif
 
       <div>
-        <label class="block mb-1.5 font-medium text-xs text-text-2">Name</label>
+        <label class="block mb-1.5 font-medium text-text-2 text-xs">Name</label>
         <input name="name" type="text" required autocomplete="name" placeholder="Ada Lovelace" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
-        <label class="block mb-1.5 font-medium text-xs text-text-2">Email</label>
+        <label class="block mb-1.5 font-medium text-text-2 text-xs">Email</label>
         <input name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
-        <label class="block mb-1.5 font-medium text-xs text-text-2">Password</label>
+        <label class="block mb-1.5 font-medium text-text-2 text-xs">Password</label>
         <input name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 

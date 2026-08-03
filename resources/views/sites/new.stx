@@ -105,11 +105,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @endif
 
       <div>
-        <label class="block mb-1.5 font-medium text-xs text-text-2">Site name</label>
+        <label class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
         <input name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
       <div>
-        <label class="block mb-1.5 font-medium text-xs text-text-2">Domain <span class="text-text-3">(optional)</span></label>
+        <label class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
         <input name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
       </div>
 

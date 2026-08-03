@@ -176,15 +176,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
 {{-- Pre-paint guard: bounce to /login before first paint when there is no token.
 
-     This is one of the few places that legitimately touches localStorage directly.
-     It runs before the signals runtime and the store bundle exist, so useStore is not
-     available yet; ch.8.11 lists the pre-paint auth bounce as the documented exception,
-     and `replace` is deliberate so Back cannot return here.
+    This is one of the few places that legitimately touches localStorage directly.
+    It runs before the signals runtime and the store bundle exist, so useStore is not
+    available yet; ch.8.11 lists the pre-paint auth bounce as the documented exception,
+    and `replace` is deliberate so Back cannot return here.
 
-     It MUST decode, not just test for presence. The session store persists through
-     useLocalStorage, which JSON.stringifies -- so a signed-out token is the literal
-     two-character string "" , which is truthy. Testing the raw value would let a
-     signed-out visitor straight through. --}}
+    It MUST decode, not just test for presence. The session store persists through
+    useLocalStorage, which JSON.stringifies -- so a signed-out token is the literal
+    two-character string "" , which is truthy. Testing the raw value would let a
+    signed-out visitor straight through. --}}
 <script>
 ;(function () {
   // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
