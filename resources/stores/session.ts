@@ -13,12 +13,14 @@
  *     so every top-level name here must be globally unique across resources/stores/.
  *   - state/derived/effect/useLocalStorage/navigate are runtime globals; do not import.
  *
- * THE MIGRATION BELOW IS LOAD-BEARING -- do not delete it.
- * useLocalStorage JSON.parses on read and JSON.stringifies on write (signals.js:4574).
- * Every existing client wrote the token RAW (`localStorage.setItem('token', token)`),
- * so handing that key straight to useLocalStorage would JSON.parse a bare JWT and throw
- * SyntaxError for every already-signed-in visitor. We re-encode the legacy value once,
- * before the signal is created.
+ * ON THE MIGRATION BELOW (rewritten for stx 0.2.151 -- the earlier note here was true of
+ * 0.2.146 and is not any more, so do not restore it):
+ * useLocalStorage still JSON.stringifies on write, but the read path now goes through
+ * stxParseStored, which on a parse failure WARNS and returns the raw string instead of
+ * throwing. So a legacy raw token no longer breaks the page; it simply logs
+ * `"token" holds a value that is not JSON` on every load until something rewrites it.
+ * sessionMigrateRaw re-encodes it once so that warning never fires. That is now its only
+ * job -- it is a papercut fix, not a crash guard.
  */
 
 const SESSION_TOKEN_KEY = 'token'
@@ -65,14 +67,17 @@ sessionMigrateRaw(SESSION_TOKEN_KEY)
 sessionMigrateRaw(SESSION_USER_KEY)
 
 defineStore('session', (): SessionStore => {
-  // NOTE the shape of these two annotations. `useLocalStorage<SessionUser | null>(...)`
-  // would be the obvious way to type them and it BREAKS: auto-import detection matches
-  // /\b<symbol>\s*\(/ on the raw source (client-script.js:400), so a `<` where the `(`
-  // must be means the symbol is never detected, no destructuring is emitted, and the
-  // call throws ReferenceError at runtime with no build error. Annotate the binding --
-  // or cast it, where the default value makes inference too narrow -- never the call.
+  // NOTE the shape of these two annotations. 0.2.151 declares
+  // `useLocalStorage<T>(key, default): StxSignal<T>`, so the return type is inferred
+  // from the DEFAULT -- and `null` alone infers StxSignal<null>, which cannot accept a
+  // user. Widen the default rather than writing `useLocalStorage<SessionUser | null>(...)`:
+  // for a client <script> block the generic form is a runtime bug, because auto-import
+  // detection matches /\b<symbol>\s*\(/ on the raw source (client-script.js:400) and a
+  // `<` where the `(` must be means the destructuring line is never emitted. Store files
+  // are not scanned that way, but keeping one habit everywhere is cheaper than
+  // remembering which files are exempt.
   const token: StxSignal<string> = useLocalStorage(SESSION_TOKEN_KEY, '')
-  const user = useLocalStorage(SESSION_USER_KEY, null) as StxSignal<SessionUser | null>
+  const user: StxSignal<SessionUser | null> = useLocalStorage(SESSION_USER_KEY, null as SessionUser | null)
 
   // The dashboard and account pages render owner-scoped content on the SERVER, which
   // cannot read localStorage -- it authenticates from this cookie. useCookie owns the
