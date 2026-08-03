@@ -1,5 +1,3 @@
-import type { SessionStore, SessionUser } from '~/types/session'
-
 /**
  * The one owner of auth state. Replaces 18 hand-written localStorage calls and 6
  * hand-serialised document.cookie writes spread across login, register, account,
@@ -7,9 +5,10 @@ import type { SessionStore, SessionUser } from '~/types/session'
  *
  * HOW THIS FILE IS LOADED (store-loader contract -- it is not a normal module):
  *   - resources/stores/ *.ts, top level only, non-recursive.
- *   - Every single-line `import ... from '...'` is DELETED before transpile, so the
- *     `import type` above is author-time only. Never add a VALUE import here; it would
- *     be stripped and throw ReferenceError at runtime with no build error.
+ *   - Every single-line `import ... from '...'` is DELETED before transpile. That is why
+ *     this file imports NOTHING: its types come from types/session.d.ts as ambient
+ *     declarations. A value import here would be stripped and throw ReferenceError at
+ *     runtime with no build error; an import of a type would vanish just as quietly.
  *   - `export` is stripped and all store files are concatenated into ONE shared IIFE,
  *     so every top-level name here must be globally unique across resources/stores/.
  *   - state/derived/effect/useLocalStorage/navigate are runtime globals; do not import.
