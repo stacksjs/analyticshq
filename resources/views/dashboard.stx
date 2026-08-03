@@ -15,11 +15,17 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtD
 
 const meta = { title: 'analyticshq - Dashboard', description: 'Privacy-first web analytics' }
 
-// Query params reach server scripts via globalThis.__stxServeSearch (the serve
-// layer stashes url.search there); there is no `request.query` in stx-serve.
-const query = new URLSearchParams((typeof globalThis !== 'undefined' && globalThis.__stxServeSearch) || '')
-let siteId = query.get('site') || 'demo'
-const range = query.get('range') || '1y'
+// The serve layer injects the parsed query string onto the render context as `query`,
+// a plain Record<string, string> (serve.js:9219). This used to read
+// globalThis.__stxServeSearch and re-parse it, with a comment claiming stx-serve had no
+// request.query -- true when that was written, not any more.
+//
+// Aliased rather than used directly because a standalone render (the SSG path, or
+// processDirectives called without a request) injects nothing, and a bare `query` would
+// be a ReferenceError there rather than an empty result.
+const queryParams = typeof query !== 'undefined' ? query : {}
+let siteId = queryParams.site || 'demo'
+const range = queryParams.range || '1y'
 // 'all' spans from the site's earliest pageview (resolved in loadData) to now, so
 // imported/backfilled history (e.g. years of Fathom data) is visible. Fixed ranges
 // are `now - days`. These are `let` because the 'all' span — and the chart bucket
@@ -27,8 +33,8 @@ const range = query.get('range') || '1y'
 const isAll = range === 'all'
 // Custom range: explicit ?from=YYYY-MM-DD&to=YYYY-MM-DD (both required, valid).
 // Takes precedence over the preset; the picker below submits these.
-const qFrom = query.get('from')
-const qTo = query.get('to')
+const qFrom = queryParams.from
+const qTo = queryParams.to
 const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)
 const isCustom = !isAll && isDate(qFrom) && isDate(qTo)
 const customFrom = isCustom ? String(qFrom).slice(0, 10) : ''
@@ -55,7 +61,7 @@ let tzLabel = 'UTC'
 const liveFrom = new Date(Date.now() - 5 * 60 * 1000).toISOString()
 // Compare-to-previous-period overlay: ?compare=1 draws the immediately-preceding window
 // (same length) as a faded line. Disabled for 'all' (no meaningful prior period).
-const compare = query.get('compare') === '1' && !isAll
+const compare = queryParams.compare === '1' && !isAll
 let prevFrom = new Date(new Date(from).getTime() - days * 864e5).toISOString()
 
 const ranges = [
@@ -106,7 +112,7 @@ const SESSION_DIMENSIONS = new Set(['country', 'device', 'browser', 'os'])
 let sessionFilterSql = ''
 const sessionFilterParams = []
 for (const key of Object.keys(FILTERS)) {
-  const raw = query.get(key)
+  const raw = queryParams[key]
   if (raw == null)
     continue
   const value = String(raw).trim()
@@ -224,8 +230,13 @@ async function loadData() {
   // Server-authenticate from the analyticshq_token cookie (mirrored from localStorage by
   // the client bootstrap at the bottom of the page), so the switcher + setup panel
   // are scoped to the caller's OWN sites — same shape as bughq's dashboard.
-  // requestContext is guarded: it's absent in a prefetch/standalone render.
-  const authToken = (typeof requestContext !== 'undefined' && requestContext.cookie && requestContext.cookie('analyticshq_token')) || ''
+  // Read from the injected `cookies` record (serve.js:9222), not requestContext.
+  // requestContext is not part of stx at all -- it is a global installed by whichever
+  // server booted, and the dev and production implementations resolve it differently
+  // (dev goes through AsyncLocalStorage, which only populates after the first top-level
+  // await). `cookies` is written onto this render's context with no ordering rule.
+  // Still guarded, because a standalone render injects nothing.
+  const authToken = (typeof cookies !== 'undefined' ? cookies.analyticshq_token : '') || ''
   if (authToken) {
     try {
       const { Auth } = await import('@stacksjs/auth')
@@ -257,8 +268,8 @@ async function loadData() {
   //   4. none of the above                        → gated (bail, run no queries)
   // Site ids are PUBLIC (they ride in the tracking snippet), so without this
   // server-side gate any curl / logged-in non-owner could read every site's stats.
-  const requestedSite = query.get('site')
-  const shareParam = query.get('share')
+  const requestedSite = queryParams.site
+  const shareParam = queryParams.share
   const ownedMatch = requestedSite && ownedSites.find(s => String(s.id) === String(requestedSite))
   if (ownedMatch) {
     siteId = String(ownedMatch.id)
