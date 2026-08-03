@@ -2,78 +2,93 @@
     and the name "site-nav". One source of truth for the top nav across every
     marketing page, with two CSS-only mega-menu dropdowns (Features, Use cases).
     No JS: panels reveal on hover and on keyboard focus via :focus-within
-    (see the .mega rules in /marketing.css). --}}
+    (see the .mega rules in /marketing.css).
+
+    Internal destinations are StxLink, which the router matches unconditionally --
+    it is the only form that gets hover prefetch and an active class. The
+    data-no-router these carried existed because marketing pages used to hand-write
+    their own document and so reported the same layout group as the app, making the
+    router treat a crossing as a same-layout fragment swap that never carried the
+    stylesheet. They resolve a real layout now, so the opt-out has no reason to exist
+    and is removed. Note it would be ignored on an StxLink anyway: the router matches
+    [data-stx-link] before shouldIntercept is ever consulted.
+
+    Two destinations stay plain <a> on purpose -- see the comments inline. --}}
 <nav class="nav">
   <div class="nav-inner shell">
-    <a class="brand" href="/" aria-label="analyticshq home">
+    <StxLink to="/" class="brand" aria-label="analyticshq home">
       <span class="brand-mark">a</span>
       <span class="brand-name">analyticshq</span>
-    </a>
+    </StxLink>
 
     <div class="nav-links" aria-label="Primary navigation">
       <div class="mega">
-        <a class="mega-trigger" href="/features" data-no-router aria-haspopup="true">Features</a>
+        <StxLink to="/features" class="mega-trigger" activeClass="nav-current" aria-haspopup="true">Features</StxLink>
         <div class="mega-panel" role="menu" aria-label="Features">
-          <a role="menuitem" href="/features/real-time" data-no-router><span class="mega-t">Real-time visitors</span><span class="mega-d">See who is on your site right now, live.</span></a>
-          <a role="menuitem" href="/features/metrics" data-no-router><span class="mega-t">Pageviews &amp; sessions</span><span class="mega-d">Sessions, bounce, entry and exit paths.</span></a>
-          <a role="menuitem" href="/features/sources" data-no-router><span class="mega-t">Sources &amp; referrers</span><span class="mega-d">Search, social, and direct, classified automatically.</span></a>
-          <a role="menuitem" href="/features/goals" data-no-router><span class="mega-t">Goals &amp; events</span><span class="mega-d">One-line conversions with UTM campaigns.</span></a>
-          <a role="menuitem" href="/features/geography" data-no-router><span class="mega-t">Geography &amp; devices</span><span class="mega-d">Country, device, browser, and OS.</span></a>
-          <a role="menuitem" href="/features/web-vitals" data-no-router><span class="mega-t">Core Web Vitals</span><span class="mega-d">Real-user LCP, INP, and CLS beside traffic.</span></a>
-          <a role="menuitem" href="/features/privacy" data-no-router><span class="mega-t">Privacy by design</span><span class="mega-d">No cookies, no consent banner, no personal data.</span></a>
-          <a role="menuitem" href="/features/import" data-no-router><span class="mega-t">Import from Google Analytics</span><span class="mega-d">Bring your GA history over in one click.</span></a>
+          <StxLink to="/features/real-time" role="menuitem" activeClass="nav-current"><span class="mega-t">Real-time visitors</span><span class="mega-d">See who is on your site right now, live.</span></StxLink>
+          <StxLink to="/features/metrics" role="menuitem" activeClass="nav-current"><span class="mega-t">Pageviews &amp; sessions</span><span class="mega-d">Sessions, bounce, entry and exit paths.</span></StxLink>
+          <StxLink to="/features/sources" role="menuitem" activeClass="nav-current"><span class="mega-t">Sources &amp; referrers</span><span class="mega-d">Search, social, and direct, classified automatically.</span></StxLink>
+          <StxLink to="/features/goals" role="menuitem" activeClass="nav-current"><span class="mega-t">Goals &amp; events</span><span class="mega-d">One-line conversions with UTM campaigns.</span></StxLink>
+          <StxLink to="/features/geography" role="menuitem" activeClass="nav-current"><span class="mega-t">Geography &amp; devices</span><span class="mega-d">Country, device, browser, and OS.</span></StxLink>
+          <StxLink to="/features/web-vitals" role="menuitem" activeClass="nav-current"><span class="mega-t">Core Web Vitals</span><span class="mega-d">Real-user LCP, INP, and CLS beside traffic.</span></StxLink>
+          <StxLink to="/features/privacy" role="menuitem" activeClass="nav-current"><span class="mega-t">Privacy by design</span><span class="mega-d">No cookies, no consent banner, no personal data.</span></StxLink>
+          <StxLink to="/features/import" role="menuitem" activeClass="nav-current"><span class="mega-t">Import from Google Analytics</span><span class="mega-d">Bring your GA history over in one click.</span></StxLink>
         </div>
       </div>
 
       <div class="mega">
-        <a class="mega-trigger" href="/use-cases" data-no-router aria-haspopup="true">Use cases</a>
+        <StxLink to="/use-cases" class="mega-trigger" activeClass="nav-current" aria-haspopup="true">Use cases</StxLink>
         <div class="mega-panel" role="menu" aria-label="Use cases">
-          <a role="menuitem" href="/use-cases" data-no-router><span class="mega-t">All use cases</span><span class="mega-d">How different teams put analyticshq to work.</span></a>
-          <a role="menuitem" href="/use-cases/saas" data-no-router><span class="mega-t">SaaS</span><span class="mega-d">From first visit to activated, no cookie banner.</span></a>
-          <a role="menuitem" href="/use-cases/ecommerce" data-no-router><span class="mega-t">Ecommerce</span><span class="mega-d">Tie every order to the click that earned it.</span></a>
-          <a role="menuitem" href="/use-cases/agencies" data-no-router><span class="mega-t">Agencies</span><span class="mega-d">Every client site in one clean dashboard.</span></a>
-          <a role="menuitem" href="/use-cases/publishers" data-no-router><span class="mega-t">Publishers &amp; blogs</span><span class="mega-d">Know what readers actually read.</span></a>
-          <a role="menuitem" href="/use-cases/developers" data-no-router><span class="mega-t">Developers</span><span class="mega-d">One-line script, a real API, self-hostable.</span></a>
+          <StxLink to="/use-cases" role="menuitem" exactActiveClass="nav-current"><span class="mega-t">All use cases</span><span class="mega-d">How different teams put analyticshq to work.</span></StxLink>
+          <StxLink to="/use-cases/saas" role="menuitem" activeClass="nav-current"><span class="mega-t">SaaS</span><span class="mega-d">From first visit to activated, no cookie banner.</span></StxLink>
+          <StxLink to="/use-cases/ecommerce" role="menuitem" activeClass="nav-current"><span class="mega-t">Ecommerce</span><span class="mega-d">Tie every order to the click that earned it.</span></StxLink>
+          <StxLink to="/use-cases/agencies" role="menuitem" activeClass="nav-current"><span class="mega-t">Agencies</span><span class="mega-d">Every client site in one clean dashboard.</span></StxLink>
+          <StxLink to="/use-cases/publishers" role="menuitem" activeClass="nav-current"><span class="mega-t">Publishers &amp; blogs</span><span class="mega-d">Know what readers actually read.</span></StxLink>
+          <StxLink to="/use-cases/developers" role="menuitem" activeClass="nav-current"><span class="mega-t">Developers</span><span class="mega-d">One-line script, a real API, self-hostable.</span></StxLink>
         </div>
       </div>
 
-      <a href="/pricing" data-no-router>Pricing</a>
-      <a href="/compare" data-no-router>Compare</a>
+      <StxLink to="/pricing" activeClass="nav-current">Pricing</StxLink>
+      <StxLink to="/compare" activeClass="nav-current">Compare</StxLink>
+      {{-- /docs is served by the BunPress proxy, not by stx. A fragment fetch would
+          get a document the router cannot swap, so this one keeps the opt-out. --}}
       <a href="/docs" data-no-router>Docs</a>
-      <a href="https://github.com/stacksjs/analyticshq" data-no-router>GitHub</a>
+      {{-- External host: the router declines it at shouldIntercept anyway, so
+          data-no-router would be noise. --}}
+      <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
     </div>
 
-    <a class="nav-login" href="/login">Log in</a>
-    <a class="btn nav-cta primary sm" href="/register">Sign up</a>
+    <StxLink to="/login" class="nav-login">Log in</StxLink>
+    <StxLink to="/register" class="btn nav-cta primary sm">Sign up</StxLink>
 
     <details class="nav-menu">
       <summary aria-label="Open menu"><span class="burger" aria-hidden="true"></span></summary>
       <div class="nav-menu-panel">
         <span class="nav-menu-group">Features</span>
-        <a href="/features/real-time" data-no-router>Real-time visitors</a>
-        <a href="/features/metrics" data-no-router>Pageviews &amp; sessions</a>
-        <a href="/features/sources" data-no-router>Sources &amp; referrers</a>
-        <a href="/features/goals" data-no-router>Goals &amp; events</a>
-        <a href="/features/geography" data-no-router>Geography &amp; devices</a>
-        <a href="/features/web-vitals" data-no-router>Core Web Vitals</a>
-        <a href="/features/privacy" data-no-router>Privacy by design</a>
-        <a href="/features/import" data-no-router>Import from Google Analytics</a>
+        <StxLink to="/features/real-time" activeClass="nav-current">Real-time visitors</StxLink>
+        <StxLink to="/features/metrics" activeClass="nav-current">Pageviews &amp; sessions</StxLink>
+        <StxLink to="/features/sources" activeClass="nav-current">Sources &amp; referrers</StxLink>
+        <StxLink to="/features/goals" activeClass="nav-current">Goals &amp; events</StxLink>
+        <StxLink to="/features/geography" activeClass="nav-current">Geography &amp; devices</StxLink>
+        <StxLink to="/features/web-vitals" activeClass="nav-current">Core Web Vitals</StxLink>
+        <StxLink to="/features/privacy" activeClass="nav-current">Privacy by design</StxLink>
+        <StxLink to="/features/import" activeClass="nav-current">Import from Google Analytics</StxLink>
 
         <span class="nav-menu-group">Use cases</span>
-        <a href="/use-cases" data-no-router>All use cases</a>
-        <a href="/use-cases/saas" data-no-router>SaaS</a>
-        <a href="/use-cases/ecommerce" data-no-router>Ecommerce</a>
-        <a href="/use-cases/agencies" data-no-router>Agencies</a>
-        <a href="/use-cases/publishers" data-no-router>Publishers &amp; blogs</a>
-        <a href="/use-cases/developers" data-no-router>Developers</a>
+        <StxLink to="/use-cases" exactActiveClass="nav-current">All use cases</StxLink>
+        <StxLink to="/use-cases/saas" activeClass="nav-current">SaaS</StxLink>
+        <StxLink to="/use-cases/ecommerce" activeClass="nav-current">Ecommerce</StxLink>
+        <StxLink to="/use-cases/agencies" activeClass="nav-current">Agencies</StxLink>
+        <StxLink to="/use-cases/publishers" activeClass="nav-current">Publishers &amp; blogs</StxLink>
+        <StxLink to="/use-cases/developers" activeClass="nav-current">Developers</StxLink>
 
         <span class="nav-menu-group">More</span>
-        <a href="/pricing" data-no-router>Pricing</a>
-        <a href="/compare" data-no-router>Compare</a>
+        <StxLink to="/pricing" activeClass="nav-current">Pricing</StxLink>
+        <StxLink to="/compare" activeClass="nav-current">Compare</StxLink>
         <a href="/docs" data-no-router>Docs</a>
-        <a href="https://github.com/stacksjs/analyticshq" data-no-router>GitHub</a>
-        <a href="/login">Log in</a>
-        <a class="btn primary sm" href="/register">Sign up</a>
+        <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
+        <StxLink to="/login">Log in</StxLink>
+        <StxLink to="/register" class="btn primary sm">Sign up</StxLink>
       </div>
     </details>
   </div>

@@ -140,6 +140,13 @@
       }
       .nav-links a { transition: color 0.16s ease; }
       .nav-links a:hover { color: var(--ink); }
+
+      /* Current-page state. StxLink adds .nav-current via data-stx-active-class once
+         the router resolves the route; before this rule existed the marketing nav had
+         no active state at all, which is why nothing in the CSS referenced it. */
+      .nav-links a.nav-current,
+      .nav-menu-panel a.nav-current { color: var(--ink); font-weight: 600; }
+      .mega-panel a.nav-current .mega-t { color: var(--accent); }
       .nav-cta { margin-left: 1.6rem; }
 
       /* mobile menu - pure-CSS disclosure (details/summary), no JS */

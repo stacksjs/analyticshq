@@ -87,12 +87,14 @@ async function upgrade(): Promise<void> {
 </style>
 @endpush
 
-@section('content')
+@push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
         itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
       })
+@endpush
 
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
         @foreach (crumbs as c)
           @if (c.href)
