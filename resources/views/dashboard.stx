@@ -805,18 +805,20 @@ const shareCopied = state(false)
 // server block; the poll stops on 401 (a share viewer has no owner token).
 const liveCount = state(typeof liveNow === 'number' ? liveNow : 0)
 
-function authHeaders(json) {
-  const h = { Authorization: `Bearer ${localStorage.getItem('token') || ''}` }
+const session = useStore('session') as SessionStore
+
+function authHeaders(json: boolean = false): Record<string, string> {
+  const h: Record<string, string> = session.authHeaders()
   if (json)
     h['Content-Type'] = 'application/json'
   return h
 }
 
-function logout() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  document.cookie = 'analyticshq_token=; path=/; max-age=0'
-  window.location.assign('/login')
+function logout(): void {
+  // Clears the token and the user, expires the analyticshq_token cookie through the
+  // store's effect, and navigates -- the three things this used to do by hand, in an
+  // order that left the cookie behind if the assign fired first.
+  session.signOut()
 }
 
 async function addGoal(e) {
@@ -1672,11 +1674,21 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     opening tag and everything through the next closing tag — including this
     comment's terminator and the bootstrap below — is silently deleted. -->
 <script>
-(function () {
-  var t = localStorage.getItem('token')
+;(function () {
+  // MUST decode. The session store persists the token through useLocalStorage, which
+  // JSON.stringifies -- so the stored value is "abc" WITH quotes, and a signed-out
+  // token is the literal two-character string "" , which is truthy. Testing the raw
+  // value would let a signed-out visitor through, and writing it into the cookie
+  // unparsed would hand the server a token wrapped in quote characters.
+  var raw = null
+  try { raw = localStorage.getItem('token') }
+  catch (e) { raw = null }
+  var t = ''
+  try { t = raw ? JSON.parse(raw) : '' }
+  catch (e) { t = raw || '' }
   if (!t) { window.location.replace('/login'); return }
   if (!/(^|;)\s*analyticshq_token=/.test(document.cookie)) {
-    document.cookie = 'analyticshq_token=' + t + '; path=/; max-age=2592000; samesite=lax'
+    document.cookie = 'analyticshq_token=' + encodeURIComponent(t) + '; path=/; max-age=2592000; samesite=lax'
     window.location.reload()
   }
 })()

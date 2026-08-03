@@ -1,47 +1,43 @@
 <script client>
 // Token auth via stx client directives. Uncontrolled inputs read from the submit
 // event; error/loading are signals.
-const error = state('')
-const loading = state(false)
+const session = useStore('session') as SessionStore
+const error: StxSignal<string> = state('')
+const loading: StxSignal<boolean> = state(false)
 // Social sign-in failures come back as ?error= from the OAuth callback redirect.
-const oauthError = state('')
+const oauthError: StxSignal<string> = state('')
 
 onMount(() => {
-  try {
-    const msg = new URLSearchParams(window.location.search).get('error')
-    if (msg)
-      oauthError.set(msg)
-  }
-  catch {}
+  const msg = useSearchParams().get('error')
+  if (msg)
+    oauthError.set(msg)
 })
 
-async function handleSubmit(e) {
+async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (loading())
     return
-  const form = e.target
+  const form = e.target as HTMLFormElement
   loading.set(true)
   error.set('')
   try {
+    const email = (form.elements.namedItem('email') as HTMLInputElement).value
+    const password = (form.elements.namedItem('password') as HTMLInputElement).value
     const res = await fetch('/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: form.elements.email.value, password: form.elements.password.value }),
+      body: JSON.stringify({ email, password }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: AuthResponse = await res.json().catch(() => ({}))
     if (!res.ok) {
       error.set(data.message || 'Invalid email or password.')
       return
     }
-    const token = data.token || data.access_token || ''
-    localStorage.setItem('token', token)
-    if (data.user)
-      localStorage.setItem('user', JSON.stringify(data.user))
-    // The dashboard renders its owner-scoped view on the SERVER, which cannot
-    // read localStorage — it authenticates from this cookie. Set it here rather
-    // than relying on the dashboard's own bootstrap to mirror it, so a fresh
-    // login lands on data instead of the signed-out gate.
-    document.cookie = `analyticshq_token=${token}; path=/; max-age=2592000; samesite=lax`
+    // signIn persists the token and user, and the store's effect mirrors the token
+    // into the analyticshq_token cookie -- which is what the SERVER reads to render
+    // the owner-scoped dashboard, so a fresh login lands on data rather than the
+    // signed-out gate. That cookie string used to be hand-written right here.
+    session.signIn(data.token || data.access_token || '', data.user ?? null)
     navigate('/dashboard')
   }
   catch {

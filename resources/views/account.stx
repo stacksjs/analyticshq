@@ -2,19 +2,20 @@
 // Account page — reactive. Fetches the current user from /api/me in onMount and
 // drives the view through signals (no imperative DOM). The pre-render guard below
 // handles the no-token redirect before paint; onMount handles an invalid token.
-const loaded = state(false)
-const name = state('')
-const email = state('')
-const since = state('--')
-const avatarUrl = state('')
-const initialCh = state('')
-const provider = state('')
-const pro = state(false)
+const session = useStore('session') as SessionStore
+const loaded: StxSignal<boolean> = state(false)
+const name: StxSignal<string> = state('')
+const email: StxSignal<string> = state('')
+const since: StxSignal<string> = state('--')
+const avatarUrl: StxSignal<string> = state('')
+const initialCh: StxSignal<string> = state('')
+const provider: StxSignal<string> = state('')
+const pro: StxSignal<boolean> = state(false)
 
-function initial(s) {
+function initial(s: string | null | undefined): string {
   return (s || '?').trim().charAt(0).toUpperCase()
 }
-function fmtDate(v) {
+function fmtDate(v: string | null | undefined): string {
   if (!v)
     return '--'
   const d = new Date(v)
@@ -23,36 +24,32 @@ function fmtDate(v) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function logout() {
-  const token = localStorage.getItem('token')
-  try {
-    fetch('/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-  }
-  catch {}
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  window.location.assign('/login')
+function logout(): void {
+  // Fire-and-forget: the server revokes the token, but the visitor should not wait on
+  // it. signOut clears both stores, expires the cookie, and navigates.
+  fetch('/logout', { method: 'POST', headers: session.authHeaders() }).catch(() => {})
+  session.signOut()
 }
 
 onMount(() => {
-  const token = localStorage.getItem('token')
-  if (!token) {
+  if (!session.isAuthed()) {
     window.location.replace('/login')
     return
   }
-  fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
-    .then((r) => {
+  fetch('/api/me', { headers: session.authHeaders() })
+    .then((r: Response) => {
       if (r.status === 401) {
-        localStorage.removeItem('token')
-        window.location.replace('/login')
+        // Stale token: clear everything rather than only the localStorage key, or the
+        // cookie survives and the server keeps rendering a signed-in shell.
+        session.signOut()
         return null
       }
-      return r.json()
+      return r.json() as Promise<MeResponse>
     })
-    .then((d) => {
+    .then((d: MeResponse | null) => {
       if (!d || !d.user)
         return
-      const u = d.user
+      const u: SessionUser = d.user
       name.set(u.name || 'Your account')
       email.set(u.email || '')
       since.set(fmtDate(u.created_at))
@@ -168,9 +165,26 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   </main>
 </div>
 
-<!-- Pre-render guard: bounce to /login before paint when there's no token. Pure
-    navigation, no DOM manipulation; the invalid-token case is handled in onMount. -->
+{{-- Pre-paint guard: bounce to /login before first paint when there is no token.
+
+     This is one of the few places that legitimately touches localStorage directly.
+     It runs before the signals runtime and the store bundle exist, so useStore is not
+     available yet; ch.8.11 lists the pre-paint auth bounce as the documented exception,
+     and `replace` is deliberate so Back cannot return here.
+
+     It MUST decode, not just test for presence. The session store persists through
+     useLocalStorage, which JSON.stringifies -- so a signed-out token is the literal
+     two-character string "" , which is truthy. Testing the raw value would let a
+     signed-out visitor straight through. --}}
 <script>
-if (!localStorage.getItem('token'))
-  window.location.replace('/login')
+;(function () {
+  var raw = null
+  try { raw = localStorage.getItem('token') }
+  catch (e) { raw = null }
+  var token = ''
+  try { token = raw ? JSON.parse(raw) : '' }
+  catch (e) { token = raw || '' }
+  if (!token)
+    window.location.replace('/login')
+})()
 </script>

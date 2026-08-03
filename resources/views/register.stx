@@ -1,15 +1,17 @@
 <script client>
 // Token auth via stx client directives. Uncontrolled inputs read from the submit
 // event; error/loading are signals.
-const error = state('')
-const loading = state(false)
+const session = useStore('session') as SessionStore
+const error: StxSignal<string> = state('')
+const loading: StxSignal<boolean> = state(false)
 
-async function handleSubmit(e) {
+async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (loading())
     return
-  const form = e.target
-  if (form.elements.password.value.length < 8) {
+  const form = e.target as HTMLFormElement
+  const field = (n: string): string => (form.elements.namedItem(n) as HTMLInputElement).value
+  if (field('password').length < 8) {
     error.set('Password must be at least 8 characters.')
     return
   }
@@ -20,19 +22,21 @@ async function handleSubmit(e) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: form.elements.name.value,
-        email: form.elements.email.value,
-        password: form.elements.password.value,
+        name: field('name'),
+        email: field('email'),
+        password: field('password'),
       }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: AuthResponse = await res.json().catch(() => ({}))
     if (!res.ok) {
       error.set(data.message || 'Could not create the account.')
       return
     }
-    localStorage.setItem('token', data.token || data.access_token || '')
-    if (data.user)
-      localStorage.setItem('user', JSON.stringify(data.user))
+    // This also fixes a real inconsistency with login: register never wrote the
+    // analyticshq_token cookie, so a freshly registered visitor reached the dashboard
+    // with a token the SERVER could not see and got the signed-out gate. The store's
+    // effect mirrors the cookie for both paths.
+    session.signIn(data.token || data.access_token || '', data.user ?? null)
     navigate('/dashboard')
   }
   catch {
