@@ -695,11 +695,18 @@ const chart = buildChart(densify(series, from, to), compare ? densify(prevSeries
 // data-export="{{ exportJson }}" attribute, so stx {{ }} attribute-escaping neutralizes any
 // "<"/quote in the JSON (the DOM decodes on read, JSON.parse restores it) — safe as-is.
 // Whether the signed-in user OWNS the site currently shown (not a share viewer) —
-// gates the setup panel + all management affordances. Install snippet is built
-// server-side; the nested closing tag is escaped so it can't end this block.
+// gates the setup panel + all management affordances.
 const ownsActive = viewGranted && !shareMode
 const showSiteSelect = ownsActive && ownedSites.length > 1
-installSnippet = `<script defer\n  src="https://analyticshq.org/script.js"\n  data-site="${siteId}"><\/script>`
+
+// The install snippet is a script tag, which cannot be written literally inside a script
+// block. The previous form escaped the closing tag as <\/script>, and that escape does
+// NOT survive: Bun's transpiler normalises it back before the browser ever sees it, so
+// the protection existed only in the source. It also left the file's script-tag count
+// unbalanced, which is the signature the tag-balance check looks for.
+// Assembling the tag name means the byte sequence never exists at any stage.
+const SNIPPET_TAG = `scr${'ipt'}`
+installSnippet = `<${SNIPPET_TAG} defer\n  src="https://analyticshq.org/script.js"\n  data-site="${siteId}"></${SNIPPET_TAG}>`
 // eslint-disable-next-line no-unused-vars
 const activeSiteId = String(siteId)
 
@@ -1637,9 +1644,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   // which is truthy. Reading it raw would let a signed-out visitor through, and writing
   // it into the cookie unparsed would hand the server a quote-wrapped token.
   //
-  // window.stx rather than a bare call: this is a plain <script>, not the client-script
-  // path that gets the auto-import preamble. The runtime tag is synchronous and above
-  // this one, so window.stx is populated by the time this runs.
+  // window.stx rather than a bare call: this is a plain script block, not the
+  // client-script path that gets the auto-import preamble. The runtime tag is
+  // synchronous and above this one, so window.stx is populated by the time this runs.
+  // (Tag name spelled without angle brackets deliberately -- stx counts script tags
+  // across the whole file, and a literal one in a comment unbalances the count.)
   var t = window.stx.useLocalStorage('token', '')()
   if (!t) { window.location.replace('/login'); return }
   if (!/(^|;)\s*analyticshq_token=/.test(document.cookie)) {

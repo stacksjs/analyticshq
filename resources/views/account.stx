@@ -184,9 +184,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   // two-character string "" -- testing the raw value would let a signed-out visitor
   // straight through.
   //
-  // Reached through window.stx, not as a bare call: this is a plain <script>, not the
-  // client-script path that gets the auto-import preamble. The runtime tag is synchronous
-  // and sits above this one, so window.stx is populated by the time this runs.
+  // Reached through window.stx, not as a bare call: this is a plain script block, not
+  // the client-script path that gets the auto-import preamble. The runtime tag is
+  // synchronous and sits above this one, so window.stx is populated by the time this
+  // runs. (The tag name is spelled without angle brackets deliberately -- stx counts
+  // script tags across the whole file, and a literal one in a comment unbalances it.)
   //
   // Verified in a browser that a second instance on the same key is safe: two
   // useLocalStorage calls on 'token' both read the stored value and neither clobbers it.
