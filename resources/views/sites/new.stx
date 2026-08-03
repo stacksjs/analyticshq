@@ -1,30 +1,28 @@
 <script client>
-// Add-site screen (reactive, mirrors bughq's projects/new). Creates an owned site
-// via POST /api/sites (bearer from localStorage), then drops into that site's
-// dashboard, where the server-rendered setup panel shows the install snippet.
+// Add-site screen. Creates an owned site via POST /api/sites, then drops into that
+// site's dashboard, where the server-rendered setup panel shows the install snippet.
 // error/loading are signals; the name/domain inputs are uncontrolled (read at submit).
-const error = state('')
-const loading = state(false)
+interface CreatedSite { id: string }
+interface CreateSiteResponse { site?: CreatedSite, error?: string }
 
-function ensureAuthed() {
-  const t = localStorage.getItem('token')
-  if (!t) {
-    window.location.replace('/login')
-    return
-  }
-  // Mirror the token into a cookie so the server-rendered dashboard can
-  // authenticate this user on plain navigation (owner-scoped switcher + snippet).
-  if (!/(^|;)\s*analyticshq_token=/.test(document.cookie))
-    document.cookie = `analyticshq_token=${t}; path=/; max-age=2592000; samesite=lax`
-}
-ensureAuthed()
+const session = useStore('session') as SessionStore
+const error: StxSignal<string> = state('')
+const loading: StxSignal<boolean> = state(false)
 
-async function handleSubmit(e) {
+// Pre-paint auth bounce: this runs before the router exists, and `replace` is
+// deliberate so the signed-out visitor cannot land back here with Back. That is the
+// one documented case where location.* stays native rather than becoming navigate().
+// The cookie mirror that used to live here is gone -- the session store keeps the
+// cookie in step with the token through an effect, for every page at once.
+if (!session.isAuthed())
+  window.location.replace('/login')
+
+async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (loading())
     return
-  const form = e.target
-  const name = form.elements.name.value.trim()
+  const form = e.target as HTMLFormElement
+  const name = (form.elements.namedItem('name') as HTMLInputElement).value.trim()
   if (!name) {
     error.set('Give your site a name.')
     return
@@ -32,17 +30,17 @@ async function handleSubmit(e) {
   loading.set(true)
   error.set('')
   try {
+    const domain = (form.elements.namedItem('domain') as HTMLInputElement).value.trim()
     const res = await fetch('/api/sites', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify({ name, domain: form.elements.domain.value.trim() }),
+      headers: { 'Content-Type': 'application/json', ...session.authHeaders() },
+      body: JSON.stringify({ name, domain }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: CreateSiteResponse = await res.json().catch(() => ({}))
     if (res.status === 401) {
-      window.location.replace('/login')
+      // The token is stale, not merely absent: clear it so the guard above does not
+      // bounce this visitor straight back here on the next render.
+      session.signOut()
       return
     }
     if (!res.ok || !data.site || !data.site.id) {
@@ -51,7 +49,7 @@ async function handleSubmit(e) {
       return
     }
     // Straight into the new site's dashboard (which shows the install snippet).
-    window.location.assign(`/dashboard?site=${encodeURIComponent(data.site.id)}`)
+    navigate(`/dashboard?site=${encodeURIComponent(data.site.id)}`)
   }
   catch {
     error.set('Something went wrong. Please try again.')

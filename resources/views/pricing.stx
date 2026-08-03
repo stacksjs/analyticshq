@@ -7,26 +7,31 @@ useSeoMeta({
 
 <script client>
 // Pricing / upgrade via stx client directives. Interval + state are signals; the
-// Upgrade button starts a Stripe Checkout (external redirect via location).
-const interval = state('monthly')
-const err = state('')
-const loading = state(false)
+// Upgrade button starts a Stripe Checkout on Stripe's own origin.
+type BillingInterval = 'monthly' | 'yearly'
+interface CheckoutResponse { url?: string, error?: string }
 
-function pick(v) { interval.set(v) }
+const session = useStore('session') as SessionStore
+const interval: StxSignal<BillingInterval> = state('monthly')
+const err: StxSignal<string> = state('')
+const loading: StxSignal<boolean> = state(false)
 
-async function upgrade() {
-  const token = localStorage.getItem('token')
-  if (!token) { navigate('/login'); return }
+function pick(v: BillingInterval): void { interval.set(v) }
+
+async function upgrade(): Promise<void> {
+  if (!session.isAuthed()) { navigate('/login'); return }
   loading.set(true)
   err.set('')
   try {
     const res = await fetch('/payments/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      headers: { 'Content-Type': 'application/json', ...session.authHeaders() },
       body: JSON.stringify({ interval: interval() }),
     })
-    const data = await res.json().catch(() => ({}))
-    if (res.ok && data.url) { location.assign(data.url); return }
+    const data: CheckoutResponse = await res.json().catch(() => ({}))
+    // Stripe is a different origin, so this is a real document load, not a routing
+    // failure -- navigate(url, true) is the declared form of exactly that.
+    if (res.ok && data.url) { navigate(data.url, true); return }
     err.set(data.error || 'Checkout is not available yet.')
   }
   catch {
