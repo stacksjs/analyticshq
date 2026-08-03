@@ -26,6 +26,23 @@ const SESSION_TOKEN_KEY = 'token'
 const SESSION_USER_KEY = 'user'
 const SESSION_COOKIE = 'analyticshq_token'
 
+/**
+ * Reach useCookie through window.stx, and do NOT "simplify" this to a bare call.
+ *
+ * Client <script> blocks get a generated `var { useCookie, ... } = window.stx` preamble
+ * from client-script.js. Store files do not: store-loader.js transpiles and concatenates
+ * them without ever importing STX_RUNTIME_GLOBALS the way composable-loader.js does. So
+ * inside a store only the symbols signals.js assigns to `window` directly resolve --
+ * state, effect, batch, navigate, defineStore and useLocalStorage do; useCookie is one of
+ * the ~34 that live solely on window.stx and is a bare ReferenceError here.
+ *
+ * That failure is silent in the worst way: the ReferenceError is thrown inside the store
+ * IIFE, so defineStore never completes and useStore('session') reports "Store not found"
+ * somewhere else entirely. Verified in a headless browser, not by reading the bundle.
+ */
+type SessionCookieOpts = { maxAge?: number, sameSite?: 'Lax' | 'Strict' | 'None', path?: string }
+const sessionUseCookie = (globalThis as any).stx.useCookie as (name: string, opts?: SessionCookieOpts) => StxSignal<string>
+
 /** Re-encode a pre-migration raw value so useLocalStorage can parse it. */
 function sessionMigrateRaw(key: string): void {
   try {
@@ -59,15 +76,20 @@ defineStore('session', (): SessionStore => {
   const user = useLocalStorage(SESSION_USER_KEY, null) as StxSignal<SessionUser | null>
 
   // The dashboard and account pages render owner-scoped content on the SERVER, which
-  // cannot read localStorage -- it authenticates from this cookie. Keeping the mirror
-  // inside the store means the four pages that used to hand-serialise it no longer can
-  // drift on path/max-age/samesite/secure.
-  function sessionWriteCookie(value: string): void {
-    const secure = location.protocol === 'https:' ? '; secure' : ''
-    document.cookie = value
-      ? `${SESSION_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=2592000; samesite=lax${secure}`
-      : `${SESSION_COOKIE}=; path=/; max-age=0; samesite=lax${secure}`
-  }
+  // cannot read localStorage -- it authenticates from this cookie. useCookie owns the
+  // serialisation (path, max-age, SameSite, and Secure derived from location.protocol),
+  // which is the string four pages used to retype by hand and could drift on.
+  const mirror: StxSignal<string> = sessionUseCookie(SESSION_COOKIE, { maxAge: 2592000, sameSite: 'Lax' })
+
+  // Keep the cookie in step with the token for the whole session rather than only at
+  // sign-in: a visitor can arrive with a token in localStorage and no cookie (it
+  // expired, or they signed in before this shipped), and the server render depends on
+  // it. This is why no page needs an "ensure the cookie exists" block any more.
+  effect(() => {
+    const t = token()
+    if (mirror() !== t)
+      mirror.set(t)
+  })
 
   return {
     token,
@@ -85,7 +107,6 @@ defineStore('session', (): SessionStore => {
         if (nextUser)
           user.set(nextUser)
       })
-      sessionWriteCookie(next)
     },
 
     signOut() {
@@ -93,7 +114,6 @@ defineStore('session', (): SessionStore => {
         token.set('')
         user.set(null)
       })
-      sessionWriteCookie('')
       navigate('/login')
     },
   }
