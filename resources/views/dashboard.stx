@@ -4,6 +4,15 @@
 // page always renders. Populates for real once DB_CONNECTION=postgres points
 // at a live database. DB access is behind a dynamic import inside try/catch so a
 // standalone render (no DB module / no database) still produces the empty state.
+
+// The pure formatters and the channel classifier live in a real .ts module rather
+// than in this block, because tsc cannot see inside a .stx file -- an annotation
+// written here is erased by the transpiler and checked by nothing, while
+// app/Support is on the tsconfig include path. Written as a static import: stx
+// rewrites it to `const { ... } = await import(...)` and adds the export line, so
+// the hand-rolled `await import()` form buys nothing and loses that.
+import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
+
 const meta = { title: 'analyticshq - Dashboard', description: 'Privacy-first web analytics' }
 
 // Query params reach server scripts via globalThis.__stxServeSearch (the serve
@@ -64,8 +73,6 @@ const ranges = [
 // column (or the special 'channel' key, expanded below). CH_SEARCH/CH_SOCIAL are
 // defined here (moved up from near channelOf) so the channel expansion reuses the
 // exact same source sets as channelOf.
-const CH_SEARCH = new Set(['google', 'bing', 'duckduckgo', 'yahoo', 'baidu', 'ecosia'])
-const CH_SOCIAL = new Set(['twitter', 'x', 'facebook', 'instagram', 'linkedin', 'reddit', 'hacker news', 'youtube', 'mastodon', 'bluesky', 'tiktok'])
 const FILTERS = {
   path: { col: 'path', label: 'Path' },
   source: { col: 'referrer_source', label: 'Source' },
@@ -83,19 +90,6 @@ const FILTERS = {
 }
 // Channel name -> a parameterized predicate on referrer_source, matching channelOf:
 // Search/Social = IN their source set; Direct = ''/'Direct'/NULL; Referral = the rest.
-function channelPredicate(name) {
-  // TRIM the column so this matches channelOf's String(src).trim() bucketing exactly
-  // (a ' Direct' referrer must filter the same way the channel panel folds it).
-  if (name === 'Search' || name === 'Social') {
-    const arr = [...(name === 'Search' ? CH_SEARCH : CH_SOCIAL)]
-    return { sql: ` AND TRIM(referrer_source) IN (${arr.map(() => '?').join(',')})`, params: arr }
-  }
-  if (name === 'Direct')
-    return { sql: ` AND (TRIM(referrer_source) IN ('', 'Direct') OR referrer_source IS NULL)`, params: [] }
-  // Referral: has a referrer that is not Direct and not in the Search/Social sets.
-  const other = [...CH_SEARCH, ...CH_SOCIAL]
-  return { sql: ` AND referrer_source IS NOT NULL AND TRIM(referrer_source) NOT IN ('', 'Direct'${other.length ? ', ' + other.map(() => '?').join(', ') : ''})`, params: other }
-}
 // Parse only known, non-empty filter keys into activeFilters + build the SQL fragment
 // that gets baked into every WHERE ${filter} query below.
 const CHANNEL_NAMES = ['Search', 'Social', 'Direct', 'Referral']
@@ -139,7 +133,7 @@ for (const key of Object.keys(FILTERS)) {
   }
 }
 // URL helpers for the markup: preserve site+range+existing filters; add/remove one key.
-function filterQuery(mutate) {
+function filterQuery(mutate: (q: URLSearchParams) => void): string {
   const q = new URLSearchParams()
   q.set('site', siteId)
   q.set('range', range)
@@ -150,10 +144,10 @@ function filterQuery(mutate) {
   mutate(q)
   return `?${q.toString()}`
 }
-function addFilterUrl(key, value) {
+function addFilterUrl(key: string, value: string | number): string {
   return filterQuery(q => q.set(key, String(value)))
 }
-function removeFilterUrl(key) {
+function removeFilterUrl(key: string): string {
   return filterQuery(q => q.delete(key))
 }
 // Toggle the compare overlay while preserving site + range + active filters.
@@ -166,15 +160,6 @@ function compareToggleUrl() {
 // sends only that key), so GROUP BY properties == GROUP BY url — dialect-portable (a plain
 // varchar group, no JSON_EXTRACT). eventUrl unwraps it for display; falls back to the raw
 // string if it isn't the expected shape.
-function eventUrl(props) {
-  try {
-    const o = JSON.parse(props)
-    return o && o.url ? String(o.url) : String(props)
-  }
-  catch {
-    return String(props)
-  }
-}
 
 let kpis = { views: 0, visitors: 0, sessions: 0 }
 let series = []
@@ -580,24 +565,12 @@ const maxGoal = goals.reduce((m, g) => Math.max(m, Number(g.conversions || 0)), 
 const maxEvent = events.reduce((m, e) => Math.max(m, Number(e.events || 0)), 0) || 1
 const maxOutbound = outboundLinks.reduce((m, l) => Math.max(m, Number(l.clicks || 0)), 0) || 1
 const maxDownload = fileDownloads.reduce((m, l) => Math.max(m, Number(l.clicks || 0)), 0) || 1
-function goalRate(converters) {
+function goalRate(converters: number | string | null | undefined): number {
   if (!kpis.visitors)
     return 0
   return (Number(converters || 0) / kpis.visitors) * 100
 }
 
-// Fold app-classified referrer_source strings into 4 channels, sum views, sort desc.
-// CH_SEARCH/CH_SOCIAL are defined up top (in the filter engine) so both share one set.
-function channelOf(src) {
-  const s = String(src ?? '').trim().toLowerCase()
-  if (!s || s === 'direct')
-    return 'Direct'
-  if (CH_SEARCH.has(s))
-    return 'Search'
-  if (CH_SOCIAL.has(s))
-    return 'Social'
-  return 'Referral'
-}
 const channelTotals = { Search: 0, Social: 0, Direct: 0, Referral: 0 }
 for (const r of channelRows)
   channelTotals[channelOf(r.source)] += Number(r.views || 0)
@@ -609,25 +582,7 @@ const maxChannel = channels.reduce((m, c) => Math.max(m, c.views), 0) || 1
 const channelTotal = channels.reduce((s, c) => s + c.views, 0) || 1
 
 // Country code -> flag emoji (regional-indicator letters); empty for non-2-letter values.
-function flag(code) {
-  if (!code || String(code).length !== 2)
-    return ''
-  return String.fromCodePoint(...[...String(code).toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65))
-}
 
-// Signed percent change vs the previous period; null when there is no baseline.
-function pct(cur, prev) {
-  if (!prev)
-    return null
-  return Math.round(((cur - prev) / prev) * 100)
-}
-// Human-readable visit duration from a seconds count: "0s", "45s", "1m 23s".
-function fmtDuration(secs) {
-  const s = Math.max(0, Math.round(Number(secs) || 0))
-  if (s < 60)
-    return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
-}
 const curVpv = kpis.visitors ? kpis.views / kpis.visitors : 0
 const prevVpv = prevVisitors ? prevViews / prevVisitors : 0
 // Views per visit = page views / sessions ("pages per session"). Distinct from
@@ -653,7 +608,7 @@ const kpiCards = [
 // visitors always (distinct visitors of a day <= that day's page views), so one shared
 // max scale keeps the visitors line at or below the views area.
 const CHART = { w: 1000, h: 200, padX: 0, padT: 14, padB: 12 }
-function buildChart(rows, prevRows) {
+function buildChart(rows: ChartRow[], prevRows: ChartRow[] | null): ChartGeometry {
   const n = rows.length
   const prev = prevRows || []
   const innerW = CHART.w - CHART.padX * 2
@@ -704,7 +659,7 @@ function buildChart(rows, prevRows) {
 // point. Steps hour/day/month to match the query's LEFT(timestamp, N) bucket;
 // `day` holds the raw bucket key (matches the query alias + Map lookup + CSV),
 // `label` is the display form ('MM-DD HH:00' hourly, 'YYYY-MM-DD' daily, 'YYYY-MM' monthly).
-function densify(rows, fromISO, toISO) {
+function densify(rows: ChartRow[], fromISO: string, toISO: string): ChartRow[] {
   const byKey = new Map(rows.map(r => [r.day, r]))
   const out = []
   const keyLen = granularity === 'hour' ? 13 : granularity === 'month' ? 7 : 10
@@ -821,7 +776,7 @@ function logout(): void {
   session.signOut()
 }
 
-async function addGoal(e) {
+async function addGoal(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (goalBusy())
     return
@@ -853,7 +808,7 @@ async function addGoal(e) {
   }
 }
 
-async function deleteGoal(id) {
+async function deleteGoal(id: string | number): Promise<void> {
   if (!id || !window.confirm('Delete this goal? Its conversions will be removed too.'))
     return
   try {
@@ -867,7 +822,7 @@ async function deleteGoal(id) {
 }
 
 // Share link management (owner-only UI). POST mints/rotates a token; DELETE revokes.
-function shareLinkFor(token) {
+function shareLinkFor(token: string): string {
   return `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${token}`
 }
 async function createShare() {

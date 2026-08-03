@@ -57,7 +57,7 @@ const comparison = [
 // inject it through their own head/Script APIs.
 const framework = state('html')
 const FILE_FOR = { html: 'index.html', vue: 'index.html', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
-function pickFramework(e) {
+function pickFramework(e: Event): void {
   framework.set(e.target.value)
 }
 </script>
