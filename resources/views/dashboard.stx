@@ -1035,9 +1035,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .filter-clear:hover { color: var(--text); }
 </style>
 
-<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
-  <!-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
-      viewer isn't signed in as the owner. Upgrade -> Pro swaps reactively (isPro). -->
+{{-- <main>, not a <div>: this is the SPA router's swap container. router.container
+     defaults to 'main', and getContainer() returning null makes shouldIntercept bail,
+     so every link on this page was doing a full document load. The four sibling app
+     pages already declare their own <main>; the dashboard was the only one that did
+     not. Same element, same classes -- only the tag name changes. --}}
+<main class="px-5 py-10 md:px-10 min-h-[100dvh]">
+  {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
+      viewer isn't signed in as the owner. Upgrade -> Pro swaps reactively (isPro). --}}
   @if (ownsActive)
     <div style="position:fixed;top:16px;right:18px;z-index:60;display:flex;gap:8px;align-items:center">
       <a :href="isPro() ? '#pro' : '/pricing'" :style="isPro() ? 'font:600 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;background:transparent;color:var(--accent);border:1px solid var(--accent);text-decoration:none' : 'font:600 13px/1 var(--sans,ui-sans-serif);padding:8px 13px;border-radius:9px;background:var(--accent);color:#fff;text-decoration:none'">{{ isPro() ? 'Pro' : 'Upgrade' }}</a>
@@ -1625,7 +1630,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </footer>
 
   </div>
-</div>
+</main>
 
 <!-- Pre-render bootstrap: token guard + mirror the localStorage token into the
     analyticshq_token cookie (so the script-server block can owner-scope the switcher
