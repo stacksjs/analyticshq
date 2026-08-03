@@ -178,12 +178,19 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
      signed-out visitor straight through. --}}
 <script>
 ;(function () {
-  var raw = null
-  try { raw = localStorage.getItem('token') }
-  catch (e) { raw = null }
-  var token = ''
-  try { token = raw ? JSON.parse(raw) : '' }
-  catch (e) { token = raw || '' }
+  // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
+  // and the composable owns the JSON decode this guard MUST perform. The session store
+  // persists through the same composable, so a signed-out token is the literal
+  // two-character string "" -- testing the raw value would let a signed-out visitor
+  // straight through.
+  //
+  // Reached through window.stx, not as a bare call: this is a plain <script>, not the
+  // client-script path that gets the auto-import preamble. The runtime tag is synchronous
+  // and sits above this one, so window.stx is populated by the time this runs.
+  //
+  // Verified in a browser that a second instance on the same key is safe: two
+  // useLocalStorage calls on 'token' both read the stored value and neither clobbers it.
+  var token = window.stx.useLocalStorage('token', '')()
   if (!token)
     window.location.replace('/login')
 })()

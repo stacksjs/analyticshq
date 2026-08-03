@@ -1630,17 +1630,17 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     comment's terminator and the bootstrap below — is silently deleted. -->
 <script>
 ;(function () {
-  // MUST decode. The session store persists the token through useLocalStorage, which
-  // JSON.stringifies -- so the stored value is "abc" WITH quotes, and a signed-out
-  // token is the literal two-character string "" , which is truthy. Testing the raw
-  // value would let a signed-out visitor through, and writing it into the cookie
-  // unparsed would hand the server a token wrapped in quote characters.
-  var raw = null
-  try { raw = localStorage.getItem('token') }
-  catch (e) { raw = null }
-  var t = ''
-  try { t = raw ? JSON.parse(raw) : '' }
-  catch (e) { t = raw || '' }
+  // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
+  // and the composable owns the decode this guard MUST perform. The session store
+  // persists through the same composable, which JSON.stringifies -- so the stored value
+  // is "abc" WITH quotes and a signed-out token is the literal two-character string "",
+  // which is truthy. Reading it raw would let a signed-out visitor through, and writing
+  // it into the cookie unparsed would hand the server a quote-wrapped token.
+  //
+  // window.stx rather than a bare call: this is a plain <script>, not the client-script
+  // path that gets the auto-import preamble. The runtime tag is synchronous and above
+  // this one, so window.stx is populated by the time this runs.
+  var t = window.stx.useLocalStorage('token', '')()
   if (!t) { window.location.replace('/login'); return }
   if (!/(^|;)\s*analyticshq_token=/.test(document.cookie)) {
     document.cookie = 'analyticshq_token=' + encodeURIComponent(t) + '; path=/; max-age=2592000; samesite=lax'
