@@ -33,6 +33,8 @@
     }
   },
   "include": [
+    "types/**/*.ts",
+    "resources/stores/**/*.ts",
     "*.ts",
     "*.d.ts",
     "types/**/*.d.ts",
