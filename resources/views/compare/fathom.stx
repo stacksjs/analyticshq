@@ -37,16 +37,32 @@ const related = [
 ]
 
 useSeoMeta(meta)
+
+// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
+const crumbs = [
+  { name: "Home", href: "/", url: "https://analyticshq.org/" },
+  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare", noRouter: true },
+  { name: "Fathom" },
+]
 </script>
 
 @extends('marketing')
 
 
 @section('content')
+      @structuredData({
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+      })
+
       <nav class="shell subnav" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
-        <a href="/compare" data-no-router>Compare</a><span class="sep">/</span>
-        <span>Fathom</span>
+        @foreach (crumbs as c)
+          @if (c.href)
+            <a href="{{ c.href }}"{{ c.noRouter ? ' data-no-router' : '' }}>{{ c.name }}</a><span class="sep" aria-hidden="true">/</span>
+          @else
+            <span aria-current="page">{{ c.name }}</span>
+          @endif
+        @endforeach
       </nav>
 
       <section class="feat-hero shell">

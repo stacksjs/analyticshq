@@ -36,16 +36,32 @@ useSeoMeta({
   title: "Real-time visitors - analyticshq",
   description: "See who is on your site right now, which pages they are reading, and where they came from. Live visitor tracking with no cookies and no reload, powered by analyticshq.",
 })
+
+// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
+const crumbs = [
+  { name: "Home", href: "/", url: "https://analyticshq.org/" },
+  { name: "Features", href: "/features", url: "https://analyticshq.org/features", noRouter: true },
+  { name: "Real-time visitors" },
+]
 </script>
 
 @extends('marketing')
 
 
 @section('content')
+      @structuredData({
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+      })
+
       <nav class="shell subnav" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
-        <a href="/features" data-no-router>Features</a><span class="sep">/</span>
-        <span>Real-time visitors</span>
+        @foreach (crumbs as c)
+          @if (c.href)
+            <a href="{{ c.href }}"{{ c.noRouter ? ' data-no-router' : '' }}>{{ c.name }}</a><span class="sep" aria-hidden="true">/</span>
+          @else
+            <span aria-current="page">{{ c.name }}</span>
+          @endif
+        @endforeach
       </nav>
 
       <section class="feat-hero shell">

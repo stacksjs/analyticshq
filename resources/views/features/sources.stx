@@ -4,15 +4,31 @@ useSeoMeta({
   title: "Traffic sources - analyticshq",
   description: "Know exactly where your traffic comes from. Every referrer is classified on arrival, so search, social, direct, and campaign traffic separate automatically.",
 })
+
+// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
+const crumbs = [
+  { name: "Home", href: "/", url: "https://analyticshq.org/" },
+  { name: "Features", href: "/features", url: "https://analyticshq.org/features", noRouter: true },
+  { name: "Sources and referrers" },
+]
 </script>
 
 @extends('marketing')
 
 @section('content')
+      @structuredData({
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+      })
+
       <nav class="shell subnav" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
-        <a href="/features" data-no-router>Features</a><span class="sep">/</span>
-        <span>Sources and referrers</span>
+        @foreach (crumbs as c)
+          @if (c.href)
+            <a href="{{ c.href }}"{{ c.noRouter ? ' data-no-router' : '' }}>{{ c.name }}</a><span class="sep" aria-hidden="true">/</span>
+          @else
+            <span aria-current="page">{{ c.name }}</span>
+          @endif
+        @endforeach
       </nav>
 
       <section class="feat-hero shell">

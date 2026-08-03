@@ -4,6 +4,12 @@ useSeoMeta({
   title: "Pricing - analyticshq",
   description: "Simple, honest pricing for privacy-first web analytics. Start free with 10k events a month, upgrade to Pro for unlimited sites and events, or self-host for free forever.",
 })
+
+// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
+const crumbs = [
+  { name: "Home", href: "/", url: "https://analyticshq.org/" },
+  { name: "Pricing" },
+]
 </script>
 
 <script client>
@@ -82,9 +88,19 @@ async function upgrade(): Promise<void> {
 @endpush
 
 @section('content')
+      @structuredData({
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+      })
+
       <nav class="shell subnav" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
-        <span>Pricing</span>
+        @foreach (crumbs as c)
+          @if (c.href)
+            <a href="{{ c.href }}"{{ c.noRouter ? ' data-no-router' : '' }}>{{ c.name }}</a><span class="sep" aria-hidden="true">/</span>
+          @else
+            <span aria-current="page">{{ c.name }}</span>
+          @endif
+        @endforeach
       </nav>
 
       <section class="feat-hero shell">
