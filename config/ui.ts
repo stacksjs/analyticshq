@@ -144,6 +144,28 @@ export default {
    *     "stx Project" placeholder need real titles (SEO stage); `skipDefaultSeoTags`
    *     must NOT be set before then or they end up with no <title> at all.
    */
+  /**
+   * NO `router` KEY HERE, AND THAT IS DELIBERATE -- it would be silently inert.
+   *
+   * The app serves interceptAllLinks:true, so the router intercepts every
+   * same-origin anchor that lacks data-no-router. Turning that off from this file
+   * does not work, and fails without a warning: serve.ts getRouterInjectOptions()
+   * merges `{ interceptAllLinks: true, container: 'main' }` with
+   * `siteConfig.router` and `stxConfig.router`, and its `stxConfig` is bunfig's own
+   * lookup for a ROOT stx.config.ts. This app has none -- Stacks keeps config in
+   * config/ -- so that spread is empty and the hardcoded true always wins. Setting
+   * `router: { interceptAllLinks: false }` here changed nothing; measured, not
+   * assumed.
+   *
+   * Everything else in this file DOES reach stx, because Stacks' views.js passes it
+   * as explicit options (Loader A). The router block is the one that needs the file
+   * bunfig looks for, and adding a root stx.config.ts to get it would create a
+   * second source of truth for exactly the directory keys documented above as
+   * loader-sensitive. Not worth it for one flag.
+   *
+   * The concrete reason anyone would want it off is handled at the call site
+   * instead: see the data-no-router on the OAuth anchors in login.stx/register.stx.
+   */
   app: {
     head: {
       // Present on all 32 views today. The stylesheet URL is the SUPERSET of the
