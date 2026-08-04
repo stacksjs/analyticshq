@@ -73,7 +73,7 @@ const crumbs = [
         <p>Mixpanel is deep product analytics, built on per-user tracking to model cohorts and journeys. analyticshq is privacy-first web analytics: how your site and marketing perform, counted exactly, with no cookies, no consent banner, and data you own.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
+          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
         </div>
       </section>
 
@@ -96,7 +96,7 @@ const crumbs = [
       <section class="reveal section shell" aria-label="Where Mixpanel leads">
         <div class="migrate">
           <p>Where Mixpanel leads: for genuine product analytics it does things analyticshq deliberately does not. Cross-session funnels, cohort retention, per-user profiles, and experimentation are its whole point. If you need to follow individual users through a product, Mixpanel is the right tool, and analyticshq is not trying to replace it.</p>
-          <a class="textlink" href="/features/goals" data-no-router>See what events we do track</a>
+          <StxLink class="textlink" to="/features/goals">See what events we do track</StxLink>
         </div>
       </section>
 
@@ -134,10 +134,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/compare/{{ r.slug }}" data-no-router>
+            <StxLink to="/compare/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -147,7 +147,7 @@ const crumbs = [
           <h2>Measuring a website, not profiling its visitors.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

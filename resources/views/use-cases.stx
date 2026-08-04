@@ -39,14 +39,14 @@ const crumbs = [
         <p>The same cookieless script fits a solo blog or a funded SaaS. Here is how different teams put analyticshq to work, and which features carry the weight.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+          <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
         </div>
       </section>
 
       <section class="reveal section shell" aria-label="Use cases">
         <div class="usecases">
 
-          <a class="usecase" href="/use-cases/saas" data-no-router>
+          <StxLink class="usecase" to="/use-cases/saas">
             <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 289 activated users" style="display:block;width:100%;height:168px;background:#101317">
               <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
               <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">SIGNUP FUNNEL</text>
@@ -62,9 +62,9 @@ const crumbs = [
               <p>Follow visitors from landing page to signup and activation, and attribute each account to the channel that earned it. No consent banner between a first-time visitor and your call to action.</p>
               <span class="textlink">Analytics for SaaS</span>
             </div>
-          </a>
+          </StxLink>
 
-          <a class="usecase" href="/use-cases/ecommerce" data-no-router>
+          <StxLink class="usecase" to="/use-cases/ecommerce">
             <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Revenue trending upward over the last 30 days" style="display:block;width:100%;height:168px;background:#101317">
               <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
               <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">REVENUE · LAST 30 DAYS</text>
@@ -78,9 +78,9 @@ const crumbs = [
               <p>Tie carts, checkouts, and revenue back to the campaigns that drove them, with numbers that match your store. Your customer data never flows into an ad graph you do not control.</p>
               <span class="textlink">Analytics for ecommerce</span>
             </div>
-          </a>
+          </StxLink>
 
-          <a class="usecase" href="/use-cases/agencies" data-no-router>
+          <StxLink class="usecase" to="/use-cases/agencies">
             <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Three client sites, each with its own visitor trend" style="display:block;width:100%;height:168px;background:#101317">
               <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
               <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">CLIENT SITES</text>
@@ -108,9 +108,9 @@ const crumbs = [
               <p>Run every client site from one login and share a clean, read-only report in a single link. Exact data that stays in your own database, free of the sampling that makes agency reports hard to defend.</p>
               <span class="textlink">Analytics for agencies</span>
             </div>
-          </a>
+          </StxLink>
 
-          <a class="usecase" href="/use-cases/publishers" data-no-router>
+          <StxLink class="usecase" to="/use-cases/publishers">
             <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Top articles ranked by readers over the last 30 days" style="display:block;width:100%;height:168px;background:#101317">
               <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
               <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">TOP ARTICLES · 30 DAYS</text>
@@ -131,9 +131,9 @@ const crumbs = [
               <p>See which posts hold attention and where a spike came from, counted exactly rather than sampled. Core Web Vitals sit beside each article, so a slow page never quietly loses its audience.</p>
               <span class="textlink">Analytics for publishers</span>
             </div>
-          </a>
+          </StxLink>
 
-          <a class="usecase" href="/use-cases/developers" data-no-router>
+          <StxLink class="usecase" to="/use-cases/developers">
             <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A live stream of custom events arriving in real time" style="display:block;width:100%;height:168px;background:#101317">
               <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
               <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">CUSTOM EVENTS</text>
@@ -152,7 +152,7 @@ const crumbs = [
               <p>A one-line script, a one-function events API, and a clean HTTP endpoint to read it all back. Self-hostable, PostgreSQL-backed, and privacy-first by default. Your data stays yours.</p>
               <span class="textlink">Analytics for developers</span>
             </div>
-          </a>
+          </StxLink>
 
         </div>
       </section>
@@ -162,7 +162,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

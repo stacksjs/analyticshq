@@ -73,7 +73,7 @@ const crumbs = [
         <p>Matomo is a powerful open-source GA replacement with a full behavioral suite — recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. analyticshq goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
+          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
         </div>
       </section>
 
@@ -127,10 +127,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/compare/{{ r.slug }}" data-no-router>
+            <StxLink to="/compare/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Privacy-first, without the overhead.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

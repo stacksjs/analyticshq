@@ -73,7 +73,7 @@ const crumbs = [
         <p>Google Analytics was built to feed an ad network, which is why it needs consent, samples your data, and hands it to Google. analyticshq answers one question, how your site is doing, without touching your visitors’ privacy.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/features/import" data-no-router>Import from GA</a>
+          <StxLink class="btn ghost" to="/features/import">Import from GA</StxLink>
         </div>
       </section>
 
@@ -127,10 +127,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/compare/{{ r.slug }}" data-no-router>
+            <StxLink to="/compare/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Leave GA. Keep your history.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/features/import" data-no-router>See the import guide</a>
+            <StxLink class="btn ghost" to="/features/import">See the import guide</StxLink>
           </div>
         </div>
       </section>

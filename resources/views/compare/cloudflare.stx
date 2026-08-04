@@ -73,7 +73,7 @@ const crumbs = [
         <p>Cloudflare Web Analytics is a solid free pageview counter, and like analyticshq it sets no cookies. The difference is depth and ownership: analyticshq adds custom events and goals, stores every event in your own PostgreSQL, and runs on any host, not just behind Cloudflare.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/features/goals" data-no-router>See events and goals</a>
+          <StxLink class="btn ghost" to="/features/goals">See events and goals</StxLink>
         </div>
       </section>
 
@@ -96,7 +96,7 @@ const crumbs = [
       <section class="reveal section shell" aria-label="Where Cloudflare leads">
         <div class="migrate">
           <p>Where Cloudflare leads: it is genuinely free, and if your site already runs behind Cloudflare it is zero extra script and zero config. For a no-frills pageview count with nothing to manage, it is hard to beat on price.</p>
-          <a class="textlink" href="/pricing" data-no-router>See how our pricing works</a>
+          <StxLink class="textlink" to="/pricing">See how our pricing works</StxLink>
         </div>
       </section>
 
@@ -134,10 +134,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/compare/{{ r.slug }}" data-no-router>
+            <StxLink to="/compare/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -147,7 +147,7 @@ const crumbs = [
           <h2>Keep the privacy. Add the events, and the ownership.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

@@ -43,7 +43,7 @@ const crumbs = [
           </p>
           <div class="d3 enter hero-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
 
@@ -166,7 +166,7 @@ const crumbs = [
           <h2>Grow the funnel, not your compliance risk.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/use-cases" data-no-router>All use cases</a>
+            <StxLink class="btn ghost" to="/use-cases">All use cases</StxLink>
           </div>
         </div>
       </section>
