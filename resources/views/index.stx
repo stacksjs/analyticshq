@@ -1,8 +1,13 @@
 <script server>
-const appName = 'analyticshq'
-const siteMode = 'live'
-const comingSoonBypassEnabled = true
-const comingSoonBypassToken = 'trailhead'
+useSeoMeta({
+  canonical: 'https://analyticshq.org/',
+  title: 'analyticshq - Privacy-first web analytics',
+  description: 'analyticshq is privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.',
+})
+
+// appName, siteMode, comingSoonBypassEnabled and comingSoonBypassToken used to live
+// here. All four existed only to fill the coming-soon <body> attributes and heading,
+// which are now the marketing layout's and config/ui.ts app.head.bodyAttrs' job.
 
 // Feature bento cells link to their dedicated pages.
 const featureCells = [
@@ -62,33 +67,9 @@ function pickFramework(e: Event): void {
 }
 </script>
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <meta name="description" content="analyticshq is privacy-first, cookieless web analytics. Real-time visitors, sources, and conversions with no cookies, no consent banner, and no personal data. Powered by Stacks and PostgreSQL.">
-    <meta name="theme-color" content="#0a0c0e">
-    <title>analyticshq - Privacy-first web analytics</title>
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body data-site-mode="{{ siteMode }}" data-coming-soon-bypass-enabled="{{ comingSoonBypassEnabled }}" data-coming-soon-bypass="{{ comingSoonBypassToken }}">
-    <section class="mode-screen" aria-labelledby="coming-soon-heading">
-      <div class="mode-card">
-        <h1 id="coming-soon-heading">{{ appName }}</h1>
-        <p>Privacy-first web analytics is almost ready. Leave your email and we will send the install snippet the moment it opens.</p>
-        <form action="/api/email/subscribe" method="POST" style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:1.25rem;max-width:30rem;">
-          <input type="email" name="email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" required style="flex:1 1 15rem;min-height:46px;padding:0 0.9rem;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink);font:inherit;">
-          <button class="btn primary" type="submit">Notify me</button>
-        </form>
-      </div>
-    </section>
+@extends('marketing')
 
-    <div class="site-content">
-      @include('site-nav')
-
-      <main>
+@section('content')
         <section class="hero shell">
           <div>
             <p class="enter eyebrow">Privacy-first web analytics</p>
@@ -247,10 +228,4 @@ function pickFramework(e: Event): void {
             </div>
           </div>
         </section>
-      </main>
-
-      @include('site-footer')
-    </div>
-    <script src="/assets/scripts/site-mode.js" defer></script>
-  </body>
-</html>
+@endsection

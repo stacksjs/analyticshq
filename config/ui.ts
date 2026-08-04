@@ -156,6 +156,31 @@ export default {
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap' },
       ],
+
+      /**
+       * The coming-soon gate. These three were <body> attributes hand-written in
+       * index.stx, which is the only reason that page kept its own <!DOCTYPE> and
+       * stayed off the marketing layout -- a page that writes its own document
+       * shell cannot receive body attributes from anywhere else.
+       *
+       * They are read by resources/assets/scripts/site-mode.js (via body.dataset)
+       * and by four rules in public/marketing.css that key off
+       * body[data-site-mode="coming-soon"]. Values are strings because they are
+       * DOM attributes: site-mode.js compares bypassEnabled to the STRING 'true'.
+       *
+       * Global rather than marketing-only, and that is safe in both directions:
+       * the CSS only reacts to data-site-mode="coming-soon", and the elements it
+       * hides (.site-content / .mode-screen) exist solely in the marketing layout,
+       * so the 5 app/auth pages carry inert attributes and render unchanged.
+       *
+       * Currently 'live', so the whole gate is dormant -- flipping this single
+       * value to 'coming-soon' is what arms it.
+       */
+      bodyAttrs: {
+        'data-site-mode': 'live',
+        'data-coming-soon-bypass-enabled': 'true',
+        'data-coming-soon-bypass': 'trailhead',
+      },
     },
   },
 } satisfies UiOptions

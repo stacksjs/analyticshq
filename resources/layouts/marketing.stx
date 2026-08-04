@@ -23,15 +23,43 @@
 @stack('styles')
 @endhead
 
-@include('site-nav')
+{{-- The coming-soon gate. Lived in index.stx until now, which is why that page had to
+    write its own <body> (and therefore its own <!DOCTYPE>) and could not use this
+    layout. The three data-* attributes it keys off are supplied to every page by
+    config/ui.ts app.head.bodyAttrs; the four rules that act on them are in
+    public/marketing.css, and resources/assets/scripts/site-mode.js handles the
+    ?preview=<token> bypass.
 
-{{-- The single router container. Pages must NOT declare their own <main>: fragment
-    extraction slices from the first <main> to the LAST </main>, so a second one
-    makes the router swap the wrong span and duplicate the chrome. --}}
-<main>
+    Moving it here also closes the hole it had: only / was ever gated, so every other
+    marketing page stayed fully readable while the homepage said "almost ready".
+    Dormant at data-site-mode="live" -- both halves are display:none'd by default. --}}
+<section class="mode-screen" aria-labelledby="coming-soon-heading">
+  <div class="mode-card">
+    <h1 id="coming-soon-heading">analyticshq</h1>
+    <p>Privacy-first web analytics is almost ready. Leave your email and we will send the install snippet the moment it opens.</p>
+    <form action="/api/email/subscribe" method="POST" style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:1.25rem;max-width:30rem;">
+      <input type="email" name="email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" required style="flex:1 1 15rem;min-height:46px;padding:0 0.9rem;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink);font:inherit;">
+      <button class="btn primary" type="submit">Notify me</button>
+    </form>
+  </div>
+</section>
+
+{{-- .site-content is the element marketing.css hides when the gate is armed, so it
+    must wrap all three pieces of chrome -- nav, main and footer -- exactly as it did
+    in index.stx. --}}
+<div class="site-content">
+  @include('site-nav')
+
+  {{-- The single router container. Pages must NOT declare their own <main>: fragment
+      extraction slices from the first <main> to the LAST </main>, so a second one
+      makes the router swap the wrong span and duplicate the chrome. --}}
+  <main>
 @yield('content')
-</main>
+  </main>
 
-@include('site-footer')
+  @include('site-footer')
+</div>
+
+<script src="/assets/scripts/site-mode.js" defer></script>
 
 @stack('scripts')
