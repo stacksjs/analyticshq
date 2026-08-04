@@ -8,7 +8,7 @@ useSeoMeta({
 // Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
 const crumbs = [
   { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Features", href: "/features", url: "https://analyticshq.org/features", noRouter: true },
+  { name: "Features", href: "/features", url: "https://analyticshq.org/features" },
   { name: "Sources and referrers" },
 ]
 </script>
@@ -26,7 +26,7 @@ const crumbs = [
       <nav class="shell subnav" aria-label="Breadcrumb">
         @foreach (crumbs as c)
           @if (c.href)
-            <a href="{{ c.href }}"{{ c.noRouter ? ' data-no-router' : '' }}>{{ c.name }}</a><span class="sep" aria-hidden="true">/</span>
+            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
           @else
             <span aria-current="page">{{ c.name }}</span>
           @endif
