@@ -1,20 +1,28 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="stx-layout" content="marketing">
-    <title>Docs - analyticshq</title>
-    <meta name="description" content="Ship analyticshq in one line: a first-party script under 2 KB, a one-function events API, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.">
-    <meta name="theme-color" content="#0a0c0e">
-    <link rel="stylesheet" href="/marketing.css">
-  </head>
-  <body>
-    @include('site-nav')
+{{-- NOTE ON WHETHER THIS FILE IS LIVE.
 
-    <main>
+    In dev it is not: scripts/dev.ts documents that views.js proxies /docs and /docs/*
+    unconditionally to the BunPress site on :3006, so this template is unreachable and
+    http://localhost:3000/docs serves "Stacks Documentation" instead of the title below.
+
+    It is kept, and migrated onto the layout, because `buddy build` enumerates
+    resources/views via pagesDir, so a static deployment can still emit this page --
+    and a deployment without the proxy would then serve it. Deleting real content on
+    that ambiguity would be the wrong way to resolve it. Which of the two /docs should
+    win in production is an open product question, not a template question. --}}
+
+<script server>
+useSeoMeta({
+  canonical: 'https://analyticshq.org/docs',
+  title: 'Docs - analyticshq',
+  description: 'Ship analyticshq in one line: a first-party script under 2 KB, a one-function events API, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.',
+})
+</script>
+
+@extends('marketing')
+
+@section('content')
       <nav class="shell subnav" aria-label="Breadcrumb">
-        <a href="/">Home</a><span class="sep">/</span>
+        <StxLink to="/">Home</StxLink><span class="sep">/</span>
         <span>Docs</span>
       </nav>
 
@@ -23,7 +31,7 @@
         <h1>Ship analyticshq in one line.</h1>
         <p>One first-party script under 2 KB, a tiny client call for custom events, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/register">Get your site ID</a>
+          <StxLink class="btn primary" to="/register">Get your site ID</StxLink>
           <a class="btn ghost" href="https://github.com/stacksjs/analyticshq" data-no-router>View on GitHub</a>
         </div>
       </section>
@@ -90,13 +98,9 @@ fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-
           <h2>Start counting visitors, privately.</h2>
           <p>Add the script, watch the dashboard fill in. No cookie banner required.</p>
           <div class="cta-actions">
-            <a class="btn primary" href="/register">Get your site ID</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink class="btn primary" to="/register">Get your site ID</StxLink>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>
-    </main>
-
-    @include('site-footer')
-  </body>
-</html>
+@endsection

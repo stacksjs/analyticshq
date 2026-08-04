@@ -24,8 +24,8 @@
 @endhead
 
 {{-- The coming-soon gate. Lived in index.stx until now, which is why that page had to
-    write its own <body> (and therefore its own <!DOCTYPE>) and could not use this
-    layout. The three data-* attributes it keys off are supplied to every page by
+    write its own document shell -- body tag, doctype and all -- and so could not use
+    this layout. The three data-* attributes it keys off are supplied to every page by
     config/ui.ts app.head.bodyAttrs; the four rules that act on them are in
     public/marketing.css, and resources/assets/scripts/site-mode.js handles the
     ?preview=<token> bypass.
