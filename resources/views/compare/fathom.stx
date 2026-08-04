@@ -127,7 +127,7 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <StxLink to="/compare/{{ r.slug }}">
+            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
             </StxLink>
