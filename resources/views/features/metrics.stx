@@ -38,7 +38,7 @@ const crumbs = [
         <h1>Every hit, counted once and exactly.</h1>
         <p>Pageviews roll up into sessions with entry and exit paths, time on page, and bounce rate. Numbers are exact, never sampled or thresholded.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -120,18 +120,18 @@ const crumbs = [
           <h2 id="related-heading" class="section-title">Pairs well with</h2>
         </div>
         <div class="related">
-          <a href="/features/real-time">
+          <StxLink to="/features/real-time">
             <div class="r-name">Real-time visitors</div>
             <div class="r-desc">Watch these sessions form as they happen.</div>
-          </a>
-          <a href="/features/sources">
+          </StxLink>
+          <StxLink to="/features/sources">
             <div class="r-name">Sources and referrers</div>
             <div class="r-desc">See which channel each session came from.</div>
-          </a>
-          <a href="/features/web-vitals">
+          </StxLink>
+          <StxLink to="/features/web-vitals">
             <div class="r-name">Core Web Vitals</div>
             <div class="r-desc">Tie slow pages to the sessions they cost you.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

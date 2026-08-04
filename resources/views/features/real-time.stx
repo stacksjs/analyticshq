@@ -71,7 +71,7 @@ const crumbs = [
         <h1>Watch your traffic as it happens.</h1>
         <p>See who is on your site right now, which pages hold their attention, and where they arrived from. The live view updates on its own, with no cookie set and no reload.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink to="/dashboard" class="btn primary">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -127,10 +127,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/features/{{ r.slug }}">
+            <StxLink to="/features/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

@@ -62,7 +62,7 @@ const crumbs = [
         <p>Switching should not mean starting your history from zero. Import your Google Analytics data into analyticshq, keep the trends you already watch, and never touch a cookie banner again.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/compare/google-analytics" data-no-router>analyticshq vs GA</a>
+          <StxLink class="btn ghost" to="/compare/google-analytics">analyticshq vs GA</StxLink>
         </div>
       </section>
 
@@ -100,10 +100,10 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (related as r)
-            <a href="/features/{{ r.slug }}" data-no-router>
+            <StxLink to="/features/{{ r.slug }}">
               <div class="r-name">{{ r.name }}</div>
               <div class="r-desc">{{ r.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>

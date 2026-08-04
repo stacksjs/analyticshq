@@ -38,7 +38,7 @@ const crumbs = [
         <h1>Nothing to hide, because nothing is stored.</h1>
         <p>The whole product is built so there is no personal data in the first place. No cookie, no stored IP, no cross-site profile, and so nothing to consent to.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink to="/dashboard" class="btn primary">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -108,18 +108,18 @@ const crumbs = [
           <h2 id="related-heading" class="section-title">Pairs well with</h2>
         </div>
         <div class="related">
-          <a href="/features/geography">
+          <StxLink to="/features/geography">
             <div class="r-name">Geography and devices</div>
             <div class="r-desc">Country without a stored IP or geo lookup.</div>
-          </a>
-          <a href="/features/real-time">
+          </StxLink>
+          <StxLink to="/features/real-time">
             <div class="r-name">Real-time visitors</div>
             <div class="r-desc">Live numbers, still without a single cookie.</div>
-          </a>
-          <a href="/features/metrics">
+          </StxLink>
+          <StxLink to="/features/metrics">
             <div class="r-name">Pageviews and sessions</div>
             <div class="r-desc">Exact counts from anonymous events.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -128,7 +128,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

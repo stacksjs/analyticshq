@@ -38,7 +38,7 @@ const crumbs = [
         <h1>See who visits, without tracking who they are.</h1>
         <p>Country, device, browser, and operating system, resolved at the edge. Country comes from your CDN headers, never a third-party geo-IP lookup.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -120,18 +120,18 @@ const crumbs = [
           <h2 id="related-heading" class="section-title">Pairs well with</h2>
         </div>
         <div class="related">
-          <a href="/features/sources">
+          <StxLink to="/features/sources">
             <div class="r-name">Sources and referrers</div>
             <div class="r-desc">Cross a country with the channel it arrived from.</div>
-          </a>
-          <a href="/features/privacy">
+          </StxLink>
+          <StxLink to="/features/privacy">
             <div class="r-name">Privacy by design</div>
             <div class="r-desc">Why there is no stored IP behind these numbers.</div>
-          </a>
-          <a href="/features/real-time">
+          </StxLink>
+          <StxLink to="/features/real-time">
             <div class="r-name">Real-time visitors</div>
             <div class="r-desc">See where current visitors are right now.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

@@ -38,7 +38,7 @@ const crumbs = [
         <h1>Watch speed and traffic in the same place.</h1>
         <p>Real-user LCP, INP, and CLS collected from the same script, shown next to your traffic. A slow page shows up before it quietly costs you visitors.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -114,18 +114,18 @@ const crumbs = [
           <h2 id="related-heading" class="section-title">Pairs well with</h2>
         </div>
         <div class="related">
-          <a href="/features/metrics">
+          <StxLink to="/features/metrics">
             <div class="r-name">Pageviews and sessions</div>
             <div class="r-desc">Find the high-traffic pages worth optimizing.</div>
-          </a>
-          <a href="/features/real-time">
+          </StxLink>
+          <StxLink to="/features/real-time">
             <div class="r-name">Real-time visitors</div>
             <div class="r-desc">Confirm a fix against live traffic.</div>
-          </a>
-          <a href="/features/geography">
+          </StxLink>
+          <StxLink to="/features/geography">
             <div class="r-name">Geography and devices</div>
             <div class="r-desc">See where slow experiences cluster.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -134,7 +134,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

@@ -64,7 +64,7 @@ const crumbs = [
         <p>Real-time visitors, traffic sources, conversions, and Core Web Vitals, in one screen. All from a single cookieless script under 2 KB, with exact numbers and no consent banner in the way.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+          <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
         </div>
       </section>
 
@@ -74,7 +74,7 @@ const crumbs = [
         </div>
         <div class="bento">
           @foreach (featureCells as cell)
-            <a class="{{ cell.cls }}" href="/features/{{ cell.slug }}" data-no-router style="{{ cell.style || '' }}">
+            <StxLink class="{{ cell.cls }}" to="/features/{{ cell.slug }}" style="{{ cell.style || '' }}">
               <h3>{{ cell.title }}</h3>
               <p>{{ cell.body }}</p>
               @if (cell.spark)
@@ -85,7 +85,7 @@ const crumbs = [
                 </div>
               @endif
               <span class="cell-more">View feature</span>
-            </a>
+            </StxLink>
           @endforeach
         </div>
       </section>
@@ -93,7 +93,7 @@ const crumbs = [
       <section class="reveal section shell" aria-label="Migrate from Google Analytics">
         <div class="migrate">
           <p>Moving off Google Analytics? Import your GA history in one click and keep every chart you already track.</p>
-          <a class="textlink" href="/features/import" data-no-router>See the import guide</a>
+          <StxLink class="textlink" to="/features/import">See the import guide</StxLink>
         </div>
       </section>
 
@@ -116,7 +116,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/compare" data-no-router>Compare the alternatives</a>
+            <StxLink class="btn ghost" to="/compare">Compare the alternatives</StxLink>
           </div>
         </div>
       </section>

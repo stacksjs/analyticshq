@@ -38,7 +38,7 @@ const crumbs = [
         <h1>Know exactly where your traffic comes from.</h1>
         <p>Every referrer is classified on arrival, so search, social, direct, and campaign traffic separate at a glance. UTM tags flow straight into the report.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/dashboard">See a live dashboard</a>
+          <StxLink to="/dashboard" class="btn primary">See a live dashboard</StxLink>
           <a class="btn ghost" href="/#install">Get your script tag</a>
         </div>
       </section>
@@ -120,18 +120,18 @@ const crumbs = [
           <h2 id="related-heading" class="section-title">Pairs well with</h2>
         </div>
         <div class="related">
-          <a href="/features/goals">
+          <StxLink to="/features/goals">
             <div class="r-name">Goals and campaigns</div>
             <div class="r-desc">Connect a channel to the conversions it drives.</div>
-          </a>
-          <a href="/features/metrics">
+          </StxLink>
+          <StxLink to="/features/metrics">
             <div class="r-name">Pageviews and sessions</div>
             <div class="r-desc">See how each channel sessions behave.</div>
-          </a>
-          <a href="/features/geography">
+          </StxLink>
+          <StxLink to="/features/geography">
             <div class="r-name">Geography and devices</div>
             <div class="r-desc">Break a channel down by country and device.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -140,7 +140,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard">See a live dashboard</a>
+            <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>
       </section>
