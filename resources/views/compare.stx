@@ -60,7 +60,7 @@ const crumbs = [
         <p>Whichever analytics tool you are weighing, the same three things hold: no cookies, exact numbers, and data that stays yours. Pick a comparison to see it point for point.</p>
         <div class="hero-actions">
           <a class="btn primary" href="/#install">Get your script tag</a>
-          <a class="btn ghost" href="/features/privacy" data-no-router>How the privacy works</a>
+          <StxLink to="/features/privacy" class="btn ghost">How the privacy works</StxLink>
         </div>
       </section>
 
@@ -70,15 +70,15 @@ const crumbs = [
         </div>
         <div class="related">
           @foreach (alternatives as a)
-            <a href="/compare/{{ a.slug }}" data-no-router>
+            <StxLink to="/compare/{{ a.slug }}">
               <div class="r-name">{{ a.name }}</div>
               <div class="r-desc">{{ a.desc }}</div>
-            </a>
+            </StxLink>
           @endforeach
-          <a href="/features/privacy" data-no-router>
+          <StxLink to="/features/privacy">
             <div class="r-name">Why privacy-first?</div>
             <div class="r-desc">The cookieless model behind every one of these comparisons.</div>
-          </a>
+          </StxLink>
         </div>
       </section>
 
@@ -101,7 +101,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+            <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>
       </section>
