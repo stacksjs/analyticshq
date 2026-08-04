@@ -113,7 +113,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <a href="/" class="text-lg wordmark">analyticshq</a>
     <div class="flex gap-2.5 items-center">
-      <a href="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</a>
+      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
       <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
     </div>
   </header>
@@ -153,10 +153,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             @endif
           </div>
         </div>
+        {{-- Two @if blocks rather than @if/@else: an @else directly before a component
+             is emitted as a boolean attribute, so stx's internal sentinel (including a
+             raw NUL byte) leaks into the served HTML as @else="<NUL>stx-boolean-attribute".
+             @if carries a real expression and compiles cleanly, so this renders the same
+             two states without the malformed attribute. --}}
         @if (pro())
-          <a href="/pricing" class="px-4 py-2 text-sm btn btn-ghost">Manage plan</a>
-        @else
-          <a href="/pricing" class="px-4 py-2 text-sm btn btn-primary">Upgrade to Pro</a>
+          <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost">Manage plan</StxLink>
+        @endif
+        @if (!pro())
+          <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary">Upgrade to Pro</StxLink>
         @endif
       </div>
       <div class="flex items-center justify-between px-6 py-4 row">
@@ -164,7 +170,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
           <div class="text-xs tracking-wide uppercase" style="color: var(--text-3); font-family: var(--mono)">Member since</div>
           <div class="mt-1 text-base text-text-2">{{ since() }}</div>
         </div>
-        <a href="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</a>
+        <StxLink to="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</StxLink>
       </div>
     </section>
 

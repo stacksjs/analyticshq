@@ -129,7 +129,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <p class="mt-6 text-center text-sm text-text-3">
       No account?
-      <a href="/register" class="font-medium text-accent">Create one</a>
+      <StxLink to="/register" class="font-medium text-accent">Create one</StxLink>
     </p>
   </div>
 </main>

@@ -128,7 +128,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <p class="mt-6 text-center text-sm text-text-3">
       Already have an account?
-      <a href="/login" class="font-medium text-accent">Sign in</a>
+      <StxLink to="/login" class="font-medium text-accent">Sign in</StxLink>
     </p>
   </div>
 </main>

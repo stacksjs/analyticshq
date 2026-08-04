@@ -130,7 +130,7 @@ async function upgrade(): Promise<void> {
               <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 30-day retention</li>
               <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Community support</li>
             </ul>
-            <a href="/register" class="btn ghost">Get started</a>
+            <StxLink to="/register" class="btn ghost">Get started</StxLink>
           </div>
 
           <div class="featured plan">
@@ -161,7 +161,7 @@ async function upgrade(): Promise<void> {
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <a class="btn primary" href="/#install">Get your script tag</a>
-            <a class="btn ghost" href="/compare" data-no-router>Compare the alternatives</a>
+            <StxLink class="btn ghost" to="/compare">Compare the alternatives</StxLink>
           </div>
         </div>
       </section>
