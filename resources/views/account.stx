@@ -153,15 +153,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             @endif
           </div>
         </div>
-        {{-- Two @if blocks rather than @if/@else: an @else directly before a component
-             is emitted as a boolean attribute, so stx's internal sentinel (including a
-             raw NUL byte) leaks into the served HTML as @else="<NUL>stx-boolean-attribute".
-             @if carries a real expression and compiles cleanly, so this renders the same
-             two states without the malformed attribute. --}}
         @if (pro())
           <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost">Manage plan</StxLink>
-        @endif
-        @if (!pro())
+        @else
           <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary">Upgrade to Pro</StxLink>
         @endif
       </div>
