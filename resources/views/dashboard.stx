@@ -1637,7 +1637,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       @else
         <h2 class="mb-2 font-semibold text-lg">Sign in to view analytics</h2>
         <p class="mb-5 text-sm text-text-2">This dashboard is private to the site owner.</p>
-        <a href="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Sign in</a>
+        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Sign in</StxLink>
       @endif
     </div>
     @endif
