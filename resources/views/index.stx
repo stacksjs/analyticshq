@@ -79,7 +79,7 @@ function pickFramework(e: Event): void {
             </p>
             <div class="d3 enter hero-actions">
               <a class="btn primary" href="#install">Get your script tag</a>
-              <a class="btn ghost" href="/dashboard" data-no-router>See a live dashboard</a>
+              <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
             </div>
           </div>
 
@@ -132,7 +132,7 @@ function pickFramework(e: Event): void {
           </div>
           <div class="bento">
             @foreach (featureCells as cell)
-              <a class="{{ cell.cls }}" href="/features/{{ cell.slug }}" data-no-router>
+              <StxLink class="{{ cell.cls }}" to="/features/{{ cell.slug }}">
                 <h3>{{ cell.title }}</h3>
                 <p>{{ cell.body }}</p>
                 @if (cell.spark)
@@ -143,7 +143,7 @@ function pickFramework(e: Event): void {
                   </div>
                 @endif
                 <span class="cell-more">View feature</span>
-              </a>
+              </StxLink>
             @endforeach
           </div>
         </section>
@@ -151,7 +151,7 @@ function pickFramework(e: Event): void {
         <section class="reveal section shell" aria-label="Migrate from Google Analytics">
           <div class="migrate">
             <p>Moving off Google Analytics? Import your GA history in one click and keep every chart you already track.</p>
-            <a class="textlink" href="/features/import" data-no-router>See the import guide</a>
+            <StxLink class="textlink" to="/features/import">See the import guide</StxLink>
           </div>
         </section>
 
