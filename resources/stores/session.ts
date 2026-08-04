@@ -40,9 +40,27 @@ const SESSION_COOKIE = 'analyticshq_token'
  * That failure is silent in the worst way: the ReferenceError is thrown inside the store
  * IIFE, so defineStore never completes and useStore('session') reports "Store not found"
  * somewhere else entirely. Verified in a headless browser, not by reading the bundle.
+ *
+ * RESOLVED LAZILY, and that matters. Read at module scope this was
+ * `globalThis.stx.useCookie` on the store bundle's first line -- which throws
+ * `Cannot read properties of undefined` if the bundle ever executes before the signals
+ * runtime has populated window.stx. The router re-runs page scripts on navigation, and
+ * an ordering slip there turns one missing global into a dead store on every subsequent
+ * page. A sibling app hit exactly that (`Cannot destructure property 'batch' of
+ * 'window.stx' as it is undefined`), so this resolves inside the factory, which cannot
+ * run before defineStore itself exists, and degrades to an in-memory signal rather than
+ * throwing if the global is somehow still absent.
  */
 type SessionCookieOpts = { maxAge?: number, sameSite?: 'Lax' | 'Strict' | 'None', path?: string }
-const sessionUseCookie = (globalThis as any).stx.useCookie as (name: string, opts?: SessionCookieOpts) => StxSignal<string>
+type SessionCookieFn = (name: string, opts?: SessionCookieOpts) => StxSignal<string>
+
+function sessionCookieSignal(name: string, opts: SessionCookieOpts): StxSignal<string> {
+  const fn = (globalThis as any).stx?.useCookie as SessionCookieFn | undefined
+  if (fn)
+    return fn(name, opts)
+  console.warn('[session] window.stx.useCookie unavailable; the server-readable cookie will not be mirrored this render.')
+  return state('')
+}
 
 /** Re-encode a pre-migration raw value so useLocalStorage can parse it. */
 function sessionMigrateRaw(key: string): void {
@@ -83,7 +101,7 @@ defineStore('session', (): SessionStore => {
   // cannot read localStorage -- it authenticates from this cookie. useCookie owns the
   // serialisation (path, max-age, SameSite, and Secure derived from location.protocol),
   // which is the string four pages used to retype by hand and could drift on.
-  const mirror: StxSignal<string> = sessionUseCookie(SESSION_COOKIE, { maxAge: 2592000, sameSite: 'Lax' })
+  const mirror: StxSignal<string> = sessionCookieSignal(SESSION_COOKIE, { maxAge: 2592000, sameSite: 'Lax' })
 
   // Keep the cookie in step with the token for the whole session rather than only at
   // sign-in: a visitor can arrive with a token in localStorage and no cookie (it
