@@ -71,59 +71,42 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 }
 </script>
 
-<meta name="stx-layout" content="auth">
 
-<style>
-:root {
-  color-scheme: dark;
-  --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
-  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #6d777c;
-  --accent: #46d3c0; --accent-ink: #04201c;
-  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
-}
-body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
-.field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
-.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
-.btn { background: var(--accent); color: var(--accent-ink); border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease; }
-.btn:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.6; cursor: default; }
-.err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
-</style>
 
-<main class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
-  <div class="max-w-md w-full">
-    <div class="mb-8 text-center">
-      <StxLink to="/dashboard" class="text-2xl wordmark">analyticshq</StxLink>
-    </div>
+@extends('auth')
 
-    <div class="mb-8 text-center">
-      <h1 class="font-semibold text-xl tracking-tight">Add a site</h1>
-      <p class="mt-2 text-sm text-text-3">Each site gets its own tracking id and dashboard.</p>
-    </div>
-
-    <form @submit="handleSubmit" class="space-y-4">
-      @if (error())
-        <div class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
-      @endif
-
-      <div>
-        <label class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
-        <input name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
-      </div>
-      <div>
-        <label class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
-        <input name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
-      </div>
-
-      <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
-        {{ loading() ? 'Creating…' : 'Create site' }}
-      </button>
-    </form>
-
-    <p class="mt-6 text-center text-sm text-text-3">
-      <StxLink to="/dashboard" class="font-medium text-accent">← Back to dashboard</StxLink>
-    </p>
+@section('content')
+<div class="max-w-md w-full">
+  <div class="mb-8 text-center">
+    <StxLink to="/dashboard" class="text-2xl wordmark">analyticshq</StxLink>
   </div>
-</main>
+
+  <div class="mb-8 text-center">
+    <h1 class="font-semibold text-xl tracking-tight">Add a site</h1>
+    <p class="mt-2 text-sm text-text-3">Each site gets its own tracking id and dashboard.</p>
+  </div>
+
+  <form @submit="handleSubmit" class="space-y-4">
+    @if (error())
+      <div class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
+    @endif
+
+    <div>
+      <label class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
+      <input name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
+    </div>
+    <div>
+      <label class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
+      <input name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
+    </div>
+
+    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
+      {{ loading() ? 'Creating…' : 'Create site' }}
+    </button>
+  </form>
+
+  <p class="mt-6 text-center text-sm text-text-3">
+    <StxLink to="/dashboard" class="font-medium text-accent">← Back to dashboard</StxLink>
+  </p>
+</div>
+@endsection

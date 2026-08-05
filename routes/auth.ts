@@ -27,6 +27,31 @@ route.post('/logout', 'Actions/Auth/LogoutAction').skipCsrf()
 // renewable source of access tokens.
 route.post('/auth/refresh', 'Actions/Auth/RefreshTokenAction').skipCsrf().rateLimit(10, 'minute')
 
+/**
+ * Password reset (#34).
+ *
+ * These had to be registered here, not merely enabled: NO framework default route is
+ * mounted in this app. Verified by probing routes this file does not declare --
+ * /verify-two-factor-login, /logout-all, /generate-two-factor-secret and /auth/tokens
+ * all return 404. Only ACTIONS resolve from @stacksjs/defaults by string, which is why
+ * the handlers below exist without a single file in app/Actions/Password/.
+ *
+ * That is also why the issue's premise ("the backend exists, nothing renders it") was
+ * only half right: the actions existed, the routes did not.
+ *
+ * Rate limits mirror the framework's own for these endpoints. /forgot is the tightest
+ * because it triggers a mailer hop, so it is the most abusable as an amplifier.
+ *
+ * NOTE the enumeration leak in SendPasswordResetEmailAction: it answers 404 "No account
+ * found with this email address." for an unknown address and 200 for a known one, which
+ * turns this into an account-existence oracle. Filed upstream. The forgot-password page
+ * renders one neutral message for BOTH outcomes so the app does not pass the leak on --
+ * see resources/views/forgot-password.stx.
+ */
+route.post('/password/forgot', 'Actions/Password/SendPasswordResetEmailAction').skipCsrf().rateLimit(3, 'minute')
+route.post('/password/reset', 'Actions/Password/PasswordResetAction').skipCsrf().rateLimit(5, 'minute')
+route.post('/password/verify-token', 'Actions/Password/VerifyResetTokenAction').skipCsrf().rateLimit(10, 'minute')
+
 // GET API endpoints must sit under /api/** — the view process only reverse
 // proxies non-GET requests and the /api/** prefix through to this API process.
 // A bare GET like /me would be swallowed by the view server's page routing.

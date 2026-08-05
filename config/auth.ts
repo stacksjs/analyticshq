@@ -96,5 +96,19 @@ export default {
      * @default 60
      */
     throttle: env.AUTH_PASSWORD_RESET_THROTTLE ||60,
+
+    /**
+     * Where the emailed reset link points. Pointed at OUR page on purpose.
+     *
+     * The framework default is `/password/reset/{token}?email={email}`
+     * (@stacksjs/auth password/reset.js:72), which collides confusingly with the
+     * POST API endpoint of the same name that routes/auth.ts registers: one is a
+     * page a human opens, the other is JSON the page submits to, and they would
+     * differ only by HTTP method and a trailing segment.
+     *
+     * {token} and {email} are substituted by the mailer; {email} is already
+     * URL-encoded at substitution time, so it must not be encoded again here.
+     */
+    url: '/reset-password?token={token}&email={email}',
   },
 } satisfies AuthConfig

@@ -1,0 +1,56 @@
+{{-- Auth chrome. Layout group 'auth'.
+
+    A FRAGMENT, not a document -- same contract as marketing.stx. stx synthesises
+    <!DOCTYPE>, <html lang>, <head> and <body> from config/ui.ts app.head merged with
+    each page's head. Writing a doctype or an html tag here, even inside a comment
+    (the test is an unanchored regex over the rendered string), makes hasDocumentShell()
+    true and every page's title and description is dropped. Never add one.
+
+    Replaces the hand-written `<meta name="stx-layout" content="auth">` that login,
+    register and sites/new each carried. That meta was a hint the pages asserted about
+    themselves; the FILENAME is what actually names a layout group, so the two could
+    disagree and nothing would say so.
+
+    The <style> block below was copy-pasted, byte for byte, into login.stx and
+    register.stx, and into sites/new.stx minus the five .oauth-btn/.divider rules it
+    does not use. Those five are harmless there -- no element carries the class -- and
+    one shared block beats three that drift.
+
+    <main> lives HERE and pages must not declare their own: fragment extraction slices
+    from the first <main> to the LAST </main>, so a second one makes the router swap the
+    wrong span. Pages yield their own width wrapper instead, because they disagree about
+    it -- login and register want max-w-sm, sites/new wants max-w-md. --}}
+
+@head
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
+  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #6d777c;
+  --accent: #46d3c0; --accent-ink: #04201c;
+  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.wordmark { font-weight: 700; letter-spacing: -0.03em; }
+.field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
+.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.btn { background: var(--accent); color: var(--accent-ink); border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease; }
+.btn:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
+.ok { background: color-mix(in srgb, #46d3c0 12%, transparent); color: var(--accent); }
+.oauth-btn { border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); transition: border-color 0.15s ease, transform 0.12s ease; }
+.oauth-btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.oauth-btn:active { transform: translateY(1px); }
+.divider { display: flex; align-items: center; gap: 0.75rem; color: var(--text-3); font-size: 12px; }
+.divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+</style>
+@stack('styles')
+@endhead
+
+<main class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
+@yield('content')
+</main>
+
+@stack('scripts')
