@@ -42,7 +42,10 @@ function logout(): void {
 
 onMount(() => {
   if (!session.isAuthed()) {
-    window.location.replace('/login')
+    // navigate(..., { replace: true }) rather than location.replace: this one runs on
+    // mount, so the router IS up and this is a fragment swap instead of a document
+    // load. The pre-paint twin at the bottom of this file cannot make that trade.
+    navigate('/login', { replace: true })
     return
   }
   fetch('/api/me', { headers: session.authHeaders() })
@@ -201,8 +204,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   //
   // Verified in a browser that a second instance on the same key is safe: two
   // useLocalStorage calls on 'token' both read the stored value and neither clobbers it.
+  //
+  // navigate(..., { replace: true }) is NOT a softening of the bounce. With no router
+  // loaded -- which is the case this early -- signals.js falls straight through to
+  // window.location.replace(url), so the emitted behaviour is byte-for-byte what it
+  // replaces. What it buys is that the day this block runs with the router up, it
+  // becomes a swap on its own instead of silently staying a document load.
   var token = window.stx.useLocalStorage('token', '')()
   if (!token)
-    window.location.replace('/login')
+    window.stx.navigate('/login', { replace: true })
 })()
 </script>

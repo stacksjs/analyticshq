@@ -776,7 +776,10 @@ const goalBusy = state(false)
 const isPro = state(false)
 // Share link: seeded from the server-bridged existing token (shareToken/activeSiteId
 // are server consts inlined here by the data bridge), then create/revoke live.
-const shareUrl = state(shareToken ? `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${shareToken}` : '')
+// Built by shareLinkFor rather than by a second copy of the same template -- it is
+// declared further down and reached by hoisting, which is the trade for having one
+// place that decides what a share URL looks like.
+const shareUrl = state(shareToken ? shareLinkFor(shareToken) : '')
 const shareBusy = state(false)
 const shareCopied = state(false)
 // Live "current visitors": seeded from the server render, then polled so the
@@ -800,6 +803,41 @@ function logout(): void {
   session.signOut()
 }
 
+// Site switcher. Was an inline onchange="location.href = ..." on the <select>, i.e.
+// vanilla JS living in the template, and a full document load on every switch.
+//
+// The URL is query-only ON PURPOSE: the range pills beside this control are plain
+// ?site=&range= anchors that the router already intercepts and swaps, so emitting the
+// same shape here makes switching sites behave like switching ranges. Relative
+// resolution is safe -- the router resolves against location.href, not the origin
+// (stx#1777), so '?site=x' stays on /dashboard instead of bouncing to /.
+//
+// `range` is a server const reaching this block through stx's server->client data
+// bridge, which inlines any server name that appears as a word in the client source
+// and is not re-declared here (client-script.js:458-478).
+function switchSite(e: Event): void {
+  const next = (e.target as HTMLSelectElement).value
+  if (!next || next === activeSiteId)
+    return
+  navigate(`?site=${encodeURIComponent(next)}&range=${encodeURIComponent(range)}`)
+}
+
+// Re-render the page from the server after a goals mutation.
+//
+// A full document load, deliberately -- this is NOT a swap in disguise. Every goal row
+// carries conversions, converters, rate and total value that come from the LEFT JOIN
+// aggregate in the server block, not from the POST/DELETE response, so there is no
+// client-side shape to re-derive a row from and nothing cheaper to fetch.
+//
+// It could not be a swap even if there were: the router early-returns on a navigation
+// to the URL it is already on (router client.ts:425), and the `force` argument that
+// bypasses that is not reachable through the two-parameter navigate() the runtime
+// exposes. { reload: true } skips the router outright by design, and `replace` keeps
+// the load off the history stack exactly as location.reload() did.
+function refreshFromServer(): void {
+  navigate(useRoute().fullPath, { replace: true, reload: true })
+}
+
 async function addGoal(e: SubmitEvent): Promise<void> {
   e.preventDefault()
   if (goalBusy())
@@ -819,7 +857,7 @@ async function addGoal(e: SubmitEvent): Promise<void> {
       method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
     })
     if (res.ok) {
-      window.location.reload()
+      refreshFromServer()
       return
     }
     const d = await res.json().catch(() => ({}))
@@ -840,12 +878,19 @@ async function deleteGoal(id: string | number): Promise<void> {
       method: 'DELETE', headers: authHeaders(false),
     })
     if (res.ok)
-      window.location.reload()
+      refreshFromServer()
   }
   catch { /* leave the row; a retry click re-attempts */ }
 }
 
 // Share link management (owner-only UI). POST mints/rotates a token; DELETE revokes.
+//
+// The one window.location left in this block, and it stays. stx's guard flags it, but
+// the suggested replacements do not cover this: useRoute() deliberately exposes only
+// path / fullPath / hash / query (signals.js:1048-1060), and navigate() is for going
+// somewhere, not for reading where you are. The alternative is APP_URL from the server,
+// which would hand a developer on localhost a share link pointing at the production
+// host. An absolute URL is required because this string gets copied to someone else.
 function shareLinkFor(token: string): string {
   return `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${token}`
 }
@@ -1075,15 +1120,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
           Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
         </p>
         {{-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
-            <select> navigates by rewriting ?site=; the plain-text line above is
-            the no-JS / no-owned-sites fallback. "+ Add site" is a link to the
+            <select> hands off to switchSite, which routes to ?site=; the plain-text
+            line above is the no-owned-sites fallback. "+ Add site" is a link to the
             reactive create page, not an in-page modal. --}}
         {{-- No nested @if (stx miscounts @endif for @if nested inside a non-top-level
             @if); the multi-site <select> is gated by a precomputed `showSiteSelect`
             flag as its OWN block, and "+ Add site" always shows to the owner. --}}
         @if (showSiteSelect)
           <div class="mt-3">
-            <select onchange="location.href = '?site=' + encodeURIComponent(this.value) + '&range={{ range }}'"
+            <select @change="switchSite"
               aria-label="Switch site"
               class="px-2.5 py-1.5 text-sm mono pill" style="color: var(--text-2); border: 1px solid var(--border); background: var(--panel); cursor: pointer">
               @foreach (ownedSites as s)
@@ -1672,10 +1717,27 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   // (Tag name spelled without angle brackets deliberately -- stx counts script tags
   // across the whole file, and a literal one in a comment unbalances the count.)
   var t = window.stx.useLocalStorage('token', '')()
-  if (!t) { window.location.replace('/login'); return }
-  if (!/(^|;)\s*analyticshq_token=/.test(document.cookie)) {
-    document.cookie = 'analyticshq_token=' + encodeURIComponent(t) + '; path=/; max-age=2592000; samesite=lax'
-    window.location.reload()
+  // No router this early, so navigate() falls through to window.location.replace and
+  // emits exactly what the hand-written call did (signals.js:1005-1015) -- with the
+  // upgrade to a swap coming for free if this ever runs with the router up.
+  if (!t) { window.stx.navigate('/login', { replace: true }); return }
+  // useCookie owns the serialisation -- path, max-age, SameSite, and Secure derived
+  // from location.protocol -- which is the attribute string this block used to retype
+  // by hand and could drift from the session store on. Reading through it also
+  // DECODES, so the comparison is against the value the server will actually see.
+  //
+  // The condition stays "absent", not "differs from t", on purpose: a mismatch test
+  // would re-enter this branch on every load if a write were ever rejected (Safari
+  // ITP, a Secure cookie on http), and the reload below makes that an infinite loop
+  // rather than a bad render.
+  var mirror = window.stx.useCookie('analyticshq_token', { maxAge: 2592000, sameSite: 'Lax' })
+  if (!mirror()) {
+    mirror.set(t)
+    // A real document load, and { reload: true } says so rather than leaving it to a
+    // bare location call: the cookie exists so the SERVER can owner-scope this render,
+    // so a fragment swap would fetch the same signed-out HTML. `replace` keeps it out
+    // of history, which is what location.reload() did.
+    window.stx.navigate(window.stx.useRoute().fullPath, { replace: true, reload: true })
   }
 })()
 </script>
