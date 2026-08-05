@@ -874,7 +874,10 @@ async function addGoal(e: SubmitEvent): Promise<void> {
 }
 
 async function deleteGoal(id: string | number): Promise<void> {
-  if (!id || !window.confirm('Delete this goal? Its conversions will be removed too.'))
+  // stxConfirm rather than window.confirm: a promise-returning in-page dialog that
+  // matches the app's theme, instead of a browser chrome prompt that blocks the whole
+  // thread. Resolves true on OK, false on Cancel or Escape.
+  if (!id || !(await stxConfirm('Delete this goal? Its conversions will be removed too.')))
     return
   try {
     const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals/${encodeURIComponent(id)}`, {
@@ -911,7 +914,12 @@ async function createShare() {
   shareBusy.set(false)
 }
 async function revokeShare() {
-  if (shareBusy() || !window.confirm('Revoke the share link? Anyone using it will lose access.'))
+  // Split from one condition into two: the old `shareBusy() || !confirm(...)` relied on
+  // short-circuiting to skip the prompt while busy, and that only reads correctly while
+  // the prompt is synchronous.
+  if (shareBusy())
+    return
+  if (!(await stxConfirm('Revoke the share link? Anyone using it will lose access.')))
     return
   shareBusy.set(true)
   try {
@@ -922,13 +930,18 @@ async function revokeShare() {
   catch {}
   shareBusy.set(false)
 }
+// Created ONCE, not per click. useTimeout starts on creation and registers an
+// onDestroy hook, so calling it inside the handler would stack a fresh hook on every
+// copy. The run at page load is harmless: it clears a flag that is already false.
+const shareCopiedReset = useTimeout(() => shareCopied.set(false), 1500)
+
 function copyShare() {
   const text = shareUrl()
   if (!text)
     return
   const done = () => {
     shareCopied.set(true)
-    setTimeout(() => shareCopied.set(false), 1500)
+    shareCopiedReset.start()
   }
   if (window.navigator.clipboard && window.navigator.clipboard.writeText)
     window.navigator.clipboard.writeText(text).then(done, () => {})
@@ -1003,6 +1016,12 @@ function exportCsv() {
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
+  // Deliberately setTimeout and NOT useTimeout, which is the opposite of the call made
+  // for the copy-feedback timer above. useTimeout stops itself on destroy -- correct for
+  // a UI flag, actively wrong here: navigating within the second would CANCEL the
+  // revoke, and since an SPA swap keeps the document alive the blob URL would then leak
+  // for the rest of the session. Cleanup is the one thing that must not be cancellable
+  // by navigation. stx's guard flags this line; the guard is wrong about this one.
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
@@ -1014,18 +1033,34 @@ onMount(() => {
     .then(d => { if (d && d.pro) isPro.set(true) })
     .catch(() => {})
 
-  // Refresh the live visitor count every 15s. Stop on 401 (share viewers can't
-  // read it) so we don't poll forever with no token.
-  let liveTimer
+  // Refresh the live visitor count every 15s.
+  //
+  // useInterval, not setInterval, and this is a bug fix rather than a style change.
+  // useInterval registers an onDestroy hook, and stx drains those on `stx:load` --
+  // which fires on SPA navigation. The hand-rolled timer relied solely on the teardown
+  // returned from onMount, and a full-document swap never runs it, so navigating away
+  // from the dashboard left the poll hitting /api/sites/:id/realtime every 15 seconds,
+  // forever, for a page nobody was looking at.
+  //
+  // Declared with `let` + a separate assignment because the callback pauses the timer
+  // it belongs to; a `const live = useInterval(() => … live.pause() …)` reads fine only
+  // because the first tick is 15s away, and that is too subtle to rely on.
+  let live: { pause: () => void }
   const tick = () => session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`)
     .then((r) => {
-      if (r.status === 401) { clearInterval(liveTimer); return null }
+      // 401 here means the renewal could not help: a share-link viewer holds no token
+      // at all. Stop rather than poll an endpoint that will never answer them.
+      if (r.status === 401) { live.pause(); return null }
       return r.ok ? r.json() : null
     })
     .then((d) => { if (d && typeof d.current === 'number') liveCount.set(d.current) })
     .catch(() => {})
-  liveTimer = setInterval(tick, 15000)
-  return () => clearInterval(liveTimer)
+
+  live = useInterval(tick, 15000)
+
+  // Kept as well as the onDestroy hook: this one fires on the fragment-swap path, the
+  // hook covers the document-swap path. Neither covers both.
+  return () => live.pause()
 })
 </script>
 
