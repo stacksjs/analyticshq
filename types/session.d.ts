@@ -32,11 +32,36 @@ interface MeResponse {
 
 /** Response body of POST /login and POST /register. */
 interface AuthResponse {
+  /** Legacy alias for access_token, still emitted by the framework's LoginAction. */
   token?: string
   access_token?: string
+  /**
+   * Single-use, rotating, 30-day. The framework has always returned this; the app
+   * dropped it on the floor until #32, which is why every session died at the
+   * one-hour access-token expiry.
+   */
+  refresh_token?: string
+  /** Access-token lifetime in SECONDS (the access token, not the refresh token). */
+  expires_in?: number
   user?: SessionUser
   message?: string
 }
+
+/** Response body of POST /auth/refresh. Carries no user — only a fresh token pair. */
+interface RefreshResponse {
+  access_token?: string
+  refresh_token?: string
+  token_type?: string
+  expires_in?: number
+}
+
+/**
+ * Outcome of a refresh attempt. The three-way split is load-bearing: a refresh that
+ * could not be ATTEMPTED (offline, no refresh token) must not sign the visitor out,
+ * while one that was REFUSED means the refresh token is spent or expired and staying
+ * signed in is a lie.
+ */
+type SessionRefreshOutcome = 'ok' | 'refused' | 'unavailable'
 
 /** What the session store exposes to a page. */
 interface SessionStore {
@@ -48,8 +73,20 @@ interface SessionStore {
   isAuthed: () => boolean
   /** Authorization header object for fetch(), empty when signed out. */
   authHeaders: () => Record<string, string>
+  /**
+   * fetch() with the bearer header attached, which transparently renews the access
+   * token and retries ONCE when the server answers 401. Prefer this over calling
+   * fetch() with authHeaders() by hand: the hand-written form is what made every
+   * session die after an hour.
+   */
+  authFetch: (input: string, init?: RequestInit) => Promise<Response>
+  /**
+   * Exchange the refresh token for a new pair. Callers rarely need this — authFetch
+   * does it for them. Concurrent calls share one in-flight request.
+   */
+  refreshAccessToken: () => Promise<SessionRefreshOutcome>
   /** Persist a fresh login; the cookie mirror follows via an effect in the store. */
-  signIn: (token: string, user?: SessionUser | null) => void
+  signIn: (token: string, user?: SessionUser | null, refreshToken?: string) => void
   /** Clear both stores, expire the cookie, and send the visitor to /login. */
   signOut: () => void
 }

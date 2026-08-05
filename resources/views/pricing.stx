@@ -30,9 +30,11 @@ async function upgrade(): Promise<void> {
   loading.set(true)
   err.set('')
   try {
-    const res = await fetch('/payments/checkout', {
+    // authFetch, not fetch: an hour-old access token would otherwise 401 here and the
+    // visitor would be told "Checkout is not available yet" while signed in (#32).
+    const res = await session.authFetch('/payments/checkout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...session.authHeaders() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ interval: interval() }),
     })
     const data: CheckoutResponse = await res.json().catch(() => ({}))

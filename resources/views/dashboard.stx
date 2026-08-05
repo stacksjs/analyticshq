@@ -789,12 +789,15 @@ const liveCount = state(typeof liveNow === 'number' ? liveNow : 0)
 
 const session = useStore('session') as SessionStore
 
-function authHeaders(json: boolean = false): Record<string, string> {
-  const h: Record<string, string> = session.authHeaders()
-  if (json)
-    h['Content-Type'] = 'application/json'
-  return h
-}
+// Every authenticated call on this page goes through session.authFetch, which attaches
+// the bearer header, renews an expired access token and retries once (#32). The local
+// authHeaders() helper that used to live here only attached the header, so an hour into
+// a session this whole page 401'd: goals could not be added or deleted, share links
+// could not be minted, and the live counter stopped.
+//
+// JSON_HEADERS rather than a boolean-flag helper -- the flag existed only to decide
+// whether to add this one line.
+const JSON_HEADERS: Record<string, string> = { 'Content-Type': 'application/json' }
 
 function logout(): void {
   // Clears the token and the user, expires the analyticshq_token cookie through the
@@ -853,8 +856,8 @@ async function addGoal(e: SubmitEvent): Promise<void> {
     value: form.elements.value.value,
   }
   try {
-    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals`, {
-      method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals`, {
+      method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
     })
     if (res.ok) {
       refreshFromServer()
@@ -874,8 +877,8 @@ async function deleteGoal(id: string | number): Promise<void> {
   if (!id || !window.confirm('Delete this goal? Its conversions will be removed too.'))
     return
   try {
-    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals/${encodeURIComponent(id)}`, {
-      method: 'DELETE', headers: authHeaders(false),
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
     })
     if (res.ok)
       refreshFromServer()
@@ -899,7 +902,7 @@ async function createShare() {
     return
   shareBusy.set(true)
   try {
-    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST', headers: authHeaders(false) })
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST' })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.token)
       shareUrl.set(shareLinkFor(d.token))
@@ -912,7 +915,7 @@ async function revokeShare() {
     return
   shareBusy.set(true)
   try {
-    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'DELETE', headers: authHeaders(false) })
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'DELETE' })
     if (res.ok)
       shareUrl.set('')
   }
@@ -1006,7 +1009,7 @@ function exportCsv() {
 // Reflect the plan: /api/me reports Pro from the local subscriptions table (kept
 // in sync by the Stripe webhook). The header swaps Upgrade -> Pro reactively.
 onMount(() => {
-  fetch('/api/me', { headers: authHeaders(false) })
+  session.authFetch('/api/me')
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d && d.pro) isPro.set(true) })
     .catch(() => {})
@@ -1014,7 +1017,7 @@ onMount(() => {
   // Refresh the live visitor count every 15s. Stop on 401 (share viewers can't
   // read it) so we don't poll forever with no token.
   let liveTimer
-  const tick = () => fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`, { headers: authHeaders(false) })
+  const tick = () => session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`)
     .then((r) => {
       if (r.status === 401) { clearInterval(liveTimer); return null }
       return r.ok ? r.json() : null

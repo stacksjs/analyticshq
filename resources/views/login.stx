@@ -46,7 +46,11 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     // into the analyticshq_token cookie -- which is what the SERVER reads to render
     // the owner-scoped dashboard, so a fresh login lands on data rather than the
     // signed-out gate. That cookie string used to be hand-written right here.
-    session.signIn(data.token || data.access_token || '', data.user ?? null)
+    //
+    // The third argument is the fix for #32: LoginAction has always returned a
+    // refresh token and this line has always discarded it, so the access token
+    // expired after an hour with nothing able to renew it.
+    session.signIn(data.token || data.access_token || '', data.user ?? null, data.refresh_token || '')
     navigate('/dashboard')
   }
   catch {

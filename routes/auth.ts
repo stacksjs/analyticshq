@@ -14,6 +14,19 @@ route.post('/login', 'Actions/Auth/LoginAction').skipCsrf().rateLimit(5, 'minute
 route.post('/register', 'Actions/Auth/RegisterAction').skipCsrf().rateLimit(3, 'minute')
 route.post('/logout', 'Actions/Auth/LogoutAction').skipCsrf()
 
+// Access tokens last one hour (config/auth.ts:57). Without this route the session
+// simply ended there -- and not with a redirect to /login, but with the server
+// rendering the signed-out gate while localStorage still held a token, so the
+// pre-paint guard saw a truthy value and did not bounce (#32).
+//
+// The framework already registers POST /auth/refresh, but CSRF-gated like the login
+// endpoints, which blocks the same-origin fetch from the session store for the same
+// reason the three above are re-registered here. Bearer/refresh tokens are not sent
+// automatically by the browser, so they are CSRF-immune; the rate limit stays, and it
+// matters more here than anywhere else because a leaked refresh token is otherwise a
+// renewable source of access tokens.
+route.post('/auth/refresh', 'Actions/Auth/RefreshTokenAction').skipCsrf().rateLimit(10, 'minute')
+
 // GET API endpoints must sit under /api/** — the view process only reverse
 // proxies non-GET requests and the /api/** prefix through to this API process.
 // A bare GET like /me would be swallowed by the view server's page routing.

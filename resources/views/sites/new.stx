@@ -42,15 +42,17 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   error.set('')
   try {
     const domain = (form.elements.namedItem('domain') as HTMLInputElement).value.trim()
-    const res = await fetch('/api/sites', {
+    const res = await session.authFetch('/api/sites', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...session.authHeaders() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, domain }),
     })
     const data: CreateSiteResponse = await res.json().catch(() => ({}))
     if (res.status === 401) {
-      // The token is stale, not merely absent: clear it so the guard above does not
-      // bounce this visitor straight back here on the next render.
+      // Reaching here now means the renewal did not rescue it -- authFetch has already
+      // tried, and already signed the visitor out if the refresh token was refused. So
+      // this covers the remaining case: no refresh token at all. Clear the stale access
+      // token so the guard above does not bounce this visitor straight back here.
       session.signOut()
       return
     }

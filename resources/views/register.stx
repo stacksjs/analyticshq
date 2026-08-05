@@ -27,25 +27,52 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   loading.set(true)
   error.set('')
   try {
+    const email = field('email')
+    const password = field('password')
     const res = await fetch('/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: field('name'),
-        email: field('email'),
-        password: field('password'),
-      }),
+      body: JSON.stringify({ name: field('name'), email, password }),
     })
     const data: AuthResponse = await res.json().catch(() => ({}))
     if (!res.ok) {
       error.set(data.message || 'Could not create the account.')
       return
     }
-    // This also fixes a real inconsistency with login: register never wrote the
-    // analyticshq_token cookie, so a freshly registered visitor reached the dashboard
-    // with a token the SERVER could not see and got the signed-out gate. The store's
-    // effect mirrors the cookie for both paths.
-    session.signIn(data.token || data.access_token || '', data.user ?? null)
+
+    // Sign in again with the credentials just used, and DO NOT simplify this away.
+    //
+    // The two framework actions do not return the same shape. LoginAction returns
+    // `access_token, refresh_token, token_type, expires_in, token, user`; RegisterAction
+    // returns `{ token, user }` and nothing else -- measured against both endpoints, not
+    // assumed. So a brand-new account has no refresh token, and #32 would fix every
+    // session except the one belonging to someone who just signed up: they would hit the
+    // one-hour wall once, on their first day.
+    //
+    // Exchanging the credentials we already hold for a full pair costs one request and
+    // keeps every session on one code path. The fallback matters too -- if this second
+    // call fails (rate limit, blip), the account still exists and the register token
+    // still works, so sign in with what we have rather than stranding the visitor on a
+    // form for an account that was created.
+    let pack: AuthResponse = data
+    try {
+      const pair = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      if (pair.ok) {
+        const paired: AuthResponse = await pair.json().catch(() => ({}))
+        if (paired.refresh_token)
+          pack = paired
+      }
+    }
+    catch { /* keep the register token; see above */ }
+
+    // signIn also writes the analyticshq_token cookie through the store's effect, which
+    // register never used to do -- a freshly registered visitor reached the dashboard
+    // with a token the SERVER could not see and got the signed-out gate.
+    session.signIn(pack.token || pack.access_token || '', pack.user ?? data.user ?? null, pack.refresh_token || '')
     navigate('/dashboard')
   }
   catch {

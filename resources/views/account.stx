@@ -48,11 +48,16 @@ onMount(() => {
     navigate('/login', { replace: true })
     return
   }
-  fetch('/api/me', { headers: session.authHeaders() })
+  // authFetch renews the access token and retries once before this sees a 401, which
+  // is the whole of #32 for this page: an hour into a session, /api/me used to answer
+  // 401 and the account page signed you out mid-visit.
+  session.authFetch('/api/me')
     .then((r: Response) => {
       if (r.status === 401) {
-        // Stale token: clear everything rather than only the localStorage key, or the
-        // cookie survives and the server keeps rendering a signed-in shell.
+        // Survived the renewal, so the session really is finished. Clear everything
+        // rather than only the localStorage key, or the cookie survives and the server
+        // keeps rendering a signed-in shell. (authFetch has usually done this already
+        // when the refresh was refused; this covers the no-refresh-token case.)
         session.signOut()
         return null
       }
