@@ -17,6 +17,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Committed env files must never carry a plaintext secret.
+  #
+  # .gitignore deliberately un-ignores .env.production / .env.staging / .env.ci
+  # (dotenvx encrypts them in place, so they are meant to be committed). That is a
+  # correct setup with one failure mode: a value that never got encrypted looks
+  # identical to one that did, and this repo is public. It has happened upstream --
+  # stacksjs/stacks shipped three plaintext mailbox passwords in .env.production and
+  # every scaffolded app inherited them.
+  #
+  # GitHub's secret scanning would not have caught it either: a mailbox password
+  # matches no provider pattern. So this is the check that has to hold the line.
+  #
+  # Only key NAMES are printed on failure, never values.
+  secrets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: No plaintext secrets in committed env files
+        run: |
+          st=0
+          for f in $(git ls-files '.env*'); do
+            # .env.example is documentation: non-secret defaults, no encryption expected.
+            [ "$f" = ".env.example" ] && continue
+            while IFS= read -r line || [ -n "$line" ]; do
+              case "$line" in ''|'#'*) continue ;; esac
+              case "$line" in *=*) ;; *) continue ;; esac
+              key=${line%%=*}
+              val=${line#*=}
+              val=${val%\"}
+              val=${val#\"}
+              # The dotenvx public key is public by design -- that is the point of it.
+              case "$key" in DOTENV_PUBLIC_KEY*) continue ;; esac
+              [ -z "$val" ] && continue
+              case "$val" in encrypted:*) continue ;; esac
+              echo "::error file=$f::$key is committed in plaintext. Encrypt it with dotenvx, or move it out of the repo into the deploy environment."
+              st=1
+            done < "$f"
+          done
+          if [ "$st" -eq 0 ]; then
+            echo "All committed env values are empty, encrypted, or a public key."
+          fi
+          exit $st
+
   lint:
     strategy:
       matrix:
@@ -150,7 +196,7 @@ jobs:
 
   deploy-prod:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-check.outputs.contains_release == '0'
-    needs: [lint, typecheck, test, release-check]
+    needs: [secrets, lint, typecheck, test, release-check]
     runs-on: ubuntu-latest
     environment: production
 
@@ -199,7 +245,7 @@ jobs:
 
   deploy-stage:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-beta.'))
-    needs: [lint, typecheck, test]
+    needs: [secrets, lint, typecheck, test]
     runs-on: ubuntu-latest
     environment: staging
 
@@ -246,7 +292,7 @@ jobs:
 
   deploy-dev:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
-    needs: [lint, typecheck, test]
+    needs: [secrets, lint, typecheck, test]
     runs-on: ubuntu-latest
     environment: development
 
