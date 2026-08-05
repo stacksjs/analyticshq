@@ -100,10 +100,32 @@ if [ -d "${PANTRY_DIR}" ] && command -v bun >/dev/null 2>&1 && [ "${STACKS_FORCE
   run_buddy "$(command -v bun)" "$@"
 fi
 
+# No pantry directory, but a usable bun is already on PATH — CI images, and any
+# machine where bun was installed directly. Pantry exists to BOOTSTRAP a bun and the
+# system dependencies; when one is already present there is nothing for it to do, and
+# insisting on it turns a working environment into a hard failure.
+#
+# This is the path CI takes, and its absence is why CI was red. `bun buddy lint` and
+# `bun buddy test` both died with
+#   Pantry installer not found at .../storage/framework/scripts/pantry-install
+# — a path that only exists while the framework is vendored in the project. Adopting
+# framework-as-dependencies deletes storage/framework, so every buddy-backed npm
+# script in this repo broke at once, on a runner that had bun and node_modules and
+# needed neither pantry nor a bootstrap.
+#
+# STACKS_FORCE_PANTRY=1 still forces the full path below.
+if command -v bun >/dev/null 2>&1 && [ "${STACKS_FORCE_PANTRY:-}" != "1" ]; then
+  run_buddy "$(command -v bun)" "$@"
+fi
+
 # Pantry not set up — bootstrap it
 if ! command -v pantry >/dev/null 2>&1; then
   if [ ! -x "${PANTRY_INSTALLER}" ]; then
-    echo "Pantry installer not found at ${PANTRY_INSTALLER}" >&2
+    echo "buddy: no bun on PATH, and no pantry installer to bootstrap one." >&2
+    echo "  Looked for the installer at ${PANTRY_INSTALLER}." >&2
+    echo "  That path only exists when the framework is vendored under storage/framework." >&2
+    echo "  This project consumes the framework from node_modules, so install bun directly:" >&2
+    echo "    curl -fsSL https://bun.sh/install | bash" >&2
     exit 1
   fi
 

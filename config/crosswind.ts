@@ -6,9 +6,17 @@ export default {
   content: [
     './resources/views/**/*.{stx,html}',
     './resources/**/*.{stx,html}',
+    // Both of these are generated, gitignored directories — they exist after the
+    // framework has run, not in a fresh checkout. Verified to resolve: 11 view
+    // templates and 194 component templates.
     './storage/framework/defaults/resources/views/**/*.{stx,html}',
     './storage/framework/defaults/resources/components/**/*.{stx,html}',
-    './storage/framework/core/error-handling/src/views/**/*.{stx,html}',
+    // storage/framework/core/error-handling/src/views was here and matched nothing.
+    // Adopting framework-as-dependencies removed storage/framework/core entirely, and
+    // the error views did not reappear under node_modules/@stacksjs/error-handling —
+    // there is no path to repoint this at. A glob that silently matches zero files is
+    // worse than no glob: it reads as coverage. If error views ever ship utility
+    // classes again, add the real path back rather than restoring this one.
   ],
   preflight: true,
   minify: false,
