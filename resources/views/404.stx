@@ -1,0 +1,62 @@
+<script server>
+/**
+ * The not-found page.
+ *
+ * WHY THE FILE IS NAMED 404.stx AND MUST STAY THAT WAY: production-server.js:115 looks
+ * the page up by the exact route key `/404` and renders it with status 404. There is no
+ * config entry and no registration step -- the filename IS the wiring. Rename it and
+ * production silently falls back to `new Response('Not Found', { status: 404 })`
+ * (production-server.js:124), which is the bare unstyled string this page replaces.
+ *
+ * Dev does not use this path at all: the dev server answers an unknown route with its
+ * own generated page that lists every route in the app. That listing is a dev
+ * convenience, not something that ships -- production has no equivalent -- but it does
+ * mean /nope looks completely different locally than deployed. To see THIS page in dev,
+ * visit /404 directly.
+ */
+useSeoMeta({
+  title: "Page not found - analyticshq",
+  description: 'That page does not exist. Find your way back to the dashboard, the docs, or the homepage.',
+  // A 404 should never be indexed. The status code implies it, but crawlers that reach
+  // this page through a stale link are better told twice than once.
+  robots: 'noindex, nofollow',
+})
+
+// Deliberately short, and deliberately not a sitemap. The dev server's route dump is
+// useful when you are building; on a public 404 it is noise at best, and an invitation
+// to go poking at /account and /dashboard at worst.
+const routes = [
+  { href: '/', name: 'Homepage', desc: 'What analyticshq is and how it works.' },
+  { href: '/dashboard', name: 'Dashboard', desc: 'Your traffic, goals, and live visitors.' },
+  { href: '/docs', name: 'Docs', desc: 'Install the script and send your first event.' },
+  { href: '/compare', name: 'Compare', desc: 'How we stack up against the alternatives.' },
+]
+</script>
+
+@extends('marketing')
+
+@section('content')
+      <section class="feat-hero shell">
+        <span class="kicker">404</span>
+        <h1>That page does not exist.</h1>
+        <p>The link may be out of date, or the address may have a typo in it. Nothing is broken on your end.</p>
+        <div class="hero-actions">
+          <StxLink class="btn primary" to="/">Back to the homepage</StxLink>
+          <StxLink class="btn ghost" to="/dashboard">Go to your dashboard</StxLink>
+        </div>
+      </section>
+
+      <section class="reveal section shell" aria-labelledby="elsewhere-heading">
+        <div class="section-head">
+          <h2 id="elsewhere-heading" class="section-title">Try one of these instead</h2>
+        </div>
+        <div class="related">
+          @foreach (routes as r)
+            <StxLink to="{{ r.href }}">
+              <div class="r-name">{{ r.name }}</div>
+              <div class="r-desc">{{ r.desc }}</div>
+            </StxLink>
+          @endforeach
+        </div>
+      </section>
+@endsection
