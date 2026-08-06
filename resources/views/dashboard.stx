@@ -1382,18 +1382,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
       </div>
 
       {{-- Top sources --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top sources</h2>
-        @forelse (referrers as r)
-          <a href="{{ addFilterUrl('source', r.source) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(r.views) / maxRef) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ r.source }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(r.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No sources yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Top sources" :rows="referrers" labelKey="source" valueKey="views" :max="maxRef" filterKey="source" empty="No sources yet." />
     </div>
 
     {{-- Entry / exit pages: the first / last page of each session, derived from
@@ -1439,62 +1428,18 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Top countries --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top countries</h2>
-        @forelse (countries as c)
-          <a href="{{ addFilterUrl('country', c.country) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxCountry) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ flag(c.country) }} {{ c.country }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No country data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Top countries" :rows="countries" labelKey="country" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
 
       {{-- Devices --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Devices</h2>
-        @forelse (devices as d)
-          <a href="{{ addFilterUrl('device', d.device) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(d.views) / maxDevice) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 capitalize text-text-2 truncate ga-row-label">{{ d.device }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(d.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No device data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />
     </div>
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Browsers --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Browsers</h2>
-        @forelse (browsers as b)
-          <a href="{{ addFilterUrl('browser', b.browser) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(b.views) / maxBrowser) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ b.browser }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(b.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No browser data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Browsers" :rows="browsers" labelKey="browser" valueKey="views" :max="maxBrowser" filterKey="browser" empty="No browser data yet." />
 
       {{-- Operating systems --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Operating systems</h2>
-        @forelse (systems as s)
-          <a href="{{ addFilterUrl('os', s.os) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(s.views) / maxSystem) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ s.os }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(s.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No OS data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Operating systems" :rows="systems" labelKey="os" valueKey="views" :max="maxSystem" filterKey="os" empty="No OS data yet." />
     </div>
 
     {{-- Referrer channels: Search / Social / Direct / Referral --}}
@@ -1651,60 +1596,16 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- UTM sources --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign sources</h2>
-        @forelse (utmSources as s)
-          <a href="{{ addFilterUrl('utmsource', s.source) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(s.views) / maxUtmSource) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ s.source }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(s.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No campaign source data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Campaign sources" :rows="utmSources" labelKey="source" valueKey="views" :max="maxUtmSource" filterKey="utmsource" empty="No campaign source data yet." />
 
       {{-- UTM mediums --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign mediums</h2>
-        @forelse (utmMediums as m)
-          <a href="{{ addFilterUrl('utmmedium', m.medium) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(m.views) / maxUtmMedium) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ m.medium }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(m.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No campaign medium data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Campaign mediums" :rows="utmMediums" labelKey="medium" valueKey="views" :max="maxUtmMedium" filterKey="utmmedium" empty="No campaign medium data yet." />
 
       {{-- UTM content --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign content</h2>
-        @forelse (utmContents as c)
-          <a href="{{ addFilterUrl('utmcontent', c.content) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxUtmContent) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ c.content }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No campaign content data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Campaign content" :rows="utmContents" labelKey="content" valueKey="views" :max="maxUtmContent" filterKey="utmcontent" empty="No campaign content data yet." />
 
       {{-- UTM terms --}}
-      <div class="p-5 panel reveal">
-        <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Campaign terms</h2>
-        @forelse (utmTerms as t)
-          <a href="{{ addFilterUrl('utmterm', t.term) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(t.views) / maxUtmTerm) * 100) }}%; background: var(--bar);"></div>
-            <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ t.term }}</span>
-            <span class="relative font-medium tabular-nums mono">{{ Number(t.views).toLocaleString() }}</span>
-          </a>
-        @empty
-          <div class="py-8 text-center text-sm text-text-3">No campaign term data yet.</div>
-        @endforelse
-      </div>
+      <BreakdownPanel title="Campaign terms" :rows="utmTerms" labelKey="term" valueKey="views" :max="maxUtmTerm" filterKey="utmterm" empty="No campaign term data yet." />
     </div>
 
     @else

@@ -1,0 +1,28 @@
+{{-- One clickable breakdown panel: a titled list of rows, each with a proportional
+    bar, a label and a single count, linking to the same view filtered by that value.
+
+    Replaces nine byte-identical copies in dashboard.stx that differed only in title,
+    collection, field names, bar denominator and empty message. Verified to render
+    byte-for-byte identically to the blocks it replaced, on both the populated and
+    the @empty path.
+
+    `rows` is the server-side array and `max` the bar denominator, both passed with
+    `:` so they arrive as values rather than strings. `labelKey`/`valueKey` are field
+    names on each row, so one component serves collections with different shapes.
+    `addFilterUrl` is NOT a prop -- it is the parent view's server function, and it
+    stays callable inside a component's scope.
+
+    Panels carrying more than one metric (Top pages, Entry/Exit pages) keep their own
+    markup; folding a variable metric list in here would cost more than it saves. --}}
+<div class="p-5 panel reveal">
+  <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">{{ title }}</h2>
+  @forelse (rows as row)
+    <a href="{{ addFilterUrl(filterKey, row[labelKey]) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
+      <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(row[valueKey]) / max) * 100) }}%; background: var(--bar);"></div>
+      <span class="relative pr-2 text-text-2 truncate {{ mono ? 'ga-row-label mono' : 'ga-row-label' }}">{{ row[labelKey] }}</span>
+      <span class="relative font-medium tabular-nums mono">{{ Number(row[valueKey]).toLocaleString() }}</span>
+    </a>
+  @empty
+    <div class="py-8 text-center text-sm text-text-3">{{ empty }}</div>
+  @endforelse
+</div>
