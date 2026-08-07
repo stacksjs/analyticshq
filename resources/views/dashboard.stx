@@ -904,14 +904,25 @@ async function createShare() {
   if (shareBusy())
     return
   shareBusy.set(true)
+  // Two silent paths used to end here: a thrown request and a non-ok response both
+  // left the button un-busying with no link and no explanation. Track the failure
+  // and report it after the busy flag clears, so the dialog is not up while the UI
+  // still says it is working.
+  let failed = false
   try {
     const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST' })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.token)
       shareUrl.set(shareLinkFor(d.token))
+    else
+      failed = true
   }
-  catch {}
+  catch {
+    failed = true
+  }
   shareBusy.set(false)
+  if (failed)
+    await stxAlert('Could not create a share link. Please try again.')
 }
 async function revokeShare() {
   // Split from one condition into two: the old `shareBusy() || !confirm(...)` relied on
@@ -922,13 +933,22 @@ async function revokeShare() {
   if (!(await stxConfirm('Revoke the share link? Anyone using it will lose access.')))
     return
   shareBusy.set(true)
+  let failed = false
   try {
     const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'DELETE' })
     if (res.ok)
       shareUrl.set('')
+    else
+      failed = true
   }
-  catch {}
+  catch {
+    failed = true
+  }
   shareBusy.set(false)
+  // Worth surfacing rather than swallowing: a failed revoke means the old link is
+  // still live, and silently clearing nothing looks identical to success.
+  if (failed)
+    await stxAlert('Could not revoke the share link. It may still be active — please try again.')
 }
 // Created ONCE, not per click. useTimeout starts on creation and registers an
 // onDestroy hook, so calling it inside the handler would stack a fresh hook on every
@@ -1161,9 +1181,11 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
             <select> hands off to switchSite, which routes to ?site=; the plain-text
             line above is the no-owned-sites fallback. "+ Add site" is a link to the
             reactive create page, not an in-page modal. --}}
-        {{-- No nested @if (stx miscounts @endif for @if nested inside a non-top-level
-            @if); the multi-site <select> is gated by a precomputed `showSiteSelect`
-            flag as its OWN block, and "+ Add site" always shows to the owner. --}}
+        {{-- The multi-site <select> is gated by a precomputed `showSiteSelect` flag as
+            its own block, and "+ Add site" always shows to the owner. This was
+            originally a workaround for stx miscounting @endif on a nested @if; that
+            bug is fixed as of 0.2.155 (verified on the installed version), so the flag
+            stays only because it reads better than nesting here. --}}
         @if (showSiteSelect)
           <div class="mt-3">
             <select @change="switchSite"
@@ -1261,11 +1283,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     @endif
 
     {{-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
-        Signals live in the script-client block; shareUrl is seeded from the
-        server-bridged existing token so the current link shows on load.
-        NOTE: never write a literal script tag in a comment here — stx's script
-        classifier does not skip comments, so it treats one as a real opening tag
-        and deletes everything through the next closing tag. --}}
+        Signals live in the <script client> block; shareUrl is seeded from the
+        server-bridged existing token so the current link shows on load. --}}
     @if (ownsActive)
       <div class="mb-8 p-5 panel reveal">
         <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -1634,13 +1653,10 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 </main>
 
 {{-- Pre-render bootstrap: token guard + mirror the localStorage token into the
-    analyticshq_token cookie (so the script-server block can owner-scope the switcher
+    analyticshq_token cookie (so the <script server> block can owner-scope the switcher
     + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
-    manipulation; all interactivity is stx directives via the script-client block above.
-    NOTE: the tag names are spelled without angle brackets on purpose. stx's script
-    classifier does not skip HTML comments, so a literal one here is read as a real
-    opening tag and everything through the next closing tag — including this
-    comment's terminator and the bootstrap below — is silently deleted. --}}
+    manipulation; all interactivity is stx directives via the <script client> block
+    above. --}}
 <script>
 ;(function () {
   // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
@@ -1653,8 +1669,6 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
   // window.stx rather than a bare call: this is a plain script block, not the
   // client-script path that gets the auto-import preamble. The runtime tag is
   // synchronous and above this one, so window.stx is populated by the time this runs.
-  // (Tag name spelled without angle brackets deliberately -- stx counts script tags
-  // across the whole file, and a literal one in a comment unbalances the count.)
   var t = window.stx.useLocalStorage('token', '')()
   // No router this early, so navigate() falls through to window.location.replace and
   // emits exactly what the hand-written call did (signals.js:1005-1015) -- with the
