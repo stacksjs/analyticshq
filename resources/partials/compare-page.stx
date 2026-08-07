@@ -9,15 +9,7 @@
   further" heading) and `c.aside` (an honest note on what the competitor does
   better, between the grid and that heading). Only three pages carry either.
 --}}
-<nav class="shell subnav" aria-label="Breadcrumb">
-  @foreach (crumbs as crumb)
-    @if (crumb.href)
-      <StxLink to="{{ crumb.href }}">{{ crumb.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-    @else
-      <span aria-current="page">{{ crumb.name }}</span>
-    @endif
-  @endforeach
-</nav>
+@include('breadcrumbs', { crumbs })
 
 <section class="feat-hero shell">
   <span class="kicker">{{ c.kicker }}</span>

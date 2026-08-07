@@ -1,0 +1,22 @@
+{{--
+  Breadcrumb trail: the visible nav and the BreadcrumbList JSON-LD, from one
+  `crumbs` array so the two cannot drift.
+
+  A crumb is { name, href?, url? } — the current page omits `href` and renders as
+  plain text; `url` is the absolute form the JSON-LD needs.
+
+  Usage: @include('breadcrumbs', { crumbs })
+
+  Only the visible nav lives here. The matching BreadcrumbList JSON-LD is emitted
+  by the marketing layout, because @push from inside an @include does not reach
+  the parent's @stack — verified: the script tag simply disappears.
+--}}
+<nav class="shell subnav" aria-label="Breadcrumb">
+  @foreach (crumbs as crumb)
+    @if (crumb.href)
+      <StxLink to="{{ crumb.href }}">{{ crumb.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
+    @else
+      <span aria-current="page">{{ crumb.name }}</span>
+    @endif
+  @endforeach
+</nav>

@@ -62,4 +62,18 @@
 
 <script src="/assets/scripts/site-mode.js" defer></script>
 
+{{-- BreadcrumbList JSON-LD for any page that defines `crumbs`, from the same array
+    that renders the visible nav via @include('breadcrumbs') — so the two cannot
+    drift, which is what the per-page copies were for.
+
+    It lives in the layout rather than in the breadcrumbs partial because @push
+    from inside an @include never reaches this @stack: the script tag is silently
+    dropped. Verified by diffing the rendered page, not assumed. --}}
+@if (typeof crumbs !== 'undefined' && crumbs)
+      @structuredData({
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
+      })
+@endif
+
 @stack('scripts')

@@ -38,23 +38,8 @@ const crumbs = [
 @extends('marketing')
 
 
-@push('scripts')
-      @structuredData({
-        '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
-      })
-@endpush
-
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
+      @include('breadcrumbs', { crumbs })
 
       <section class="feat-hero shell">
         <span class="kicker">GA import</span>
