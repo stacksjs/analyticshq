@@ -1,147 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/umami',
-  title: 'analyticshq vs Umami - aggregate-only, cookieless analytics',
-  description: 'Two open-source, cookieless analytics tools compared. Where analyticshq stays strictly aggregate — 24h rotating IDs, no session replay, no individual profiles — and Umami does not.',
-}
+const c = competitors.umami
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'ID rotation window', them: 'Session salt rotates monthly, visit salt hourly', us: 'Per-site hash rotates every 24 hours. No monthly linkability.' },
-  { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
-  { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'No per-person view. Reports are aggregate, full stop.' },
-  { dim: 'Cross-session identity', them: 'identify() stitches a user’s sessions across time', us: 'No identify(), no distinct-ID stitching, by design.' },
-  { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country only, from CDN edge headers. IP discarded.' },
-  { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes — Postgres-native, self-hostable, Stacks-integrated.' },
-  { dim: 'Cookies & consent', them: 'Cookieless, no banner needed', us: 'Cookieless, no banner needed.' },
-]
-
-const reasons = [
-  { n: '01', h: 'Both are open source — the philosophy is where they split', b: 'Umami and analyticshq are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, analyticshq refuses to build it.' },
-  { n: '02', h: 'Aggregate-only, on purpose', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. analyticshq deliberately will never add any of them — there is no per-person timeline to reconstruct.' },
-  { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. analyticshq rotates its per-site hash every 24 hours, so activity cannot be linked across days — a materially shorter linkability window.' },
-]
-
-const metrics = [
-  { v: '24h', l: 'ID rotation window, versus Umami’s monthly session salt.' },
-  { v: '0', l: 'Session recordings, heatmaps, or individual profiles — ever.' },
-  { v: 'Country', l: 'Geo granularity. No region or city is stored.' },
-]
-
-const related = [
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Two aggregate-first tools, side by side.' },
-  { slug: 'matomo', name: 'vs Matomo', desc: 'The lighter, cookieless alternative.' },
-  { slug: '', name: 'All alternatives', desc: 'Every analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Umami" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Umami</span>
-        <h1>Open source, but strictly aggregate.</h1>
-        <p>Umami and analyticshq are both open-source and cookieless. The difference is where the line is drawn: Umami v3 moved toward individual-level tracking with session replay and user profiles, while analyticshq stays aggregate-only — and rotates identity every 24 hours instead of monthly.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Umami vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where the two part ways.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Aggregate by principle, not by default.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

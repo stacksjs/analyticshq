@@ -1,154 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/cloudflare',
-  title: 'analyticshq vs Cloudflare Web Analytics - the privacy-first alternative',
-  description: 'Cloudflare Web Analytics is free and cookieless, but read-only on pageviews and locked to Cloudflare. analyticshq adds custom events, data you own in PostgreSQL, and self-hosting, while staying cookieless.',
-}
+const c = competitors.cloudflare
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Cookies and consent', them: 'Cookieless, no banner. A genuine privacy peer.', us: 'Cookieless, no banner, no personal data stored.' },
-  { dim: 'Custom events and goals', them: 'None. Pageviews, referrers, and top paths only.', us: 'One-line analyticshq() events, goals, and UTM campaigns.' },
-  { dim: 'Where your data lives', them: 'Inside Cloudflare. You read it, you do not hold it.', us: 'Your own PostgreSQL database, and nowhere else.' },
-  { dim: 'Open source and self-host', them: 'Proprietary and hosted. No self-host option.', us: 'MIT-licensed and self-hostable on your own box.' },
-  { dim: 'Ties to one provider', them: 'At its best when your site is proxied through Cloudflare.', us: 'Works on any host or CDN with one script tag.' },
-  { dim: 'Real-time', them: 'Reports refresh on a delay, not live.', us: 'A live view of who is on the site right now.' },
-  { dim: 'Price', them: 'Free.', us: 'Free tier, flat Pro, and free forever if you self-host.' },
-]
-
-const reasons = [
-  { n: '01', h: 'Events, not just a pageview counter', b: 'Cloudflare Web Analytics counts pages and referrers and stops there. analyticshq fires a conversion with a one-line analyticshq() call, so signups, purchases, and custom events sit beside your traffic.' },
-  { n: '02', h: 'You hold the data, not just a dashboard', b: 'Cloudflare shows you the numbers but keeps them. With analyticshq every raw event lands in a PostgreSQL database you own, ready to query, export, or self-host.' },
-  { n: '03', h: 'Not tied to one network', b: 'Cloudflare Analytics is happiest when your site already runs behind Cloudflare. analyticshq is a single first-party script that works on any host, CDN, or framework.' },
-]
-
-const metrics = [
-  { v: 'Cookieless', l: 'Like Cloudflare, no cookies and no consent banner. Where analyticshq goes further is events and ownership.' },
-  { v: 'Your DB', l: 'Every event stored in your own PostgreSQL, not held inside a provider dashboard.' },
-  { v: 'Any host', l: 'One script tag, no requirement to proxy your traffic through a specific network.' },
-]
-
-const related = [
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Two cookieless tools, side by side.' },
-  { slug: 'simple-analytics', name: 'vs Simple Analytics', desc: 'Aggregate-only analytics, compared.' },
-  { slug: '', name: 'All alternatives', desc: 'Every analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Cloudflare" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Cloudflare Web Analytics</span>
-        <h1>Cookieless like Cloudflare, but the data is yours.</h1>
-        <p>Cloudflare Web Analytics is a solid free pageview counter, and like analyticshq it sets no cookies. The difference is depth and ownership: analyticshq adds custom events and goals, stores every event in your own PostgreSQL, and runs on any host, not just behind Cloudflare.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/goals">See events and goals</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Cloudflare vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Where Cloudflare leads">
-        <div class="migrate">
-          <p>Where Cloudflare leads: it is genuinely free, and if your site already runs behind Cloudflare it is zero extra script and zero config. For a no-frills pageview count with nothing to manage, it is hard to beat on price.</p>
-          <StxLink class="textlink" to="/pricing">See how our pricing works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Why teams switch from Cloudflare.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Keep the privacy. Add the events, and the ownership.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

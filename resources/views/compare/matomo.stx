@@ -1,147 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/matomo',
-  title: 'analyticshq vs Matomo - the lightweight, always-cookieless alternative',
-  description: 'Matomo is a powerful, full behavioral suite. analyticshq is the lightweight, always-cookieless, aggregate-only alternative: no consent banner, under 2 KB, data in your own PostgreSQL.',
-}
+const c = competitors.matomo
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Cookies and consent', them: 'Sets cookies when behavioral features are on; can run cookieless with reduced accuracy', us: 'Always cookieless. Nothing stored on the device, so no banner.' },
-  { dim: 'Script weight', them: 'Heavy tracker plus a full PHP/MySQL or cloud stack to run', us: 'Under 2 KB, first-party, on a lean Postgres and Stacks stack.' },
-  { dim: 'Approach', them: 'Full behavioral suite: recordings, heatmaps, funnels, A/B tests', us: 'Deliberately aggregate-only — the reports you actually open.' },
-  { dim: 'Session recordings and heatmaps', them: 'Included (individual-level tracking of real sessions)', us: 'Not offered by design; nothing is recorded per person.' },
-  { dim: 'Setup and hosting', them: 'Self-host the LAMP stack, or pay for Matomo Cloud', us: 'Drop in a one-line script; your data lands in your Postgres.' },
-  { dim: 'Where your data lives', them: 'Your Matomo instance, or Matomo Cloud', us: 'Your own PostgreSQL database, and nowhere else.' },
-  { dim: 'Simplicity', them: 'A GA-scale console with a lot to configure', us: 'One screen, no manual, running in a minute.' },
-]
-
-const reasons = [
-  { n: '01', h: 'Cookieless without an asterisk', b: 'Matomo can run cookieless, but you trade away accuracy and features to get there, and the full suite sets cookies. analyticshq is cookieless on every plan, with no banner and nothing to configure.' },
-  { n: '02', h: 'Light where Matomo is heavy', b: 'Matomo is a full LAMP application with a large tracker. analyticshq is an under-2 KB first-party script writing to a Postgres table, so there is far less to run, host, and keep patched.' },
-  { n: '03', h: 'Aggregate on purpose', b: 'Matomo records and replays individual sessions. analyticshq never does — it answers how your site is doing at the aggregate level, which is exactly why there is no personal data to manage.' },
-]
-
-const metrics = [
-  { v: '< 2 KB', l: 'First-party script versus Matomo’s heavier tracker.' },
-  { v: '0', l: 'Cookies set, consent banners shown, or sessions recorded.' },
-  { v: '1 table', l: 'Events land in your own PostgreSQL, not a LAMP stack to run.' },
-]
-
-const related = [
-  { slug: 'google-analytics', name: 'vs Google Analytics', desc: 'The GA4 alternative with no cookie banner.' },
-  { slug: 'umami', name: 'vs Umami', desc: 'Open-source analytics, and where the privacy lines are drawn.' },
-  { slug: '', name: 'All alternatives', desc: 'Every Google Analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Matomo" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Matomo</span>
-        <h1>The privacy suite, minus the weight.</h1>
-        <p>Matomo is a powerful open-source GA replacement with a full behavioral suite — recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. analyticshq goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Matomo vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where analyticshq fits instead.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Privacy-first, without the overhead.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

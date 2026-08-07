@@ -1,147 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/fathom',
-  title: 'analyticshq vs Fathom Analytics - two cookieless tools compared',
-  description: 'Both privacy-first and cookieless. Where analyticshq differs from Fathom: open source, self-hostable on your own PostgreSQL, and country-only geo by design.',
-}
+const c = competitors.fathom
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Source', them: 'Closed-source SaaS', us: 'Open source, and you can read every line.' },
-  { dim: 'Where your data lives', them: 'Fathom’s infrastructure, reports handed back to you', us: 'Your own PostgreSQL — you hold the raw events, not just charts.' },
-  { dim: 'Geography', them: 'City-level location', us: 'Country-only, on purpose — a stricter privacy line.' },
-  { dim: 'Cookies and consent', them: 'Cookieless, no banner', us: 'Cookieless, no banner — same footing here.' },
-  { dim: 'Revenue tracking', them: 'Per-event value with currency', us: 'Goals and events today; per-event revenue on the roadmap.' },
-  { dim: 'Hosting and EU', them: 'Managed SaaS with EU Isolation for EU visitors', us: 'Self-host anywhere, or run it in the region you choose.' },
-  { dim: 'Ecosystem', them: 'Polished single-dashboard product', us: 'Native to the Stacks toolchain and your own stack.' },
-]
-
-const reasons = [
-  { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
-  { n: '02', h: 'Country-only, held on principle', b: 'Fathom resolves visitors to city level. analyticshq deliberately stops at country, from your CDN edge headers, keeping the aggregate-only line as strict as it goes.' },
-  { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; analyticshq trades that polish for openness and full data ownership.' },
-]
-
-const metrics = [
-  { v: 'Open', l: 'Source you can read and self-host, versus a closed SaaS.' },
-  { v: 'Country-only', l: 'Geo stops at country by design — stricter than city-level.' },
-  { v: 'Your DB', l: 'Raw events land in your PostgreSQL, not a vendor’s.' },
-]
-
-const related = [
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Another cookieless peer, compared.' },
-  { slug: 'simple-analytics', name: 'vs Simple Analytics', desc: 'Aggregate-only analytics, side by side.' },
-  { slug: '', name: 'All alternatives', desc: 'Every privacy-first alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Fathom" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Fathom</span>
-        <h1>Two cookieless tools. One you can host yourself.</h1>
-        <p>Fathom is a respected, privacy-first analytics product — cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and a country-only geo line that never moves.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Fathom vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where analyticshq goes further.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Cookieless, exact, and yours to host.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

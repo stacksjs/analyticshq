@@ -1,148 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/plausible',
-  title: 'analyticshq vs Plausible - privacy-first analytics, compared',
-  description: 'Two cookieless, privacy-first analytics tools compared. Where analyticshq goes further: your own PostgreSQL database and country-only geolocation.',
-}
+const c = competitors.plausible
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Cookies and consent', them: 'Cookieless, no banner — genuinely privacy-first', us: 'Cookieless, no banner — the same baseline.' },
-  { dim: 'Where your data lives', them: 'Plausible Cloud hosts it on their EU servers', us: 'Your own PostgreSQL database, wherever you run it.' },
-  { dim: 'Geolocation', them: 'Resolves to city level', us: 'Country only, on purpose — the stricter line.' },
-  { dim: 'Accuracy', them: 'Exact, no sampling', us: 'Exact, no sampling — the same.' },
-  { dim: 'Visitor identity', them: '24-hour rotating salt', us: '24-hour rotating, per-site hash — the same.' },
-  { dim: 'Ecosystem', them: 'Standalone SaaS, self-hostable', us: 'Native to the Stacks toolchain: Postgres, queues, deploy.' },
-  { dim: 'Licence', them: 'Open source (AGPL)', us: 'Open source, and Postgres-native.' },
-]
-
-const reasons = [
-  { n: '01', h: 'Your data, in your own database', b: 'Plausible is a great cookieless tool, but on Plausible Cloud your analytics live on their servers. analyticshq writes every event to a PostgreSQL table you own and can query directly — no separate store to trust.' },
-  { n: '02', h: 'Country-only, on purpose', b: 'Plausible now resolves visitor location to city level. analyticshq deliberately stops at country, keeping the stricter privacy line and nothing more granular than it needs.' },
-  { n: '03', h: 'Part of your stack, not another service', b: 'analyticshq runs inside the Stacks toolchain, on the same Postgres, queue, and deploy you already operate. There is no extra analytics service to run alongside your app.' },
-]
-
-const metrics = [
-  { v: 'Country-only', l: 'No city, region, or coordinates — ever. Stricter than city-level geo.' },
-  { v: 'Your Postgres', l: 'Every event lands in a database you own, not a managed store.' },
-  { v: '24h', l: 'Rotating per-site hash: no cross-day and no cross-site identity.' },
-]
-
-const related = [
-  { slug: 'fathom', name: 'vs Fathom', desc: 'How the cookieless options compare.' },
-  { slug: 'simple-analytics', name: 'vs Simple Analytics', desc: 'Aggregate-only analytics, side by side.' },
-  { slug: '', name: 'All alternatives', desc: 'Every analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Plausible" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Plausible</span>
-        <h1>Two privacy-first tools. One keeps your data in your database.</h1>
-        <p>Plausible is a respected, cookieless analytics tool, and on the basics the two are close: no cookies, no consent banner, exact counts. The difference is where your data lives and how far the privacy line is drawn.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Plausible vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where analyticshq goes further.</h2>
-          <p class="section-intro">Plausible does plenty analyticshq does not — funnels, Search Console, a Looker connector, spike alerts. If those are what you need, it is an excellent choice. Here is where analyticshq leads instead.</p>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Your numbers. Your visitors' privacy. Your database.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

@@ -1,147 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/google-analytics',
-  title: 'analyticshq vs Google Analytics - privacy-first alternative',
-  description: 'A cookieless, GDPR-friendly alternative to Google Analytics 4. Exact counts, no consent banner, your data in your own PostgreSQL, and one-click GA import.',
-}
+const c = competitors['google-analytics']
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Consent', them: 'Cookie banner and Consent Mode v2 required in the EU', us: 'Cookieless. Nothing stored on the device, so no banner.' },
-  { dim: 'Where your data goes', them: 'Into the Google ad graph, shared across Google products', us: 'Into your own PostgreSQL database, and nowhere else.' },
-  { dim: 'Accuracy', them: 'Sampled and thresholded once traffic grows', us: 'Every event counted, exact numbers, no sampling.' },
-  { dim: 'Legality in the EU', them: 'Found unlawful by several EU DPAs over US transfers (2022–23)', us: 'No personal data collected, so there is nothing to transfer.' },
-  { dim: 'Script weight', them: 'About 50 KB of gtag.js, widely ad-blocked', us: 'Under 2 KB, first-party, counts even with blockers.' },
-  { dim: 'Learning curve', them: 'Explorations, dimensions, and a manual to read', us: 'One screen with the reports you actually open.' },
-  { dim: 'Leaving', them: 'Export is a project', us: 'One-click GA import in, full export out, both ways.' },
-]
-
-const reasons = [
-  { n: '01', h: 'GA4 answers to advertisers, not to you', b: 'Google Analytics exists to feed audience data into the ad network. The reports are a by-product. analyticshq has one job: tell you how your site is doing.' },
-  { n: '02', h: 'No cookie banner, no Consent Mode', b: 'Because nothing is written to a visitor device, there is no consent to collect and no banner to bolt on. Your pages load clean.' },
-  { n: '03', h: 'Your numbers stay yours', b: 'Events land in a PostgreSQL database you control instead of Google’s. Nothing is sampled, sold, or cross-referenced against another property.' },
-]
-
-const metrics = [
-  { v: '< 2 KB', l: 'First-party script versus roughly 50 KB of gtag.js.' },
-  { v: '0', l: 'Cookies set, consent banners shown, or personal data stored.' },
-  { v: '1 click', l: 'Import your GA history and keep the charts you already track.' },
-]
-
-const related = [
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Two privacy-first tools, side by side.' },
-  { slug: 'fathom', name: 'vs Fathom', desc: 'How the cookieless options compare.' },
-  { slug: '', name: 'All alternatives', desc: 'Every Google Analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Google Analytics" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Google Analytics</span>
-        <h1>The GA4 alternative that skips the cookie banner.</h1>
-        <p>Google Analytics was built to feed an ad network, which is why it needs consent, samples your data, and hands it to Google. analyticshq answers one question, how your site is doing, without touching your visitors’ privacy.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/import">Import from GA</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">GA4 vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Why teams leave Google Analytics.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Leave GA. Keep your history.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/features/import">See the import guide</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

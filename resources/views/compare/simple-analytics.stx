@@ -1,147 +1,21 @@
 <script server>
-const appName = 'analyticshq'
+import { competitors, crumbsFor } from '../../data/competitors'
 
-const meta = {
-  canonical: 'https://analyticshq.org/compare/simple-analytics',
-  title: 'analyticshq vs Simple Analytics - privacy-first, with the full report set',
-  description: 'Both are cookieless and aggregate-only. analyticshq adds bounce rate, entry and exit pages, goals, and real-time — plus self-hosting and Postgres data ownership.',
-}
+const c = competitors['simple-analytics']
+const crumbs = crumbsFor(c)
 
-// dim / competitor / analyticshq — reuses the home comparison grid styling.
-const rows = [
-  { dim: 'Data ownership', them: 'Closed-source SaaS (Netherlands). No self-host.', us: 'Open and self-hostable. Raw data in your own PostgreSQL.' },
-  { dim: 'Bounce rate', them: 'Not reported', us: 'Bounce rate on every page and entry point' },
-  { dim: 'Entry and exit pages', them: 'Not reported', us: 'Entry and exit paths, per session' },
-  { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line analyticshq() goals with conversion rate and value' },
-  { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country only, from your CDN edge headers' },
-  { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Anonymous by design; DNT respect is on the roadmap' },
-  { dim: 'Cookies and consent', them: 'Cookieless, no banner, never touches the IP', us: 'Cookieless, no banner, IP hashed then discarded' },
-]
-
-const reasons = [
-  { n: '01', h: 'Just as private, with the reports you actually need', b: 'Simple Analytics keeps things minimal — no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, but gives you the full report set teams rely on.' },
-  { n: '02', h: 'You own the raw data', b: 'Simple Analytics is closed-source SaaS. analyticshq is self-hostable and Postgres-native, so the raw events live in a database you control and can query directly.' },
-  { n: '03', h: 'Credit where it is due', b: 'Simple Analytics never collects the IP at all and documents honoring Do Not Track — genuinely strong privacy choices. analyticshq matches the cookieless, no-personal-data posture and adds depth and ownership on top.' },
-]
-
-const metrics = [
-  { v: 'Full', l: 'Bounce, entry/exit, goals, and real-time — not just pageviews.' },
-  { v: 'Self-host', l: 'Run it on your own Postgres and own the raw data.' },
-  { v: '0', l: 'Cookies set, consent banners shown, or personal data stored.' },
-]
-
-const related = [
-  { slug: 'plausible', name: 'vs Plausible', desc: 'Two privacy-first tools, side by side.' },
-  { slug: 'umami', name: 'vs Umami', desc: 'Open-source analytics, and where the privacy lines are drawn.' },
-  { slug: '', name: 'All alternatives', desc: 'Every analytics alternative, compared.' },
-]
-
-useSeoMeta(meta)
-
-// Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
-const crumbs = [
-  { name: "Home", href: "/", url: "https://analyticshq.org/" },
-  { name: "Compare", href: "/compare", url: "https://analyticshq.org/compare" },
-  { name: "Simple Analytics" },
-]
+useSeoMeta(c.meta)
 </script>
 
 @extends('marketing')
 
-
 @push('scripts')
       @structuredData({
         '@type': 'BreadcrumbList',
-        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+        itemListElement: crumbs.map((crumb, i) => ({ '@type': 'ListItem', position: i + 1, name: crumb.name, item: crumb.url })),
       })
 @endpush
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        @foreach (crumbs as c)
-          @if (c.href)
-            <StxLink to="{{ c.href }}">{{ c.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-          @else
-            <span aria-current="page">{{ c.name }}</span>
-          @endif
-        @endforeach
-      </nav>
-
-      <section class="feat-hero shell">
-        <span class="kicker">analyticshq vs Simple Analytics</span>
-        <h1>Just as private. With the reports you actually need.</h1>
-        <p>Simple Analytics is admirably strict — it never even touches the IP. But its report set is the thinnest of the privacy-first tools: no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, and gives you the full picture — on data you own.</p>
-        <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
-          <StxLink class="btn ghost" to="/features/privacy">How the privacy works</StxLink>
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="cmp-heading">
-        <div class="section-head">
-          <p class="eyebrow">Simple Analytics vs analyticshq</p>
-          <h2 id="cmp-heading" class="section-title">Point for point.</h2>
-        </div>
-        <div class="cmp">
-          @foreach (rows as row)
-            <div class="cmp-cell">
-              <span class="cmp-dim">{{ row.dim }}</span>
-              <span class="cmp-ga">{{ row.them }}</span>
-              <span class="cmp-ours">{{ row.us }}</span>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="why-heading">
-        <div class="section-head">
-          <h2 id="why-heading" class="section-title">Where analyticshq goes further.</h2>
-        </div>
-        <div class="flow">
-          @foreach (reasons as step)
-            <div class="flow-step">
-              <span class="flow-num">{{ step.n }}</span>
-              <div>
-                <h3>{{ step.h }}</h3>
-                <p>{{ step.b }}</p>
-              </div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="At a glance">
-        <div class="metrics">
-          @foreach (metrics as m)
-            <div class="metric">
-              <div class="m-value">{{ m.v }}</div>
-              <div class="m-label">{{ m.l }}</div>
-            </div>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-labelledby="related-heading">
-        <div class="section-head">
-          <h2 id="related-heading" class="section-title">Keep comparing</h2>
-        </div>
-        <div class="related">
-          @foreach (related as r)
-            <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
-              <div class="r-name">{{ r.name }}</div>
-              <div class="r-desc">{{ r.desc }}</div>
-            </StxLink>
-          @endforeach
-        </div>
-      </section>
-
-      <section class="reveal section shell" aria-label="Get started">
-        <div class="cta-band">
-          <h2>Privacy-first, without the blind spots.</h2>
-          <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
-          </div>
-        </div>
-      </section>
+      @include('compare-page', { c, crumbs })
 @endsection

@@ -1,0 +1,110 @@
+{{--
+  The body of every /compare/* page.
+
+  All eight comparison pages had byte-identical markup and differed only in copy,
+  which now lives in resources/data/competitors.ts. Each view passes its entry as
+  `c` and its breadcrumb trail as `crumbs`.
+
+  The two optional blocks are `c.sectionIntro` (a paragraph under the "where we go
+  further" heading) and `c.aside` (an honest note on what the competitor does
+  better, between the grid and that heading). Only three pages carry either.
+--}}
+<nav class="shell subnav" aria-label="Breadcrumb">
+  @foreach (crumbs as crumb)
+    @if (crumb.href)
+      <StxLink to="{{ crumb.href }}">{{ crumb.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
+    @else
+      <span aria-current="page">{{ crumb.name }}</span>
+    @endif
+  @endforeach
+</nav>
+
+<section class="feat-hero shell">
+  <span class="kicker">{{ c.kicker }}</span>
+  <h1>{{ c.h1 }}</h1>
+  <p>{{ c.intro }}</p>
+  <div class="hero-actions">
+    <a class="btn primary" href="/#install">Get your script tag</a>
+    <StxLink class="btn ghost" to="{{ c.heroCta.to }}">{{ c.heroCta.label }}</StxLink>
+  </div>
+</section>
+
+<section class="reveal section shell" aria-labelledby="cmp-heading">
+  <div class="section-head">
+    <p class="eyebrow">{{ c.eyebrow }}</p>
+    <h2 id="cmp-heading" class="section-title">Point for point.</h2>
+  </div>
+  <div class="cmp">
+    @foreach (c.rows as row)
+      <div class="cmp-cell">
+        <span class="cmp-dim">{{ row.dim }}</span>
+        <span class="cmp-ga">{{ row.them }}</span>
+        <span class="cmp-ours">{{ row.us }}</span>
+      </div>
+    @endforeach
+  </div>
+</section>
+
+@if (c.aside)
+  <section class="reveal section shell" aria-label="{{ c.aside.ariaLabel }}">
+    <div class="migrate">
+      <p>{{ c.aside.body }}</p>
+      <StxLink class="textlink" to="{{ c.aside.link.to }}">{{ c.aside.link.label }}</StxLink>
+    </div>
+  </section>
+@endif
+
+<section class="reveal section shell" aria-labelledby="why-heading">
+  <div class="section-head">
+    <h2 id="why-heading" class="section-title">{{ c.whyHeading }}</h2>
+    @if (c.sectionIntro)
+      <p class="section-intro">{{ c.sectionIntro }}</p>
+    @endif
+  </div>
+  <div class="flow">
+    @foreach (c.reasons as step)
+      <div class="flow-step">
+        <span class="flow-num">{{ step.n }}</span>
+        <div>
+          <h3>{{ step.h }}</h3>
+          <p>{{ step.b }}</p>
+        </div>
+      </div>
+    @endforeach
+  </div>
+</section>
+
+<section class="reveal section shell" aria-label="At a glance">
+  <div class="metrics">
+    @foreach (c.metrics as m)
+      <div class="metric">
+        <div class="m-value">{{ m.v }}</div>
+        <div class="m-label">{{ m.l }}</div>
+      </div>
+    @endforeach
+  </div>
+</section>
+
+<section class="reveal section shell" aria-labelledby="related-heading">
+  <div class="section-head">
+    <h2 id="related-heading" class="section-title">Keep comparing</h2>
+  </div>
+  <div class="related">
+    @foreach (c.related as r)
+      <StxLink to="/compare{{ r.slug ? '/' + r.slug : '' }}">
+        <div class="r-name">{{ r.name }}</div>
+        <div class="r-desc">{{ r.desc }}</div>
+      </StxLink>
+    @endforeach
+  </div>
+</section>
+
+<section class="reveal section shell" aria-label="Get started">
+  <div class="cta-band">
+    <h2>{{ c.ctaHeading }}</h2>
+    <div class="cta-actions">
+      <a class="btn primary" href="/#install">Get your script tag</a>
+      <StxLink class="btn ghost" to="{{ c.ctaLink.to }}">{{ c.ctaLink.label }}</StxLink>
+    </div>
+  </div>
+</section>
