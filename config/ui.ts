@@ -48,6 +48,30 @@ export default {
   // Loader B's fallback and the value every non-serve entry point sees.
   componentsDir: 'resources/components',
 
+  // Makes the 45 @stacksjs/components tags (<Skeleton>, <Table>, <Avatar>, …)
+  // resolvable by name, so the app stops hand-rolling widgets the library ships.
+  //
+  // This key survives the loader split that the header documents, and it is worth
+  // saying why, because the componentsDir immediately above does NOT:
+  //   - componentsDir is overridden by the explicit option views.js passes, so the
+  //     value here never reaches a live render.
+  //   - plugins are read on a different path. serve.js:9016-9021 calls stx's own
+  //     loadStxConfig() with NO cwd and copies `_pluginComponentDirs` off the
+  //     result, so it is additive to the options-supplied componentsDir rather than
+  //     in competition with it. Both dirs end up on the resolver's search frontier.
+  //
+  // loadStxConfig() finds THIS file because it loads with `{ name: 'stx', alias:
+  // 'ui' }` (config.js:445-446) — the alias is what makes config/ui.ts the stx
+  // config in a Stacks app, and it is why the router block documented at the bottom
+  // of this file is the exception rather than the rule.
+  //
+  // The plugin declares a RELATIVE `components: './src/ui'`, resolved against the
+  // plugin's own directory via `path.dirname(require.resolve(pluginPath))`
+  // (config.js:462, :473) — so it lands in node_modules/@stacksjs/components,
+  // not in this project. Component resolution walks subdirectories, so the
+  // library's grouped `src/ui/<name>/<Name>.stx` layout resolves as-is.
+  plugins: ['@stacksjs/components/stx-plugin'],
+
   // MUST stay outside pagesDir. Route discovery and the SSG have no exclusion for layout
   // directories, so a layout under resources/views/ is a public URL that gets built to
   // HTML and listed in the sitemap. resources/views/layouts/ is deleted for that reason;
