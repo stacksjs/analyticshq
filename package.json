@@ -77,13 +77,13 @@
     "sqlite": "^3.47.2"
   },
   "dependencies": {
-    "@stacksjs/buddy": "^0.70.226",
-    "@stacksjs/ts-cloud": "^0.7.92",
-    "@ts-analytics/tracking": "^0.1.7",
-    "stacks": "^0.70.190"
+    "@stacksjs/buddy": "^0.70.324",
+    "@stacksjs/ts-cloud": "^0.7.108",
+    "@ts-analytics/tracking": "^0.1.12",
+    "stacks": "^0.70.324"
   },
   "devDependencies": {
-    "better-dx": "^0.2.15"
+    "better-dx": "^0.2.22"
   },
   "overrides": {
     "bun-query-builder": "^0.1.44"
