@@ -135,6 +135,24 @@ export default {
   strict: {
     enabled: process.env.APP_ENV !== 'production',
     failOnViolation: false,
+
+    // The two DOM calls that are deliberate. allowPatterns matches a rule's
+    // `message` or its `pattern.source` (script-validation.js:131), so each entry
+    // suppresses exactly one rule — stx-standards §12.1.
+    allowPatterns: [
+      // CSV export builds an <a download> and clicks it. There is no stx
+      // primitive for this: the package exports nothing matching
+      // download/saveAs/blob/useFile, checked against 0.2.171. Revisit if one
+      // ever ships.
+      'document.createElement',
+      // Blob-URL revoke after the CSV download. useTimeout() cancels itself on
+      // destroy, which is right for a UI flag and actively wrong here —
+      // navigating within the second would cancel the revoke, and because an SPA
+      // swap keeps the document alive the blob URL would leak for the rest of the
+      // session. Cleanup must not be cancellable by navigation. Reasoning is
+      // inline at the call site in dashboard.stx.
+      'setTimeout',
+    ],
   },
 
   /**
