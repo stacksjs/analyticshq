@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto'
 import { db } from '@stacksjs/database'
 import { response, route } from '@stacksjs/router'
+import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
 import {
   cleanReferrer,
@@ -192,7 +193,7 @@ route.post('/collect', async (request: any) => {
   //
   // 204, the same as the bot path: the tracker ignores the body, and an error
   // status would only invite a retry.
-  if (request.headers?.get('sec-gpc') === '1')
+  if (privacy.respectDnt && request.headers?.get('sec-gpc') === '1')
     return new Response(null, { status: 204, headers: CORS })
 
   const ip = clientIp(request.headers)
@@ -210,7 +211,7 @@ route.post('/collect', async (request: any) => {
   // Fathom/Plausible): a visitor whose IP changes mid-visit, or a visit crossing the daily
   // visitor-salt rotation at UTC midnight, starts a new session. This per-beacon lookup rides the
   // page_views(site_id, visitor_id) index on Postgres; cache the active session if it ever gets hot.
-  const SESSION_WINDOW_MS = 30 * 60 * 1000
+  const SESSION_WINDOW_MS = privacy.sessionWindowMinutes * 60 * 1000
   const sessionSince = new Date(Date.now() - SESSION_WINDOW_MS).toISOString()
   const recentSession = (await pgq(
     `SELECT session_id FROM page_views WHERE site_id = ? AND visitor_id = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1`,
@@ -220,7 +221,9 @@ route.post('/collect', async (request: any) => {
     ? String(recentSession[0].session_id)
     : createHash('sha256').update(`${siteId}|${visitorId}|${Math.floor(Date.now() / SESSION_WINDOW_MS)}`).digest('hex').slice(0, 32)
   const info = parseUserAgent(ua)
-  const country = geoCountry(request.headers)
+  // 'none' records no location at all; there is deliberately no city/region
+  // option, since adding one would be a product decision, not config (#11).
+  const country = privacy.geo.granularity === 'country' ? geoCountry(request.headers) : undefined
   const now = new Date().toISOString()
 
   let url: URL | null = null

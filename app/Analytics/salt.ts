@@ -31,9 +31,7 @@
 
 import { randomBytes } from 'node:crypto'
 import { db } from '@stacksjs/database'
-
-/** How many days of salts to keep. */
-const RETENTION_DAYS = 2
+import privacy from '../../config/privacy'
 
 const cache = new Map<string, string>()
 
@@ -106,7 +104,7 @@ export async function getDailySalt(siteId: string, date: Date = new Date()): Pro
  * UTC midnight still hash consistently.
  */
 export async function purgeExpiredSalts(now: Date = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000)
+  const cutoff = new Date(now.getTime() - privacy.saltRetentionDays * 24 * 60 * 60 * 1000)
   const cutoffDate = saltDateFor(cutoff)
 
   for (const key of [...cache.keys()]) {
