@@ -32,7 +32,7 @@ useSeoMeta({
         <p>One first-party script under 2 KB, a tiny client call for custom events, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/register">Get your site ID</StxLink>
-          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq" data-no-router>View on GitHub</a>
+          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq">View on GitHub</a>
         </div>
       </section>
 
@@ -89,7 +89,7 @@ fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-
           <p class="section-intro">Every event lands in your own PostgreSQL database, so the numbers never leave your infrastructure and there is no third party to trust. The whole stack is open source.</p>
         </div>
         <div class="hero-actions">
-          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq" data-no-router>Read the source on GitHub</a>
+          <a class="btn ghost" href="https://github.com/stacksjs/analyticshq">Read the source on GitHub</a>
         </div>
       </section>
 

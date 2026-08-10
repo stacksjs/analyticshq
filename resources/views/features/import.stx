@@ -98,7 +98,12 @@ const crumbs = [
           <h2>Bring your history. Leave the tracking behind.</h2>
           <div class="cta-actions">
             <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
-            <a class="btn ghost" href="/docs" data-no-router>Read the docs</a>
+            {{-- /docs is proxied to BunPress in dev (dev/views.js:99), so a fragment fetch
+              would get a document the router cannot swap. Production serves docs.stx
+              directly (no proxy in production-server.js; dist/docs.html is built), so
+              this opt-out is a dev artefact and should go once #37 removes the proxy.
+              Matches the same decision in resources/partials/site-nav.stx. --}}
+          <a class="btn ghost" href="/docs" data-no-router>Read the docs</a>
           </div>
         </div>
       </section>
