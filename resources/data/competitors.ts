@@ -362,7 +362,9 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Entry and exit pages', them: 'Not reported', us: 'Entry and exit paths, per session' },
       { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line analyticshq() goals with conversion rate and value' },
       { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country only, from your CDN edge headers' },
-      { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Anonymous by design; DNT respect is on the roadmap' },
+      // Was "DNT respect is on the roadmap" until #8 shipped. Kept honest in
+      // both directions: they still deserve the credit for doing it first.
+      { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Honored too, by default — DNT and Global Privacy Control' },
       { dim: 'Cookies and consent', them: 'Cookieless, no banner, never touches the IP', us: 'Cookieless, no banner, IP hashed then discarded' },
     ],
     reasons: [

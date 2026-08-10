@@ -62,30 +62,37 @@ describe('guardrail: no individual-tracking dependencies', () => {
 })
 
 describe('guardrail: visitor hash is rotating, per-site and opaque', () => {
-  const at = (iso: string) => new Date(iso)
+  // These used to pass a Date and let hashVisitor derive the salt from it. The
+  // salt is now a per-site-per-day secret supplied by app/Analytics/salt.ts
+  // (#9), because a date-derived salt is public and made the digest a
+  // confirmation oracle. The properties below are unchanged; what rotates the
+  // salt daily is now the salt module, covered in visitor-salt-privacy.test.ts.
+  const saltFor = (day: string) => `secret-for-${day}`
 
   test('rotates every 24h — no cross-day linkability', () => {
-    const day1 = hashVisitor('1.2.3.4', 'UA', 'site', at('2026-01-01T12:00:00Z'))
-    const day2 = hashVisitor('1.2.3.4', 'UA', 'site', at('2026-01-02T12:00:00Z'))
+    const day1 = hashVisitor('1.2.3.4', 'UA', 'site', saltFor('2026-01-01'))
+    const day2 = hashVisitor('1.2.3.4', 'UA', 'site', saltFor('2026-01-02'))
     expect(day1).not.toBe(day2)
   })
 
   test('is stable within a single UTC day', () => {
-    const early = hashVisitor('1.2.3.4', 'UA', 'site', at('2026-01-01T00:00:01Z'))
-    const late = hashVisitor('1.2.3.4', 'UA', 'site', at('2026-01-01T23:59:59Z'))
+    const salt = saltFor('2026-01-01')
+    const early = hashVisitor('1.2.3.4', 'UA', 'site', salt)
+    const late = hashVisitor('1.2.3.4', 'UA', 'site', salt)
     expect(early).toBe(late)
   })
 
   test('is per-site — the same person on two sites gets two ids (no cross-site identity)', () => {
-    const a = hashVisitor('1.2.3.4', 'UA', 'siteA', at('2026-01-01T12:00:00Z'))
-    const b = hashVisitor('1.2.3.4', 'UA', 'siteB', at('2026-01-01T12:00:00Z'))
+    const salt = saltFor('2026-01-01')
+    const a = hashVisitor('1.2.3.4', 'UA', 'siteA', salt)
+    const b = hashVisitor('1.2.3.4', 'UA', 'siteB', salt)
     expect(a).not.toBe(b)
   })
 
   test('is opaque — never leaks the raw IP or user-agent', () => {
     const ip = '203.0.113.7'
     const ua = 'Mozilla/5.0 SecretAgent'
-    const h = hashVisitor(ip, ua, 'site', at('2026-01-01T12:00:00Z'))
+    const h = hashVisitor(ip, ua, 'site', saltFor('2026-01-01'))
     expect(h).not.toContain(ip)
     expect(h).not.toContain('SecretAgent')
     expect(h).toMatch(/^[a-f0-9]{32}$/)

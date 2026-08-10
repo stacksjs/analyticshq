@@ -21,11 +21,19 @@ export {
 
 /**
  * Cookieless visitor id: sha256(ip + ua + siteId + daily-salt), truncated.
- * The salt is the UTC date, so the hash rotates every 24h and cannot be joined
- * across days. No raw IP or UA is persisted — only this opaque digest.
+ * No raw IP or UA is persisted — only this opaque digest.
+ *
+ * The salt is passed in rather than derived here, and that is the whole point of
+ * #9. It used to be the UTC date: public, so the only unknown in the digest was
+ * the IP, which made a stored visitor id a confirmation oracle — take a
+ * candidate IP and User-Agent, hash it, and see whether that person visited.
+ * The salt is now a per-site-per-day secret (see ./salt.ts), and once it is
+ * purged the day's hashes are unlinkable to any input.
+ *
+ * Keeping this a pure function of its inputs also means the hash can be tested
+ * without a database, which the previous signature quietly prevented.
  */
-export function hashVisitor(ip: string, ua: string, siteId: string, date = new Date()): string {
-  const salt = date.toISOString().slice(0, 10) // YYYY-MM-DD (UTC)
+export function hashVisitor(ip: string, ua: string, siteId: string, salt: string): string {
   return createHash('sha256').update(`${ip}|${ua}|${siteId}|${salt}`).digest('hex').slice(0, 32)
 }
 

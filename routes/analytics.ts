@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto'
 import { db } from '@stacksjs/database'
 import { response, route } from '@stacksjs/router'
+import { getDailySalt } from '../app/Analytics/salt'
 import {
   cleanReferrer,
   clientIp,
@@ -181,8 +182,23 @@ route.post('/collect', async (request: any) => {
   if (isBot(ua))
     return new Response(null, { status: 204, headers: CORS })
 
+  // Global Privacy Control, enforced server-side as well as in the tracker (#8).
+  //
+  // Both halves are needed for different reasons. The client check stops the
+  // request being made at all, which is what a visitor actually wants. This one
+  // is the backstop: `Sec-GPC` is attached by the browser itself, so it still
+  // arrives from an old cached copy of script.js, a self-hosted or proxied
+  // tracker, or a hand-rolled beacon — none of which run our client code.
+  //
+  // 204, the same as the bot path: the tracker ignores the body, and an error
+  // status would only invite a retry.
+  if (request.headers?.get('sec-gpc') === '1')
+    return new Response(null, { status: 204, headers: CORS })
+
   const ip = clientIp(request.headers)
-  const visitorId = hashVisitor(ip, ua, String(siteId))
+  // Per-site-per-day secret, not the UTC date (#9). Memoised per site-day, so
+  // this is a database round-trip once a day, not once a beacon.
+  const visitorId = hashVisitor(ip, ua, String(siteId), await getDailySalt(String(siteId)))
   // Server-side sessionization (no client storage → cookieless/consent-free, the point of a
   // privacy-first tracker): a session is one anonymous visitor's activity within a rolling
   // 30-minute inactivity window. Primary path: reuse the session id from this visitor's most

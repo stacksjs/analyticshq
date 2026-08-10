@@ -26,6 +26,26 @@
   const site = s && s.getAttribute('data-site')
   if (!site) return
 
+  // Do Not Track / Global Privacy Control (#8).
+  //
+  // Checked once, here, rather than inside `send`: `currentScript` is only
+  // readable during this pass anyway, and bailing now means no listeners are
+  // attached and no history hooks installed — the tracker leaves no trace at
+  // all rather than merely declining to transmit.
+  //
+  // Respected by DEFAULT, which is a deliberate position: we already store no
+  // personal data, so honoring the signal costs us nothing and is the one thing
+  // a visitor can actively say. Opt out per site with data-respect-dnt="false"
+  // if you would rather count those visits.
+  //
+  // `navigator.doNotTrack` is the string "1"; some older builds put it on
+  // `window` or spell it `msDoNotTrack`. GPC is a real boolean.
+  if (s.getAttribute('data-respect-dnt') !== 'false') {
+    const n = navigator
+    const dnt = n.doNotTrack || w.doNotTrack || n.msDoNotTrack
+    if (dnt === '1' || dnt === 'yes' || n.globalPrivacyControl === true) return
+  }
+
   let endpoint
   try {
     endpoint = new URL(s.src, location.href).origin + '/collect'
