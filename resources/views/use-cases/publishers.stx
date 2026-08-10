@@ -27,7 +27,7 @@ const crumbs = [
             See your top articles, where a spike from Hacker News or Reddit came from, and how a post performs over time. All from a script under 2 KB that never slows the page down.
           </p>
           <div class="d3 enter hero-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
@@ -156,7 +156,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Write for readers, measure like it.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/use-cases">All use cases</StxLink>
           </div>
         </div>

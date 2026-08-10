@@ -6,10 +6,10 @@
 <footer class="footer shell">
   <div class="footer-top">
     <div class="footer-brand">
-      <a class="brand" href="/" aria-label="analyticshq home">
+      <StxLink class="brand" to="/" aria-label="analyticshq home">
         <span class="brand-mark">a</span>
         <span class="brand-name">analyticshq</span>
-      </a>
+      </StxLink>
       <p>Privacy-first web analytics, powered by Stacks + PostgreSQL.</p>
       <span class="footer-social">
         <a href="https://github.com/stacksjs/analyticshq" target="_blank" rel="noopener" aria-label="analyticshq on GitHub">

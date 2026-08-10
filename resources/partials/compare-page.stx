@@ -16,7 +16,7 @@
   <h1>{{ c.h1 }}</h1>
   <p>{{ c.intro }}</p>
   <div class="hero-actions">
-    <a class="btn primary" href="/#install">Get your script tag</a>
+    <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
     <StxLink class="btn ghost" to="{{ c.heroCta.to }}">{{ c.heroCta.label }}</StxLink>
   </div>
 </section>
@@ -95,7 +95,7 @@
   <div class="cta-band">
     <h2>{{ c.ctaHeading }}</h2>
     <div class="cta-actions">
-      <a class="btn primary" href="/#install">Get your script tag</a>
+      <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
       <StxLink class="btn ghost" to="{{ c.ctaLink.to }}">{{ c.ctaLink.label }}</StxLink>
     </div>
   </div>

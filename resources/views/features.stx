@@ -48,7 +48,7 @@ const crumbs = [
         <h1>Every report you actually open. None of the tracking.</h1>
         <p>Real-time visitors, traffic sources, conversions, and Core Web Vitals, in one screen. All from a single cookieless script under 2 KB, with exact numbers and no consent banner in the way.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
+          <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
           <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
         </div>
       </section>
@@ -100,7 +100,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/compare">Compare the alternatives</StxLink>
           </div>
         </div>

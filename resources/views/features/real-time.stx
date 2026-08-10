@@ -57,7 +57,7 @@ const crumbs = [
         <p>See who is on your site right now, which pages hold their attention, and where they arrived from. The live view updates on its own, with no cookie set and no reload.</p>
         <div class="hero-actions">
           <StxLink to="/dashboard" class="btn primary">See a live dashboard</StxLink>
-          <a class="btn ghost" href="/#install">Get your script tag</a>
+          <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
 
@@ -124,7 +124,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>

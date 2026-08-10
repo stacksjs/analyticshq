@@ -27,7 +27,7 @@ const crumbs = [
             Drop in a single script tag, fire custom events with one function, and read it all back over a clean API. Self-hostable, PostgreSQL-backed, and privacy-first by default. Your data stays yours.
           </p>
           <div class="d3 enter hero-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <a class="btn ghost" href="/docs" data-no-router>Read the docs</a>
           </div>
         </div>
@@ -162,7 +162,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Ship analytics you actually own.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <a class="btn ghost" href="/docs" data-no-router>Read the docs</a>
           </div>
         </div>

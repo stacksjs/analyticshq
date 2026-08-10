@@ -27,7 +27,7 @@ const crumbs = [
             Track carts, checkouts, and revenue without a cookie banner slowing the sale. See which products, pages, and campaigns actually pay, with numbers that match your store.
           </p>
           <div class="d3 enter hero-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
@@ -157,7 +157,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Grow revenue, not your consent overhead.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/use-cases">All use cases</StxLink>
           </div>
         </div>

@@ -147,7 +147,7 @@ async function upgrade(): Promise<void> {
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/compare">Compare the alternatives</StxLink>
           </div>
         </div>

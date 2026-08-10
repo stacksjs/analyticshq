@@ -23,7 +23,7 @@ const crumbs = [
         <h1>Real numbers for teams that respect their visitors.</h1>
         <p>The same cookieless script fits a solo blog or a funded SaaS. Here is how different teams put analyticshq to work, and which features carry the weight.</p>
         <div class="hero-actions">
-          <a class="btn primary" href="/#install">Get your script tag</a>
+          <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
           <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
         </div>
       </section>
@@ -146,7 +146,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>

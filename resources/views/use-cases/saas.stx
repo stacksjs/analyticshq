@@ -27,7 +27,7 @@ const crumbs = [
             Track the whole SaaS funnel without a cookie banner in the way. See which pages turn visitors into signups, and which channels bring the accounts that stick.
           </p>
           <div class="d3 enter hero-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
@@ -150,7 +150,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Grow the funnel, not your compliance risk.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/use-cases">All use cases</StxLink>
           </div>
         </div>

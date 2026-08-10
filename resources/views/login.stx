@@ -69,7 +69,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 @section('content')
 <div class="max-w-sm w-full">
   <div class="mb-8 text-center">
-    <a href="/" class="text-2xl wordmark">analyticshq</a>
+    <StxLink to="/" class="text-2xl wordmark">analyticshq</StxLink>
     <p class="mt-2 text-sm text-text-3">Sign in to your account</p>
   </div>
 

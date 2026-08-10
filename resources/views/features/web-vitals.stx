@@ -24,7 +24,7 @@ const crumbs = [
         <p>Real-user LCP, INP, and CLS collected from the same script, shown next to your traffic. A slow page shows up before it quietly costs you visitors.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
-          <a class="btn ghost" href="/#install">Get your script tag</a>
+          <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
 
@@ -118,7 +118,7 @@ const crumbs = [
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>

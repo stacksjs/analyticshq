@@ -24,7 +24,7 @@ const crumbs = [
         <p>Fire a conversion with a single analyticshq() call, attach a value, and tie it back to the campaign that earned it. No tag manager, no extra pageview.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
-          <a class="btn ghost" href="/#install">Get your script tag</a>
+          <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
 
@@ -112,7 +112,7 @@ analyticshq('signup', {
         <div class="cta-band">
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
-            <a class="btn primary" href="/#install">Get your script tag</a>
+            <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
             <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
           </div>
         </div>
