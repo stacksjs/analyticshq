@@ -65,10 +65,16 @@
         p: p || {},
         u: location.origin + location.pathname,
         r: d.referrer || '',
-        t: d.title,
-        sw: screen.width,
-        sh: screen.height,
       }
+      // Deliberately NOT sent (#10):
+      //   t  — document.title. A title routinely carries page content, and on a
+      //        real app that means personal data: "Invoice #4432 — Jane Smith",
+      //        "Reset password for alice@example.com". The path already
+      //        identifies the page for every report we have.
+      //   sw/sh — screen.width/height. A classic passive fingerprinting vector,
+      //        and device_type is derived from the User-Agent, not from these.
+      // All three were write-only: stored on every page view and read by nothing.
+      // Reinstate only behind a per-site opt-in, never by default.
       ;['source', 'medium', 'campaign', 'content', 'term'].forEach((k) => {
         const v = q.get('utm_' + k)
         if (v) b['utm_' + k] = v

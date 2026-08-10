@@ -269,7 +269,6 @@ route.post('/collect', async (request: any) => {
       visitor_id: visitorId,
       path,
       hostname: url?.hostname ?? null,
-      title: clip255(body.t),
       referrer: cleanReferrer(body.r),
       referrer_source: source,
       utm_source: utmParam(body.utm_source),
@@ -283,8 +282,10 @@ route.post('/collect', async (request: any) => {
       browser_version: null,
       os: info.os,
       os_version: null,
-      screen_width: body.sw ?? null,
-      screen_height: body.sh ?? null,
+      // title / screen_width / screen_height are no longer collected (#10) — the
+      // tracker stops sending them and the columns are dropped by migration 37.
+      // Nothing ever read them: every SELECT in this file is column-explicit and
+      // none names them, and device_type comes from the User-Agent above.
       is_unique: false,
       is_bounce: false,
       timestamp: now,

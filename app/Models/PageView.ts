@@ -44,7 +44,8 @@ export default defineModel({
     visitor_id: { fillable: true, validation: { rule: schema.string().required().max(64) } },
     path: { fillable: true, validation: { rule: schema.string().required() } },
     hostname: { fillable: true, validation: { rule: schema.string().optional().max(128) } },
-    title: { fillable: true, validation: { rule: schema.string().optional() } },
+    // `title` removed (#10): a page title carries page content, and on a real app
+    // that means personal data. Write-only in practice — nothing selected it.
     referrer: { fillable: true, validation: { rule: schema.string().optional() } },
     referrer_source: { fillable: true, validation: { rule: schema.string().optional().max(128) } },
     utm_source: { fillable: true, validation: { rule: schema.string().optional().max(255) } },
@@ -58,8 +59,8 @@ export default defineModel({
     browser_version: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     os: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     os_version: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
-    screen_width: { fillable: true, validation: { rule: schema.number().optional() } },
-    screen_height: { fillable: true, validation: { rule: schema.number().optional() } },
+    // screen_width / screen_height removed (#10): a passive fingerprinting vector,
+    // and device_type comes from the User-Agent, not from these.
     is_unique: { fillable: true, validation: { rule: schema.boolean().optional() }, factory: () => false },
     is_bounce: { fillable: true, validation: { rule: schema.boolean().optional() }, factory: () => false },
     time_on_page: { fillable: true, validation: { rule: schema.number().optional() } },
