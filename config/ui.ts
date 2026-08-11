@@ -254,4 +254,49 @@ export default {
       },
     },
   },
+
+  /**
+   * We measure this site with the product it sells (#12).
+   *
+   * Before this, config/analytics.ts declared `driver: 'fathom'` with a real Fathom
+   * site id — a competitor's tracker, configured on the site whose /compare pages
+   * argue against handing visitors to third parties. It never actually loaded (no
+   * code reads that file), so the effect was not a leak but something almost as bad:
+   * a config that read like a decision nobody had taken, on a product that collected
+   * nothing about itself while selling analytics.
+   *
+   * `driver: 'custom'` rather than stx's own `'self-hosted'`. That driver exists and
+   * would work, but it generates its OWN inline beacon with its own payload shape
+   * (a random session id, `t('outbound', ...)`) posted to `apiEndpoint`. Our
+   * /collect contract is different, and more to the point, dogfooding means running
+   * the artifact we hand customers — public/script.js, loaded exactly the way the
+   * install snippet on the homepage tells them to load it. Anything else measures a
+   * tracker no customer runs.
+   *
+   * Injection is stx's, not ours: process.js calls injectAnalytics(), which places
+   * the tag before </head> on every page. Global is deliberate and safe here — every
+   * app route is a fixed path (/login, /dashboard, /account, /sites/new; there are no
+   * [param] routes), and the tracker sends `location.origin + location.pathname`, so
+   * query strings are dropped and no customer site id can reach a recorded path.
+   *
+   * Off unless ANALYTICSHQ_SITE_ID is set, which keeps development and any fresh
+   * checkout from beaconing at production. `enabled: false` makes
+   * generateAnalyticsScript return '' before it reads anything else.
+   *
+   * The site id is not a secret — it ships in the snippet on every customer's site,
+   * which is exactly why tests/unit/api-authz.test.ts gates every site-scoped read on
+   * ownership instead of on knowing the id.
+   */
+  analytics: {
+    enabled: !!process.env.ANALYTICSHQ_SITE_ID,
+    driver: 'custom',
+    custom: {
+      scriptUrl: '/script.js',
+      // No `defer` here: generateCustomScript appends one unconditionally, and
+      // declaring it too renders `<script defer="" ... defer>`.
+      attributes: {
+        'data-site': process.env.ANALYTICSHQ_SITE_ID || '',
+      },
+    },
+  },
 } satisfies UiOptions

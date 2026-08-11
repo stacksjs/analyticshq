@@ -79,6 +79,50 @@ describe('no third-party hosts are embedded in served pages', () => {
     const block = ui.slice(ui.indexOf('link: ['), ui.indexOf(']', ui.indexOf('link: [')))
     expect(block).not.toMatch(/href:\s*['"]https?:\/\//)
   })
+
+  test('no config injects a third-party host either', () => {
+    // The sweep above reads templates and public assets, which is where a font or a
+    // CDN link gets pasted. It would NOT have caught the way this app actually
+    // carried a third party: config/analytics.ts declared driver 'fathom' with a
+    // real site id, and stx's injectAnalytics() renders the tag from config with no
+    // template involvement at all. A guard that only reads markup calls that clean.
+    //
+    // resources/data/competitors.ts is excluded on purpose — naming competitors is
+    // its entire job, and it ships no script.
+    for (const f of ['config/ui.ts', 'config/analytics.ts']) {
+      const src = code(f)
+      for (const host of FORBIDDEN)
+        expect({ file: f, host, found: src.includes(host) }).toEqual({ file: f, host, found: false })
+    }
+  })
+})
+
+describe('we measure this site with the product it sells (#12)', () => {
+  const ui = code('config/ui.ts')
+
+  test('the tracker is our own artifact, not a third-party or framework beacon', () => {
+    // public/script.js is the file the install snippet on the homepage tells
+    // customers to load. Dogfooding means running that, not stx's built-in
+    // 'self-hosted' generator, which emits a different beacon with a payload
+    // /collect does not accept — and which no customer would ever run.
+    expect(ui).toContain('scriptUrl: \'/script.js\'')
+    expect(ui).toMatch(/driver:\s*'custom'/)
+  })
+
+  test('it stays off unless an operator supplies a site id', () => {
+    // generateAnalyticsScript returns '' when enabled is false, so a fresh checkout
+    // and every dev machine beacon at nothing.
+    expect(ui).toMatch(/enabled:\s*!!process\.env\.ANALYTICSHQ_SITE_ID/)
+  })
+
+  test('the framework-side config agrees rather than contradicting it', () => {
+    // These are two different files the framework and stx read separately. The
+    // scaffold left this one saying 'fathom' while nothing rendered it, which read
+    // like a decision nobody had taken.
+    const analytics = code('config/analytics.ts')
+    expect(analytics).toMatch(/driver:\s*'self-hosted'/)
+    expect(analytics).not.toMatch(/googleAnalytics|trackingId|UA-/)
+  })
 })
 
 describe('the fonts that replaced Google are actually present', () => {
