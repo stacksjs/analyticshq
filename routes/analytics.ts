@@ -14,6 +14,7 @@
 
 import { createHash } from 'node:crypto'
 import { db } from '@stacksjs/database'
+import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -402,17 +403,39 @@ function authUserId(request: any): string | null {
  * Site ids are public (embedded in the tracking snippet), so distinguishing 404
  * from 403 leaks nothing sensitive.
  */
-async function requireSiteOwner(request: any, siteId: string): Promise<Response | null> {
+/**
+ * Gate a site-scoped endpoint on a minimum role (#19).
+ *
+ * `viewer` reads reports, `admin` also changes settings/goals/share/members, and
+ * `owner` alone destroys things. Every call site names the rank it needs, so the
+ * requirement is readable at the endpoint rather than inferred from one shared
+ * function that meant "owner" everywhere.
+ *
+ * 404 vs 403 is deliberate. A site that does not exist answers 404; a site that
+ * exists but is not yours answers 403. That does leak existence to an
+ * authenticated caller who guesses an id — but site ids are PUBLIC, they ship in
+ * the tracking snippet on every page of a customer's site, so there is nothing to
+ * conceal and collapsing the two would only make real 404s undebuggable. The
+ * secret is the data, and that is what the role check protects.
+ */
+async function requireSiteRole(request: any, siteId: string, required: SiteRole): Promise<Response | null> {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
-  const rows = await pgq(`SELECT owner_id FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
-  const site = rows?.[0]
-  if (!site)
-    return json({ error: 'Site not found' }, 404)
-  if (site.owner_id == null || String(site.owner_id) !== uid)
+  const role = await resolveSiteRole(uid, siteId)
+  if (role == null) {
+    if (!(await siteExists(siteId)))
+      return json({ error: 'Site not found' }, 404)
+    return json({ error: 'Forbidden' }, 403)
+  }
+  if (!satisfies(role, required))
     return json({ error: 'Forbidden' }, 403)
   return null
+}
+
+/** Destructive and ownership-transferring operations only. */
+async function requireSiteOwner(request: any, siteId: string): Promise<Response | null> {
+  return requireSiteRole(request, siteId, 'owner')
 }
 
 // ---------------------------------------------------------------------------
@@ -430,13 +453,101 @@ route.get('/api/sites', async (request: any) => {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
+  // Owned sites AND sites shared with this user (#19). Before memberships this
+  // was `WHERE owner_id = ?`, which is why an invited member could authenticate,
+  // hold a valid role, and still see an empty site list — the switcher reads this.
+  //
+  // `role` comes back with each row so the dashboard can hide controls the user
+  // cannot use. It is a convenience for the UI, never the check: every endpoint
+  // re-resolves the role server-side.
   const rows = await pgq(
-    `SELECT id, name, domains, timezone, is_active, created_at
-    FROM sites WHERE owner_id = ? ORDER BY created_at DESC`,
-    [Number(uid)],
+    `SELECT s.id, s.name, s.domains, s.timezone, s.is_active, s.created_at,
+            CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
+     FROM sites s
+     LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
+     WHERE s.owner_id = ? OR m.user_id IS NOT NULL
+     ORDER BY s.created_at DESC`,
+    [Number(uid), Number(uid), Number(uid)],
   )
   return json({ sites: rows ?? [] })
 }).middleware('auth')
+
+// ---------------------------------------------------------------------------
+// Members (#19)
+// ---------------------------------------------------------------------------
+// Membership is by user id, resolved from an email address that must already
+// have an account. There is no invite-by-email flow yet: creating a user from an
+// unauthenticated address is an account-creation path, and bolting one onto a
+// member endpoint is how invitation systems become account-takeover systems.
+// Until that exists properly, adding someone who has not signed up answers 404.
+
+route.options('/api/sites/{siteId}/members', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/members', async (request: any) => {
+  const siteId = request.params.siteId
+  // Viewer, not admin: knowing who else can see a site is part of knowing whether
+  // it is being shared, and a viewer who cannot see that has no way to notice.
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  return json({ members: await listSiteMembers(siteId) })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/members', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const role = body.role
+  if (!email)
+    return json({ error: 'email is required' }, 400)
+  if (!isAssignableRole(role))
+    return json({ error: `role must be one of ${ASSIGNABLE_ROLES.join(', ')}` }, 400)
+
+  const users = await pgq(`SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1`, [email])
+  const userId = users?.[0]?.id
+  if (userId == null)
+    return json({ error: 'No account with that email address' }, 404)
+
+  // The owner is not a member row. Adding them would create a second, lower
+  // answer to "what is their role", and resolveSiteRole takes the higher of the
+  // two — so it would be silently inert rather than wrong. Rejecting says so.
+  const site = (await pgq(`SELECT owner_id FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+  if (site?.owner_id != null && Number(site.owner_id) === Number(userId))
+    return json({ error: 'The owner already has full access' }, 409)
+
+  // Re-adding an existing member changes their role rather than erroring: the
+  // primary key is (site_id, user_id), and "invite again with a different role"
+  // is the obvious way to express a promotion.
+  await pgq(
+    `INSERT INTO site_members (site_id, user_id, role, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (site_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+    [String(siteId), Number(userId), role, new Date().toISOString()],
+  )
+  return json({ members: await listSiteMembers(siteId) })
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/members/{userId}', () => new Response(null, { status: 204, headers: CORS }))
+
+route.delete('/api/sites/{siteId}/members/{userId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const targetId = Number(request.params.userId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  // The owner has no membership row to delete, so this would report success while
+  // changing nothing — the shape of "removed the owner" without doing it.
+  const site = (await pgq(`SELECT owner_id FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+  if (site?.owner_id != null && Number(site.owner_id) === targetId)
+    return json({ error: 'The owner cannot be removed' }, 409)
+
+  await pgq(`DELETE FROM site_members WHERE site_id = ? AND user_id = ?`, [String(siteId), targetId])
+  return json({ members: await listSiteMembers(siteId) })
+}).middleware('auth').skipCsrf()
 
 route.post('/api/sites', async (request: any) => {
   const uid = authUserId(request)
@@ -487,7 +598,7 @@ route.options('/api/sites/{siteId}', () => new Response(null, { status: 204, hea
 // Rename / edit a site (name, domains, timezone). Owner-scoped, partial update.
 route.patch('/api/sites/{siteId}', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
 
@@ -574,7 +685,7 @@ route.options('/api/sites/{siteId}/goals', () => new Response(null, { status: 20
 
 route.get('/api/sites/{siteId}/goals', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const rows = await pgq(
@@ -587,7 +698,7 @@ route.get('/api/sites/{siteId}/goals', async (request: any) => {
 
 route.post('/api/sites/{siteId}/goals', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
   const body = request.jsonBody ?? {}
@@ -639,7 +750,7 @@ route.options('/api/sites/{siteId}/goals/{goalId}', () => new Response(null, { s
 route.delete('/api/sites/{siteId}/goals/{goalId}', async (request: any) => {
   const siteId = request.params.siteId
   const goalId = request.params.goalId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
   // Delete the goal's conversions first — conversions.goal_id FKs to goals.id, so
@@ -676,7 +787,7 @@ route.options('/api/sites/{siteId}/share', () => new Response(null, { status: 20
 
 route.post('/api/sites/{siteId}/share', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
   // Rotate on every POST: a fresh token invalidates any previously-shared link.
@@ -689,7 +800,7 @@ route.post('/api/sites/{siteId}/share', async (request: any) => {
 
 route.delete('/api/sites/{siteId}/share', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
   const settings = await readSiteSettings(siteId)
@@ -752,7 +863,7 @@ route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) =>
 
 route.get('/api/sites/{siteId}/stats', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -772,7 +883,7 @@ route.get('/api/sites/{siteId}/stats', async (request: any) => {
 
 route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -788,7 +899,7 @@ route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
 
 route.get('/api/sites/{siteId}/pages', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -804,7 +915,7 @@ route.get('/api/sites/{siteId}/pages', async (request: any) => {
 
 route.get('/api/sites/{siteId}/referrers', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -825,7 +936,7 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
 function topDimension(path: string, column: string, key: string): void {
   route.get(path, async (request: any) => {
     const siteId = request.params.siteId
-    const denied = await requireSiteOwner(request, siteId)
+    const denied = await requireSiteRole(request, siteId, 'viewer')
     if (denied)
       return denied
     const { from, to } = window(request)
@@ -851,7 +962,7 @@ topDimension('/api/sites/{siteId}/utm/campaigns', 'utm_campaign', 'campaigns')
 // Custom events, by name.
 route.get('/api/sites/{siteId}/events', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -867,7 +978,7 @@ route.get('/api/sites/{siteId}/events', async (request: any) => {
 // Entry pages (session first page).
 route.get('/api/sites/{siteId}/entry-pages', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -883,7 +994,7 @@ route.get('/api/sites/{siteId}/entry-pages', async (request: any) => {
 // Exit pages (session last page).
 route.get('/api/sites/{siteId}/exit-pages', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -900,7 +1011,7 @@ route.get('/api/sites/{siteId}/exit-pages', async (request: any) => {
 // dashboard to keep the live count fresh without a reload (issue #20).
 route.get('/api/sites/{siteId}/realtime', async (request: any) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteOwner(request, siteId)
+  const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
   const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()

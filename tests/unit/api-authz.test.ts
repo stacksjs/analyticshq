@@ -44,12 +44,16 @@ const TOP_DIMENSIONS = [
   '/api/sites/{siteId}/utm/campaigns',
 ]
 
-describe('guardrail: site-scoped read endpoints are owner-gated', () => {
+describe('guardrail: site-scoped read endpoints require at least viewer', () => {
+  // These were owner-gated until #19, which is why an invited colleague could not
+  // read a single report. The requirement is now a RANK, and the rank has to be
+  // named at the endpoint: `viewer` reads, `admin` also writes, `owner` alone
+  // destroys. A read that asks for more than viewer silently un-shares the site.
   for (const path of READ_ENDPOINTS) {
-    test(`GET ${path} enforces auth + site ownership`, () => {
+    test(`GET ${path} enforces auth + at least viewer`, () => {
       const block = routeBlock(path)
       expect(block).not.toBe('')
-      expect(block).toContain('requireSiteOwner(request, siteId)')
+      expect(block).toContain('requireSiteRole(request, siteId, \'viewer\')')
       expect(block).toContain('.middleware(\'auth\')')
     })
   }
@@ -60,7 +64,7 @@ describe('guardrail: top-dimension reports are owner-gated', () => {
     const i = analytics.indexOf('function topDimension(')
     expect(i).toBeGreaterThan(-1)
     const block = analytics.slice(i, i + 900)
-    expect(block).toContain('requireSiteOwner(request, siteId)')
+    expect(block).toContain('requireSiteRole(request, siteId, \'viewer\')')
     expect(block).toContain('.middleware(\'auth\')')
   })
 
@@ -83,16 +87,70 @@ const MGMT_DECLS = [
   'route.delete(\'/api/sites/{siteId}\'',
 ]
 
-describe('guardrail: owner-gated mutation endpoints', () => {
-  for (const decl of [...DELETE_DECLS, ...MGMT_DECLS]) {
-    test(`${decl.slice(12)} enforces auth + site ownership`, () => {
+function declBlock(decl: string): string {
+  const i = analytics.indexOf(decl)
+  expect(i).toBeGreaterThan(-1)
+  const rest = analytics.slice(i)
+  const end = rest.indexOf('\nroute.')
+  return end === -1 ? rest : rest.slice(0, end)
+}
+
+describe('guardrail: destroying data stays owner-only', () => {
+  // An admin is someone trusted with reports and settings. Erasing a client's
+  // history, or deleting the site outright, is not the same trust — and it is not
+  // recoverable, so the rank here must never be relaxed to admin for convenience.
+  for (const decl of DELETE_DECLS.concat(['route.delete(\'/api/sites/{siteId}\''])) {
+    test(`${decl.slice(12)} enforces auth + owner`, () => {
+      const block = declBlock(decl)
+      expect(block).toContain('requireSiteOwner(request, siteId)')
+      expect(block).toContain('.middleware(\'auth\')')
+    })
+  }
+})
+
+describe('guardrail: settings and sharing require admin', () => {
+  // Writes a viewer must not be able to make. Sharing is here rather than with the
+  // reads because a share link hands the data to anyone holding the URL.
+  const ADMIN_DECLS = [
+    'route.patch(\'/api/sites/{siteId}\'',
+    'route.post(\'/api/sites/{siteId}/goals\'',
+    'route.post(\'/api/sites/{siteId}/share\'',
+    'route.delete(\'/api/sites/{siteId}/share\'',
+    'route.post(\'/api/sites/{siteId}/members\'',
+    'route.delete(\'/api/sites/{siteId}/members/{userId}\'',
+  ]
+  for (const decl of ADMIN_DECLS) {
+    test(`${decl.slice(12)} enforces auth + admin`, () => {
+      const block = declBlock(decl)
+      expect(block).toContain('requireSiteRole(request, siteId, \'admin\')')
+      expect(block).toContain('.middleware(\'auth\')')
+    })
+  }
+})
+
+describe('guardrail: no site-scoped endpoint is left ungated', () => {
+  // The failure this exists to catch is a NEW endpoint added without a check —
+  // the one way a site-scoped leak gets introduced now that ranks exist.
+  //
+  // The first version of this test counted gates against routes with a tolerance
+  // for the topDimension helper, and a deliberately ungated endpoint added during
+  // review slipped straight through: the slack absorbed exactly the case it was
+  // meant to detect. It now inspects each route body, which cannot be satisfied by
+  // arithmetic.
+  const decls = [...analytics.matchAll(/^route\.(get|post|patch|put|delete)\('(\/api\/sites\/\{siteId\}[^']*)'/gm)]
+
+  test('there are site-scoped routes to check, so this cannot pass vacuously', () => {
+    expect(decls.length).toBeGreaterThan(15)
+  })
+
+  for (const m of decls) {
+    const [decl, verb, path] = [m[0], m[1], m[2]]
+    test(`${verb.toUpperCase()} ${path} resolves a role`, () => {
       const i = analytics.indexOf(decl)
-      expect(i).toBeGreaterThan(-1)
       const rest = analytics.slice(i)
       const end = rest.indexOf('\nroute.')
       const block = end === -1 ? rest : rest.slice(0, end)
-      expect(block).toContain('requireSiteOwner(request, siteId)')
-      expect(block).toContain('.middleware(\'auth\')')
+      expect(block).toMatch(/requireSiteRole\(request, siteId, '(viewer|admin|owner)'\)|requireSiteOwner\(request, siteId\)/)
     })
   }
 })
