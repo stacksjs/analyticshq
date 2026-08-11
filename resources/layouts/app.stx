@@ -1,0 +1,60 @@
+{{-- App chrome. Layout group 'app'.
+
+    A FRAGMENT, not a document -- same contract as auth.stx and marketing.stx. stx
+    synthesises the doctype, the html tag, the head and the body from config/ui.ts
+    app.head merged with each page's head. Writing a doctype or an html tag here, even
+    inside a comment (the test is an unanchored regex over the rendered string), makes
+    hasDocumentShell() true and every page's title and description is dropped.
+
+    Replaces the hand-written `<meta name="stx-layout" content="app">` that dashboard.stx
+    and account.stx each carried. That meta is the OUTPUT of layout resolution, not an
+    input to it: stx emits it from the `<!-- stx-layout: ... -->` marker only after a
+    layout actually resolves, and deriveLayoutGroup reads the group from the layout's
+    FILENAME. Asserting the meta by hand produced the right header while the mechanism
+    behind it never ran, so the pages shared no chrome, no styles and no stacks -- and
+    nothing would have reported a disagreement between the claim and the file.
+
+    <main> lives HERE and pages must not declare their own: fragment extraction slices
+    from the first <main> to the LAST </main>, so a second one makes the router swap the
+    wrong span. It is deliberately unstyled, because the two pages disagree about their
+    wrapper -- the dashboard wants full-bleed padding, account wants a centred max-w-3xl
+    column -- so each yields its own <div> with the classes it already had. Same
+    elements, same classes, one tag name different.
+
+    The :root token block below was duplicated in both pages, byte for byte apart from
+    --bar (dashboard only) and a longer --mono fallback chain (dashboard's). Both are
+    supersets here, so account gains an unused variable and a better monospace stack and
+    renders identically. Everything page-specific stays in the page, pushed to
+    @stack('styles') rather than left loose: once a layout applies, stx sweeps every
+    orphan <style> out of the page and appends it AFTER the content, in the body. --}}
+
+@head
+<style>
+/* analyticshq - Geist display + Geist Mono for numerics.
+  One accent (emerald), off-black/off-white, auto light+dark, radius lock 12px. */
+:root {
+  --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
+  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669; --bar: rgba(5,150,105,0.16);
+  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
+    --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; --bar: rgba(52,211,153,0.18); }
+}
+:root[data-theme="dark"] { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
+  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; --bar: rgba(52,211,153,0.18); }
+:root[data-theme="light"] { --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
+  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669; --bar: rgba(5,150,105,0.16); }
+
+body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.wordmark { font-weight: 700; letter-spacing: -0.03em; }
+</style>
+@stack('styles')
+@endhead
+
+<main>
+@yield('content')
+</main>
+
+@stack('scripts')

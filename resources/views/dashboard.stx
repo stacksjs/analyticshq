@@ -1084,29 +1084,16 @@ onMount(() => {
 })
 </script>
 
-<meta name="stx-layout" content="app">
+@extends('app')
 
+{{-- The token block, body and .wordmark that stood here were byte-identical to
+    account.stx's and now live once in resources/layouts/app.stx. What remains is what
+    only the dashboard uses. It is pushed rather than left loose: under a layout stx
+    sweeps every orphan <style> out of the page and appends it AFTER the content, in the
+    body, so a loose block would still apply but from the wrong place. --}}
+@push('styles')
 <style>
-/* analyticshq - Geist display + Geist Mono for numerics.
-  One accent (emerald), off-black/off-white, auto light+dark, radius lock 12px. */
-:root {
-  --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
-  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669; --bar: rgba(5,150,105,0.16);
-  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
-  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-    --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; --bar: rgba(52,211,153,0.18); }
-}
-:root[data-theme="dark"] { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; --bar: rgba(52,211,153,0.18); }
-:root[data-theme="light"] { --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
-  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669; --bar: rgba(5,150,105,0.16); }
-
-body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 .mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 .bar { animation: grow 0.6s cubic-bezier(0.16,1,0.3,1); transform-origin: bottom; }
@@ -1154,13 +1141,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .filter-clear { color: var(--text-3); text-decoration: none; }
 .filter-clear:hover { color: var(--text); }
 </style>
+@endpush
 
-{{-- <main>, not a <div>: this is the SPA router's swap container. router.container
-    defaults to 'main', and getContainer() returning null makes shouldIntercept bail,
-    so every link on this page was doing a full document load. The four sibling app
-    pages already declare their own <main>; the dashboard was the only one that did
-    not. Same element, same classes -- only the tag name changes. --}}
-<main class="px-5 py-10 md:px-10 min-h-[100dvh]">
+{{-- A <div>, not <main>. The router container is the single <main> in
+    resources/layouts/app.stx: fragment extraction slices from the first <main> to the
+    LAST </main>, so a page that declares its own makes the router swap the wrong span.
+    Same classes as before, one tag name different. --}}
+@section('content')
+<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
   {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
       viewer isn't signed in as the owner. Upgrade -> Pro swaps reactively (isPro). --}}
   @if (ownsActive)
@@ -1650,13 +1638,19 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </footer>
 
   </div>
-</main>
+</div>
+@endsection
 
 {{-- Pre-render bootstrap: token guard + mirror the localStorage token into the
     analyticshq_token cookie (so the <script server> block can owner-scope the switcher
     + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
     manipulation; all interactivity is stx directives via the <script client> block
-    above. --}}
+    above.
+
+    Pushed rather than left loose, for the same reason as the styles: stx's orphan sweep
+    would append it to the content section, which happens to be close to where it
+    belongs; @stack('scripts') in app.stx puts it there deliberately. --}}
+@push('scripts')
 <script>
 ;(function () {
   // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
@@ -1695,3 +1689,4 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 })()
 </script>
 
+@endpush

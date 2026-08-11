@@ -83,24 +83,14 @@ onMount(() => {
 })
 </script>
 
-<meta name="stx-layout" content="app">
+@extends('app')
 
+{{-- Tokens, body and .wordmark now come from resources/layouts/app.stx, which carries
+    the superset of what this page and the dashboard each had. What stays is what only
+    this page uses. It is pushed rather than left loose because a loose <style> under a
+    layout gets swept out of the page and appended after the content, in the body. --}}
+@push('styles')
 <style>
-:root {
-  --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
-  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669;
-  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-    --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; }
-}
-:root[data-theme="dark"] { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #667085; --accent: #34d399; }
-:root[data-theme="light"] { --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
-  --text: #0b1220; --text-2: #4b5563; --text-3: #98a2b3; --accent: #059669; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
 .btn { border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease, background-color 0.15s ease; font-weight: 600; }
 .btn:active { transform: translateY(1px); }
@@ -116,7 +106,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.9; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
 </style>
+@endpush
 
+@section('content')
 <div class="min-h-[100dvh]">
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">analyticshq</StxLink>
@@ -126,7 +118,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     </div>
   </header>
 
-  <main class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
+  {{-- A <div>, not <main>: the layout owns the single router container. Same classes. --}}
+  <div class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
     <h1 class="mb-6 text-2xl wordmark">Account</h1>
 
     <section class="mb-5 p-6 card">
@@ -179,8 +172,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     <p class="text-sm text-text-3">
       Signed in with a private token. <StxLink class="text-accent" to="/">Back to site</StxLink>
     </p>
-  </main>
+  </div>
 </div>
+@endsection
 
 {{-- Pre-paint guard: bounce to /login before first paint when there is no token.
 
@@ -192,7 +186,12 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     It MUST decode, not just test for presence. The session store persists through
     useLocalStorage, which JSON.stringifies -- so a signed-out token is the literal
     two-character string "" , which is truthy. Testing the raw value would let a
-    signed-out visitor straight through. --}}
+    signed-out visitor straight through.
+
+    Pushed rather than left loose. Under a layout stx sweeps orphan scripts out of the
+    page and appends them to the content section, which lands this in roughly the same
+    place by accident; @stack('scripts') in app.stx puts it there on purpose. --}}
+@push('scripts')
 <script>
 ;(function () {
   // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
@@ -220,3 +219,4 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
     window.stx.navigate('/login', { replace: true })
 })()
 </script>
+@endpush
