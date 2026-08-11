@@ -516,6 +516,29 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     sets.push('timezone = ?')
     params.push(body.timezone)
   }
+  // Email digest opt-in (#14). Read by app/Jobs/SendAnalyticsDigest.ts.
+  //
+  // It rides in `settings` rather than a column of its own, the way share_token
+  // does, so adding a preference needs no migration. 'off' DELETES the key rather
+  // than storing a falsy value: absent is what the job treats as off, so one
+  // spelling of "no mail" cannot disagree with another.
+  //
+  // Read-modify-write on a JSON blob is last-write-wins against a concurrent
+  // share-token rotation. Both are owner-only, deliberate, single-user actions, so
+  // the race needs two tabs and a coincidence; a jsonb column would be the real
+  // answer if this column ever gets a third writer.
+  if (typeof body.digest === 'string') {
+    const value = body.digest.trim().toLowerCase()
+    if (!['weekly', 'monthly', 'off'].includes(value))
+      return json({ error: 'digest must be weekly, monthly or off' }, 400)
+    const settings = await readSiteSettings(siteId)
+    if (value === 'off')
+      delete settings.digest
+    else settings.digest = value
+    sets.push('settings = ?')
+    params.push(JSON.stringify(settings))
+  }
+
   if (!sets.length)
     return json({ error: 'nothing to update' }, 400)
 

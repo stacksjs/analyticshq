@@ -22,6 +22,15 @@ export default function () {
   schedule
     .command('bun scripts/analytics/prune.ts')
     .daily()
+
+  // Per-site email digests (#14). Daily on purpose: the job decides who is due —
+  // weekly on Monday, monthly on the 1st, both UTC — rather than this file
+  // carrying one schedule per cadence. That keeps "who gets mail today" in one
+  // readable place, and makes a missed run cost a day instead of a month.
+  // Sites opt in through `settings.digest`; absent means no mail.
+  schedule
+    .job('SendAnalyticsDigest')
+    .daily()
 }
 
 process.on('SIGINT', () => {
