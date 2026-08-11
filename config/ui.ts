@@ -210,15 +210,22 @@ export default {
    */
   app: {
     head: {
-      // Present on all 32 views today. The stylesheet URL is the SUPERSET of the
-      // three variants that were in the tree (Geist 800 and Mono 600 appeared only
-      // on the marketing set), so the 5 app/auth pages gain those two weights and
-      // every page now requests one identical URL — which also means crossing the
-      // marketing/app boundary reuses the font cache entry instead of refetching.
+      // Present on all 32 views today, which is why the fonts live here and not in
+      // public/marketing.css — the 5 app/auth pages do not load that file.
+      //
+      // These three entries used to be two preconnects and a stylesheet pointing at
+      // fonts.googleapis.com. That sent every visitor's IP, User-Agent and Referer
+      // to Google on every page, /login included, which contradicted the claim
+      // /compare/google-analytics makes to the reader's face — that GA hands data to
+      // Google while ours goes "into your own PostgreSQL database, and nowhere
+      // else" — and is the exact arrangement LG München I found unlawful under GDPR
+      // in 2022. Self-hosting removes the request rather than making it cheaper.
+      //
+      // The two preconnects went with it: preconnecting to a host we no longer use
+      // is a DNS + TLS handshake for nothing, and it would still leak the visit.
       link: [
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap' },
+        { rel: 'preload', href: '/assets/fonts/geist/geist-latin.woff2', as: 'font', type: 'font/woff2', crossorigin: '' },
+        { rel: 'stylesheet', href: '/fonts.css' },
       ],
 
       /**
