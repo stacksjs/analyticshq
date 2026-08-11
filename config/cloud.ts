@@ -741,6 +741,24 @@ export const tsCloud: TsCloudConfig = {
       // logged rather than silently dropping columns.
       preStart: [
         'bun install',
+        // Re-vendor the framework defaults from the package that was just
+        // installed. `defaultsAppPath()` resolves to storage/framework/defaults
+        // (via frameworkPath -> storagePath), and the generated auto-import
+        // barrels reach into it by relative path, so THAT tree is the code that
+        // runs -- not node_modules/@stacksjs/defaults.
+        //
+        // Nothing else writes it. `bun install` advances node_modules and leaves
+        // it untouched, there is no postinstall here, and it is gitignored so a
+        // checkout never carries it. Left alone it silently pins the app to
+        // whenever it was last written: locally that was 2026-07-23, which is how
+        // /password/forgot went on answering 404 "No account found with this
+        // email address." for months after stacksjs/stacks#2214 fixed the
+        // account-enumeration leak in the shipped action. 592 files had drifted.
+        //
+        // cp rather than rsync: rsync is not guaranteed on the box. The rm makes
+        // it an exact copy rather than an overlay, so files DELETED upstream (121
+        // of them) do not linger and keep resolving.
+        'rm -rf storage/framework/defaults && mkdir -p storage/framework && cp -R node_modules/@stacksjs/defaults storage/framework/defaults',
         'mkdir -p storage/framework/runtime/production',
         'bun build --production --target=bun --packages=external app/ProductionServer.ts --outdir storage/framework/runtime/production --entry-naming serve.js',
         'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
@@ -773,7 +791,13 @@ export const tsCloud: TsCloudConfig = {
       // its own API site (a direct path to the serve/api entry).
       start: 'bun node_modules/@stacksjs/actions/dist/serve/api.js',
       port: 3025,
-      preStart: ['bun install'],
+      // Same re-vendor as `main`, and this is the site that needs it most: the
+      // API process is what resolves and runs Actions, so it is the one serving
+      // the password-reset endpoints off the vendored tree.
+      preStart: [
+        'bun install',
+        'rm -rf storage/framework/defaults && mkdir -p storage/framework && cp -R node_modules/@stacksjs/defaults storage/framework/defaults',
+      ],
       env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production' },
     },
 
