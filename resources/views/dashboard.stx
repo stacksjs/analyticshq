@@ -1303,14 +1303,16 @@ onMount(() => {
             <div class="font-semibold text-sm">Share this dashboard</div>
             <div class="mt-0.5 text-text-3 text-xs">A read-only link — anyone with it can view, but not manage, this site.</div>
           </div>
-          {{-- No @if here (a client-signal @if nested inside a server @if breaks
-              stx's @endif matching); reactive :style toggles the two states. --}}
-          <div class="flex flex-wrap gap-2 items-center" :style="shareUrl() ? 'display:flex' : 'display:none'">
+          {{-- No @if here: a client-signal @if nested inside a server @if breaks stx's
+              @endif matching. :show is the binding for this (stx-standards §7.3) and
+              carries its SSR state in the static style, per §7.1 — the element ships
+              hidden and the first effect reveals it. --}}
+          <div class="flex flex-wrap gap-2 items-center" :show="shareUrl()" style="display:none">
             <input readonly :value="shareUrl()" aria-label="Share link" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
             <button type="button" @click="copyShare" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareCopied() ? 'Copied' : 'Copy' }}</button>
             <button type="button" @click="revokeShare" :disabled="shareBusy()" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-3);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
           </div>
-          <button type="button" @click="createShare" :disabled="shareBusy()" :style="shareUrl() ? 'display:none' : 'display:inline-block;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer'">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
+          <button type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
         </div>
       </div>
     @endif
@@ -1548,7 +1550,7 @@ onMount(() => {
         <input name="value" type="number" step="any" placeholder="Value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
         <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
-      <div class="mt-2 text-xs" :style="goalError() ? 'color:#ef4444' : 'display:none'">{{ goalError() }}</div>
+      <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:#ef4444">{{ goalError() }}</div>
       @endif
     </div>
 

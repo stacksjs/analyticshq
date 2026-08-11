@@ -172,13 +172,13 @@ function pickFramework(e: Event): void {
                   <option value="next">Next.js</option>
                 </select>
               </div>
-              <pre :style="framework() === 'html' ? 'display:block' : 'display:none'">&lt;!-- analyticshq --&gt;
+              <pre :show="framework() === 'html'" style="display:none">&lt;!-- analyticshq --&gt;
 &lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :style="framework() === 'vue' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- analyticshq · add to your index.html --&gt;</span>
+              <pre :show="framework() === 'vue'" style="display:none"><span class="cmt">&lt;!-- analyticshq · add to your index.html --&gt;</span>
 &lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :style="framework() === 'react' ? 'display:block' : 'display:none'"><span class="cmt">&lt;!-- analyticshq · add to index.html (or public/index.html) --&gt;</span>
+              <pre :show="framework() === 'react'" style="display:none"><span class="cmt">&lt;!-- analyticshq · add to index.html (or public/index.html) --&gt;</span>
 &lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :style="framework() === 'nuxt' ? 'display:block' : 'display:none'"><span class="cmt">// npm i @stacksjs/ts-analytics — official Nuxt module</span>
+              <pre :show="framework() === 'nuxt'" style="display:none"><span class="cmt">// npm i @stacksjs/ts-analytics — official Nuxt module</span>
 <span class="tok">export default</span> defineNuxtConfig({
   modules: [<span class="str">'@stacksjs/ts-analytics/nuxt'</span>],
   tsAnalytics: {
@@ -186,7 +186,7 @@ function pickFramework(e: Event): void {
     apiEndpoint: <span class="str">'https://analyticshq.org'</span>,
   },
 })</pre>
-              <pre :style="framework() === 'next' ? 'display:block' : 'display:none'"><span class="tok">import</span> Script <span class="tok">from</span> <span class="str">'next/script'</span>
+              <pre :show="framework() === 'next'" style="display:none"><span class="tok">import</span> Script <span class="tok">from</span> <span class="str">'next/script'</span>
 
 &lt;Script
   src=<span class="str">"https://analyticshq.org/script.js"</span>
