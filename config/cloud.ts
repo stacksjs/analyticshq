@@ -759,6 +759,14 @@ export const tsCloud: TsCloudConfig = {
         // it an exact copy rather than an overlay, so files DELETED upstream (121
         // of them) do not linger and keep resolving.
         'rm -rf storage/framework/defaults && mkdir -p storage/framework && cp -R node_modules/@stacksjs/defaults storage/framework/defaults',
+        // And drop the generated auto-import barrels, because they are generated
+        // AGAINST the tree above by bun-plugin-auto-imports and re-exported from it
+        // by relative path. Replacing defaults/ without clearing these leaves the
+        // barrel pointing at modules the new tree no longer has — locally that was
+        // `../defaults/functions/settings/mail`, which made functions.ts fail to load
+        // whole, so every symbol it exports became "is not defined" at runtime. The
+        // plugin rewrites them on next boot; deleting is the whole fix.
+        'rm -rf storage/framework/auto-imports',
         'mkdir -p storage/framework/runtime/production',
         'bun build --production --target=bun --packages=external app/ProductionServer.ts --outdir storage/framework/runtime/production --entry-naming serve.js',
         'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
@@ -797,6 +805,14 @@ export const tsCloud: TsCloudConfig = {
       preStart: [
         'bun install',
         'rm -rf storage/framework/defaults && mkdir -p storage/framework && cp -R node_modules/@stacksjs/defaults storage/framework/defaults',
+        // And drop the generated auto-import barrels, because they are generated
+        // AGAINST the tree above by bun-plugin-auto-imports and re-exported from it
+        // by relative path. Replacing defaults/ without clearing these leaves the
+        // barrel pointing at modules the new tree no longer has — locally that was
+        // `../defaults/functions/settings/mail`, which made functions.ts fail to load
+        // whole, so every symbol it exports became "is not defined" at runtime. The
+        // plugin rewrites them on next boot; deleting is the whole fix.
+        'rm -rf storage/framework/auto-imports',
       ],
       env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production' },
     },

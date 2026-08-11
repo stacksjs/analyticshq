@@ -106,6 +106,11 @@ describe('deploy re-vendors, so a box cannot boot on a stale copy', () => {
     // one actually serving /password/forgot, so a sync on only one is a trap.
     const syncs = [...cloud.matchAll(/cp -R node_modules\/@stacksjs\/defaults storage\/framework\/defaults/g)]
     expect(syncs.length).toBe(2)
+    // And clears the generated barrels, which are re-exported FROM that tree by
+    // relative path. A fresh defaults/ under a stale auto-imports/ points at modules
+    // that no longer exist, and functions.ts then fails to load whole.
+    const barrels = [...cloud.matchAll(/rm -rf storage\/framework\/auto-imports/g)]
+    expect(barrels.length).toBe(2)
   })
 
   test('the copy is exact rather than an overlay', () => {
