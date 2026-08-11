@@ -6,12 +6,25 @@ export default {
   content: [
     './resources/views/**/*.{stx,html}',
     './resources/**/*.{stx,html}',
-    // Both of these are generated, gitignored directories — they exist after the
-    // framework has run, not in a fresh checkout. Verified to resolve: 11 view
-    // templates and 194 component templates.
-    './storage/framework/defaults/resources/views/**/*.{stx,html}',
-    './storage/framework/defaults/resources/components/**/*.{stx,html}',
-    // storage/framework/core/error-handling/src/views was here and matched nothing.
+    // Two globs pointing into storage/framework/defaults were here, scanning 346
+    // templates. They are gone because they were worse than the zero-match glob
+    // described below, not merely as bad.
+    //
+    // storage/framework/ is gitignored build output left over from before this app
+    // adopted framework-as-dependencies. Its copy of defaults/ has since diverged
+    // from the published @stacksjs/defaults — a class sorter has been run over it at
+    // some point and reordered the tokens INSIDE template expressions, so
+    // Marketing/Feature.stx reads
+    //   class="hover:opacity-100' : !isActive ? '' 'opacity-75 {{ {{ }} }} className"
+    // where the package still has the intact ternary. Scanning that harvests
+    // fragments like `'text-red-700` and `hover:opacity-100'` as class candidates.
+    //
+    // It bought nothing either way: no view in this app renders a defaults component,
+    // so none of their classes can reach the output. Measured before removing —
+    // the generated CSS contained none of opacity-75, text-red-700, bg-blue-900 or
+    // i-hugeicons, and removing the globs left every page's stylesheet byte-identical.
+    //
+    // storage/framework/core/error-handling/src/views was also here and matched nothing.
     // Adopting framework-as-dependencies removed storage/framework/core entirely, and
     // the error views did not reappear under node_modules/@stacksjs/error-handling —
     // there is no path to repoint this at. A glob that silently matches zero files is
