@@ -717,7 +717,9 @@ const showSiteSelect = ownsActive && ownedSites.length > 1
 // Assembling the tag name means the byte sequence never exists at any stage.
 const SNIPPET_TAG = `scr${'ipt'}`
 installSnippet = `<${SNIPPET_TAG} defer\n  src="https://analyticshq.org/script.js"\n  data-site="${siteId}"></${SNIPPET_TAG}>`
-// eslint-disable-next-line no-unused-vars
+// No eslint-disable here any more: activeSiteId reads as unused only while the
+// only thing consuming it is the implicit bridge, which nothing can see. The
+// defineClientPayload call at the end of this block is a real reference.
 const activeSiteId = String(siteId)
 
 const exportPayload = {
@@ -756,6 +758,27 @@ const exportPayload = {
   entryPages: entryPages.map(e => ({ path: e.path, entries: Number(e.entries || 0), visitors: Number(e.visitors || 0), bounces: Number(e.bounces || 0), bounce: Number(e.entries) ? Math.round((Number(e.bounces || 0) / Number(e.entries)) * 100) : 0 })),
   exitPages: exitPages.map(e => ({ path: e.path, exits: Number(e.exits || 0), visitors: Number(e.visitors || 0) })),
 }
+
+/**
+ * Everything this page hands to its client block, declared (#1868).
+ *
+ * Without this call the bridge is implicit: stx scrapes the client block for
+ * identifiers it cannot resolve, finds these five, and serialises whatever the
+ * server block happens to have bound to those names. That works, and it is
+ * unchecked in both directions — a rename here silently produces `undefined`
+ * over there, and the client sees `any` for all five. `stx typecheck` reported
+ * exactly that: "5 values reach this block on the implicit bridge and are
+ * untyped".
+ *
+ * Declaring them makes the set explicit and typed, so the checker can see the
+ * shape of exportPayload rather than guessing, and a name that stops existing
+ * becomes an error instead of a runtime undefined.
+ *
+ * These five and no more. Everything else the server block computes stays
+ * server-side, which is the other half of what this call is for — it is the list
+ * of what crosses, not a convenience export.
+ */
+defineClientPayload({ activeSiteId, exportPayload, liveNow, range, shareToken })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
