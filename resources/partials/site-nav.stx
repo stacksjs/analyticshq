@@ -50,9 +50,7 @@
 
       <StxLink to="/pricing" activeClass="nav-current">Pricing</StxLink>
       <StxLink to="/compare" activeClass="nav-current">Compare</StxLink>
-      {{-- /docs is served by the BunPress proxy, not by stx. A fragment fetch would
-          get a document the router cannot swap, so this one keeps the opt-out. --}}
-      <a href="/docs" data-no-router>Docs</a>
+      <StxLink to="/docs" activeClass="nav-current">Docs</StxLink>
       {{-- External host: the router declines it at shouldIntercept anyway, so
           data-no-router would be noise. --}}
       <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
@@ -85,7 +83,7 @@
         <span class="nav-menu-group">More</span>
         <StxLink to="/pricing" activeClass="nav-current">Pricing</StxLink>
         <StxLink to="/compare" activeClass="nav-current">Compare</StxLink>
-        <a href="/docs" data-no-router>Docs</a>
+        <StxLink to="/docs" activeClass="nav-current">Docs</StxLink>
         <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
         <StxLink to="/login">Log in</StxLink>
         <StxLink to="/register" class="btn primary sm">Sign up</StxLink>

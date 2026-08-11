@@ -103,7 +103,7 @@ const crumbs = [
               directly (no proxy in production-server.js; dist/docs.html is built), so
               this opt-out is a dev artefact and should go once #37 removes the proxy.
               Matches the same decision in resources/partials/site-nav.stx. --}}
-          <a class="btn ghost" href="/docs" data-no-router>Read the docs</a>
+          <StxLink class="btn ghost" to="/docs">Read the docs</StxLink>
           </div>
         </div>
       </section>
