@@ -17,6 +17,7 @@ import { db } from '@stacksjs/database'
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
+import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -1051,6 +1052,191 @@ route.delete('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
   await pgq(`DELETE FROM site_alerts WHERE id = ? AND site_id = ?`, [String(request.params.alertId), String(siteId)])
   return json({ ok: true })
 }).middleware('auth').skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Funnels (#21)
+// ---------------------------------------------------------------------------
+// Reading is a VIEWER right, unlike alerts. A funnel definition is a list of goal
+// ids and a name — it holds no delivery credential, and its results are the same
+// aggregate numbers a viewer can already reach through the goals report. Writing
+// is admin, matching goals.
+//
+// Results are counts and nothing else. See app/Analytics/funnels.ts: no identity
+// leaves the query, so "aggregate only" is a property of the SQL rather than a
+// rule someone has to remember.
+
+/** Resolve step labels, and confirm every step is a goal on THIS site. */
+async function funnelGoalNames(siteId: string, steps: string[]): Promise<Record<string, string>> {
+  if (!steps.length)
+    return {}
+  const placeholders = steps.map(() => '?').join(', ')
+  const rows = await pgq(
+    `SELECT id, name FROM goals WHERE site_id = ? AND id IN (${placeholders})`,
+    [String(siteId), ...steps],
+  )
+  const names: Record<string, string> = {}
+  for (const row of (rows ?? []) as Array<{ id: string, name: string }>)
+    names[String(row.id)] = String(row.name)
+  return names
+}
+
+function funnelOut(row: any): Record<string, unknown> {
+  return {
+    id: row.id,
+    site_id: row.site_id,
+    name: row.name,
+    scope: row.scope,
+    steps: parseSteps(row.steps),
+    created_at: row.created_at,
+  }
+}
+
+route.options('/api/sites/{siteId}/funnels', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/funnels', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const rows = await pgq(`SELECT * FROM funnels WHERE site_id = ? ORDER BY created_at DESC`, [String(siteId)])
+  return json({ funnels: (rows ?? []).map(funnelOut) })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/funnels', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+  const scope = body.scope ?? 'session'
+
+  if (!name)
+    return json({ error: 'name is required' }, 400)
+  if (!isFunnelScope(scope))
+    return json({ error: `scope must be one of ${FUNNEL_SCOPES.join(', ')}` }, 400)
+
+  const validated = validateSteps(body.steps)
+  if ('error' in validated)
+    return json({ error: validated.error }, 400)
+
+  // Every step must be a goal on THIS site. Without this an admin on one site
+  // could name another site's goal and read its conversion counts out of the
+  // funnel — the same cross-site leak the alerts endpoint closes for goal_id.
+  const names = await funnelGoalNames(siteId, validated.steps)
+  const missing = validated.steps.filter(id => !(id in names))
+  if (missing.length)
+    return json({ error: `these steps are not goals on this site: ${missing.join(', ')}` }, 404)
+
+  const count = (await pgq(`SELECT COUNT(*) AS n FROM funnels WHERE site_id = ?`, [String(siteId)]))?.[0]?.n
+  if (Number(count ?? 0) >= 20)
+    return json({ error: 'funnel limit reached (20)' }, 409)
+
+  const id = randomId()
+  const now = new Date().toISOString()
+  await pgq(
+    `INSERT INTO funnels (id, site_id, name, steps, scope, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, String(siteId), name, JSON.stringify(validated.steps), scope, now],
+  )
+  const row = (await pgq(`SELECT * FROM funnels WHERE id = ?`, [id]))?.[0]
+  return json({ funnel: funnelOut(row) }, 201)
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/funnels/{funnelId}', () => new Response(null, { status: 204, headers: CORS }))
+
+route.patch('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const funnelId = request.params.funnelId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  // Scoped by both ids, so a funnel id from another site is not reachable.
+  const existing = (await pgq(`SELECT * FROM funnels WHERE id = ? AND site_id = ? LIMIT 1`, [String(funnelId), String(siteId)]))?.[0]
+  if (!existing)
+    return json({ error: 'Funnel not found' }, 404)
+
+  const body = request.jsonBody ?? {}
+  const updates: Record<string, unknown> = {}
+
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+    if (!name)
+      return json({ error: 'name cannot be empty' }, 400)
+    updates.name = name
+  }
+
+  if (body.scope !== undefined) {
+    if (!isFunnelScope(body.scope))
+      return json({ error: `scope must be one of ${FUNNEL_SCOPES.join(', ')}` }, 400)
+    updates.scope = body.scope
+  }
+
+  if (body.steps !== undefined) {
+    const validated = validateSteps(body.steps)
+    if ('error' in validated)
+      return json({ error: validated.error }, 400)
+    const names = await funnelGoalNames(siteId, validated.steps)
+    const missing = validated.steps.filter(id => !(id in names))
+    if (missing.length)
+      return json({ error: `these steps are not goals on this site: ${missing.join(', ')}` }, 404)
+    updates.steps = JSON.stringify(validated.steps)
+  }
+
+  if (!Object.keys(updates).length)
+    return json({ error: 'nothing to update' }, 400)
+
+  updates.updated_at = new Date().toISOString()
+
+  // Column names come from the fixed set above, never the request body.
+  const columns = Object.keys(updates)
+  await pgq(
+    `UPDATE funnels SET ${columns.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND site_id = ?`,
+    [...columns.map(c => updates[c]), String(funnelId), String(siteId)],
+  )
+  const row = (await pgq(`SELECT * FROM funnels WHERE id = ?`, [String(funnelId)]))?.[0]
+  return json({ funnel: funnelOut(row) })
+}).middleware('auth').skipCsrf()
+
+route.delete('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  await pgq(`DELETE FROM funnels WHERE id = ? AND site_id = ?`, [String(request.params.funnelId), String(siteId)])
+  return json({ ok: true })
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/funnels/{funnelId}/results', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+
+  const row = (await pgq(`SELECT * FROM funnels WHERE id = ? AND site_id = ? LIMIT 1`, [String(request.params.funnelId), String(siteId)]))?.[0]
+  if (!row)
+    return json({ error: 'Funnel not found' }, 404)
+
+  const steps = parseSteps(row.steps)
+  if (steps.length < 2)
+    return json({ error: 'This funnel no longer has enough steps' }, 409)
+
+  const url = new URL(request.url)
+  const to = url.searchParams.get('endDate') ? new Date(`${url.searchParams.get('endDate')}T23:59:59.999Z`) : new Date()
+  const from = url.searchParams.get('startDate')
+    ? new Date(`${url.searchParams.get('startDate')}T00:00:00.000Z`)
+    : new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000)
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()))
+    return json({ error: 'startDate and endDate must be YYYY-MM-DD' }, 400)
+
+  const names = await funnelGoalNames(siteId, steps)
+  const result = await computeFunnel(String(siteId), steps, row.scope === 'day' ? 'day' : 'session', from, to, names)
+
+  return json({ funnel: funnelOut(row), result })
+}).middleware('auth')
 
 // ---------------------------------------------------------------------------
 // Shareable read-only links (management API)
