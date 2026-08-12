@@ -12,8 +12,10 @@
  * which is why the tracker is a static asset and `/health` lives under `/api`.
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
+import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
+import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app/Analytics/badge'
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
@@ -1382,6 +1384,193 @@ route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any)
 
   return json({ funnel: funnelOut(row), result })
 }).middleware('auth')
+
+// ---------------------------------------------------------------------------
+// Embeddable public widgets (#26)
+// ---------------------------------------------------------------------------
+// A badge or sparkline served to an <img>/<iframe> on somebody else's page, so
+// these are the only routes here without `.middleware('auth')` besides /collect.
+//
+// TWO DECISIONS THAT ARE THE WHOLE SECURITY OF THIS FEATURE
+//
+// 1. The widget token is NOT the dashboard share token. A badge lives in an
+//    <img src> in public page source, so its token is public by construction.
+//    Reusing `share_token` would mean that embedding a visitor count silently
+//    publishes the entire dashboard — every path, referrer and country — to
+//    anyone who views source. They are minted, rotated and revoked separately,
+//    and holding one grants nothing about the other.
+//
+// 2. A widget exposes TOTALS AND A DAILY SERIES, and no dimensions. Top paths on
+//    a public endpoint leak internal and unreleased URLs: /admin/project-titan,
+//    /blog/the-post-we-have-not-announced. There is no filter parameter either,
+//    which is also what keeps a public surface clear of the re-identification
+//    problem that segmenting an aggregate down to one person would create.
+//
+// Both are enforced below and asserted in tests/unit/widgets.test.ts.
+
+/** Compare two secrets without leaking their contents through timing. */
+function tokensMatch(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b)
+    return false
+  // Hashed first so the buffers are always the same length — timingSafeEqual
+  // throws on a length mismatch, and catching that would itself be a length
+  // oracle.
+  const left = createHash('sha256').update(a).digest()
+  const right = createHash('sha256').update(b).digest()
+  return timingSafeEqual(left, right)
+}
+
+/** Resolve a widget request, or the reason it was refused. */
+async function widgetSite(request: any): Promise<{ siteId: string, settings: Record<string, any> } | null> {
+  const siteId = String(request.params.siteId ?? '')
+  const token = request.query?.token
+  if (!siteId || typeof token !== 'string')
+    return null
+  const settings = await readSiteSettings(siteId)
+  if (!tokensMatch(settings.widget_token, token))
+    return null
+  return { siteId, settings }
+}
+
+/** Public widget responses are cacheable — a badge on a busy page is hammered. */
+const WIDGET_CACHE = 'public, max-age=300, s-maxage=300'
+
+/** Days a widget may look back. Bounded so a public endpoint cannot ask for everything. */
+function widgetWindow(request: any): { from: string, to: string, days: number } {
+  const raw = Number(request.query?.days ?? 30)
+  const days = Number.isFinite(raw) ? Math.min(365, Math.max(1, Math.trunc(raw))) : 30
+  const to = new Date()
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000)
+  return { from: from.toISOString(), to: to.toISOString(), days }
+}
+
+route.options('/api/sites/{siteId}/widget', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/widget', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  // Rotate on every POST, like the share token: a fresh value invalidates every
+  // badge already embedded, which is the only way to withdraw one.
+  const token = createHash('sha256').update(`${siteId}|${randomId()}|widget`).digest('hex').slice(0, 32)
+  const settings = await readSiteSettings(siteId)
+  settings.widget_token = token
+  await pgq(`UPDATE sites SET settings = ? WHERE id = ?`, [JSON.stringify(settings), String(siteId)])
+  const base = config.app?.url || ''
+  return json({
+    token,
+    badge: `${base}/public/${encodeURIComponent(String(siteId))}/badge.svg?token=${token}`,
+    summary: `${base}/api/public/${encodeURIComponent(String(siteId))}/summary?token=${token}`,
+    embed: `<img src="${base}/public/${encodeURIComponent(String(siteId))}/badge.svg?token=${token}" alt="visitors" />`,
+  })
+}).middleware('auth').skipCsrf()
+
+route.delete('/api/sites/{siteId}/widget', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  const settings = await readSiteSettings(siteId)
+  delete settings.widget_token
+  await pgq(`UPDATE sites SET settings = ? WHERE id = ?`, [JSON.stringify(settings), String(siteId)])
+  return json({ ok: true })
+}).middleware('auth').skipCsrf()
+
+/**
+ * Totals and a daily series for one site. Public, token-gated.
+ *
+ * Deliberately no dimensions and no filters — see the section header.
+ */
+route.options('/api/public/{siteId}/summary', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/public/{siteId}/summary', async (request: any) => {
+  const site = await widgetSite(request)
+  // One answer for "no such site", "no widget token" and "wrong token". A public
+  // endpoint that distinguishes them turns a site id — which is public — into a
+  // way to enumerate which sites have widgets enabled.
+  if (!site)
+    return json({ error: 'Not found' }, 404)
+
+  const { from, to, days } = widgetWindow(request)
+
+  const totals = (await pgq(
+    `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
+     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?`,
+    [site.siteId, from, to],
+  ))?.[0]
+
+  const series = await pgq(
+    `SELECT LEFT(timestamp, 10) AS day, COUNT(DISTINCT visitor_id) AS visitors
+     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY LEFT(timestamp, 10) ORDER BY day ASC`,
+    [site.siteId, from, to],
+  )
+
+  return new Response(JSON.stringify({
+    days,
+    visitors: Number(totals?.visitors ?? 0),
+    views: Number(totals?.views ?? 0),
+    series: (series ?? []).map((r: any) => ({ day: r.day, visitors: Number(r.visitors ?? 0) })),
+  }), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': WIDGET_CACHE, ...CORS },
+  })
+})
+
+/** The badge itself. Served as an image, so no CORS dance and no script. */
+route.get('/public/{siteId}/badge.svg', async (request: any) => {
+  const site = await widgetSite(request)
+  if (!site) {
+    // An SVG, not a 404 page: this is loaded by <img>, and a broken image tells
+    // whoever embedded it nothing. A badge that says so is debuggable.
+    return new Response(renderBadge({ label: 'visitors', value: 'n/a', color: '#8b8b8b' }), {
+      status: 404,
+      headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store', ...CORS },
+    })
+  }
+
+  const { from, to } = widgetWindow(request)
+  const metric = request.query?.metric === 'views' ? 'views' : 'visitors'
+
+  const row = (await pgq(
+    `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
+     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?`,
+    [site.siteId, from, to],
+  ))?.[0]
+
+  const svg = renderBadge({
+    label: sanitizeLabel(request.query?.label, metric),
+    value: formatCount(Number(row?.[metric] ?? 0)),
+    color: typeof request.query?.color === 'string' ? request.query.color : undefined,
+  })
+
+  return new Response(svg, {
+    headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': WIDGET_CACHE, ...CORS },
+  })
+})
+
+/** A standalone sparkline, for embedding next to the badge. */
+route.get('/public/{siteId}/sparkline.svg', async (request: any) => {
+  const site = await widgetSite(request)
+  if (!site) {
+    return new Response(renderSparkline([]), {
+      status: 404,
+      headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store', ...CORS },
+    })
+  }
+
+  const { from, to } = widgetWindow(request)
+  const rows = await pgq(
+    `SELECT LEFT(timestamp, 10) AS day, COUNT(DISTINCT visitor_id) AS visitors
+     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY LEFT(timestamp, 10) ORDER BY day ASC`,
+    [site.siteId, from, to],
+  )
+
+  return new Response(renderSparkline((rows ?? []).map((r: any) => Number(r.visitors ?? 0))), {
+    headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': WIDGET_CACHE, ...CORS },
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Revenue (#22)

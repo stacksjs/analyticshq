@@ -217,11 +217,21 @@ describe('the wiring a later edit could quietly loosen', () => {
     // The section is located in the RAW source, because its boundaries are
     // comments and `code()` has already removed them — then the extract is
     // stripped, so the assertion still matches code rather than prose.
+    // Bounded by the NEXT section divider, not by a named later section. The end
+    // marker here was '// Shareable read-only links', which stopped being
+    // adjacent the moment two sections were inserted between them — the slice
+    // then swallowed unrelated endpoints and failed on their legitimate use of
+    // visitor_id. A section's end is "wherever the next section starts".
     const raw = read('routes/analytics.ts')
     const start = raw.indexOf('// Funnels (#21)')
-    const end = raw.indexOf('// Shareable read-only links', start)
     expect(start, 'the funnel section marker is gone').toBeGreaterThan(-1)
-    expect(end, 'the section end marker is gone').toBeGreaterThan(start)
+
+    const divider = /^\/\/ -{10,}$/m
+    const afterHeader = start + raw.slice(start).search(divider) + 1
+    const rest = raw.slice(afterHeader)
+    const offset = rest.search(divider)
+    const end = offset === -1 ? raw.length : afterHeader + offset
+    expect(end, 'no section follows the funnels').toBeGreaterThan(start)
 
     const section = raw.slice(start, end)
       .replace(/\/\*[\s\S]*?\*\//g, '')
