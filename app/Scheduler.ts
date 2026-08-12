@@ -31,6 +31,16 @@ export default function () {
   schedule
     .job('SendAnalyticsDigest')
     .daily()
+
+  // Traffic spike/drop and threshold alerts (#24). Hourly, unlike the digest
+  // above: a collapse discovered the next morning is a post-mortem, not an alert.
+  // Hourly is also the coarsest cadence that matches the default one-hour
+  // observation window, so consecutive runs neither overlap nor leave a gap.
+  // Each alert carries its own window and cooldown, and the job skips anything
+  // inside its quiet period before it queries anything.
+  schedule
+    .job('RunAnalyticsAlerts')
+    .hourly()
 }
 
 process.on('SIGINT', () => {

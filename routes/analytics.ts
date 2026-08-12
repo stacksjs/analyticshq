@@ -15,6 +15,8 @@
 import { createHash } from 'node:crypto'
 import { db } from '@stacksjs/database'
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
+import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
+import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -762,6 +764,293 @@ route.delete('/api/sites/{siteId}/goals/{goalId}', async (request: any) => {
   // Same posture as create: authenticated + owner-scoped (requireSiteOwner).
   .middleware('auth')
   .skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Alerts (#24)
+// ---------------------------------------------------------------------------
+// Every endpoint here is ADMIN, including the list — unlike goals or members,
+// where reading is a viewer right. An alert's `channels` holds delivery secrets:
+// a Slack incoming-webhook URL is a bearer credential, and anyone holding one can
+// post into that channel as the app forever. A viewer is someone trusted to read
+// a site's numbers, which is not the same as being trusted with the owner's Slack.
+//
+// Evaluation lives in app/Analytics/alerts.ts and delivery in app/Alerts/. These
+// endpoints only validate and store.
+
+/** Bound the hourly job's work: each alert costs 1 + baseline_days queries a run. */
+const ALERT_LIMIT_PER_SITE = 20
+
+const ALERT_BOUNDS = {
+  window_minutes: { min: 5, max: 1440, fallback: 60 },
+  baseline_days: { min: 1, max: 30, fallback: 7 },
+  min_volume: { min: 0, max: 1_000_000, fallback: 20 },
+  cooldown_minutes: { min: 0, max: 43_200, fallback: 1440 },
+} as const
+
+function boundedInt(value: unknown, bound: { min: number, max: number, fallback: number }): number | null {
+  if (value == null || value === '')
+    return bound.fallback
+  const n = Number(value)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < bound.min || n > bound.max)
+    return null
+  return n
+}
+
+/**
+ * Validate a channel list, resolving each webhook URL.
+ *
+ * URLs are checked here so a typo is refused while the person is looking at the
+ * form, but this is not the check that protects the server — `postJson` runs the
+ * same guard immediately before every request, because DNS can change after a URL
+ * is stored. See app/Alerts/url-safety.ts.
+ */
+async function validateChannels(raw: unknown): Promise<{ error: string } | { channels: any[] }> {
+  if (!Array.isArray(raw) || raw.length === 0)
+    return { error: 'at least one channel is required' }
+  if (raw.length > 10)
+    return { error: 'a maximum of 10 channels is allowed' }
+
+  const channels: any[] = []
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object')
+      return { error: 'each channel must be an object' }
+    const { type, to, url } = entry as Record<string, unknown>
+
+    if (type === 'email') {
+      const address = typeof to === 'string' ? to.trim() : ''
+      if (!address.includes('@'))
+        return { error: 'email channels need a `to` address' }
+      channels.push({ type: 'email', to: address.slice(0, 255) })
+      continue
+    }
+
+    if (type === 'slack' || type === 'webhook') {
+      const target = typeof url === 'string' ? url.trim() : ''
+      if (!target)
+        return { error: `${type} channels need a \`url\`` }
+      const verdict = await checkWebhookUrl(target)
+      if (!verdict.ok)
+        return { error: verdict.reason || 'that webhook URL was refused' }
+      channels.push({ type, url: target.slice(0, 2048) })
+      continue
+    }
+
+    return { error: 'channel type must be email, slack, or webhook' }
+  }
+  return { channels }
+}
+
+/** Shape one row for the API, parsing `channels` so clients do not double-decode. */
+function alertOut(row: any): Record<string, unknown> {
+  let channels: unknown = []
+  try {
+    channels = JSON.parse(row.channels || '[]')
+  }
+  catch {
+    channels = []
+  }
+  return {
+    id: row.id,
+    site_id: row.site_id,
+    name: row.name,
+    metric: row.metric,
+    goal_id: row.goal_id ?? null,
+    condition: row.condition,
+    threshold: Number(row.threshold),
+    window_minutes: Number(row.window_minutes),
+    baseline_days: Number(row.baseline_days),
+    min_volume: Number(row.min_volume),
+    cooldown_minutes: Number(row.cooldown_minutes),
+    is_active: !!row.is_active,
+    last_fired_at: row.last_fired_at ?? null,
+    created_at: row.created_at,
+    channels,
+  }
+}
+
+route.options('/api/sites/{siteId}/alerts', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/alerts', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  const rows = await pgq(
+    `SELECT * FROM site_alerts WHERE site_id = ? ORDER BY created_at DESC`,
+    [String(siteId)],
+  )
+  return json({ alerts: (rows ?? []).map(alertOut) })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/alerts', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+  const metric = body.metric
+  const condition = body.condition
+  const threshold = Number(body.threshold)
+
+  if (!name)
+    return json({ error: 'name is required' }, 400)
+  if (!isAlertMetric(metric))
+    return json({ error: `metric must be one of ${ALERT_METRICS.join(', ')}` }, 400)
+  if (!isAlertCondition(condition))
+    return json({ error: `condition must be one of ${ALERT_CONDITIONS.join(', ')}` }, 400)
+  if (!Number.isFinite(threshold))
+    return json({ error: 'threshold must be a finite number' }, 400)
+  // A spike or drop threshold of zero or less fires on every run by definition —
+  // "notify me when traffic changes by at least nothing".
+  if (isRelative(condition) && threshold <= 0)
+    return json({ error: 'a spike or drop threshold must be a positive percentage' }, 400)
+  if (!isRelative(condition) && threshold < 0)
+    return json({ error: 'threshold must not be negative' }, 400)
+
+  const windowMinutes = boundedInt(body.window_minutes, ALERT_BOUNDS.window_minutes)
+  if (windowMinutes === null)
+    return json({ error: 'window_minutes must be between 5 and 1440' }, 400)
+  const baselineDays = boundedInt(body.baseline_days, ALERT_BOUNDS.baseline_days)
+  if (baselineDays === null)
+    return json({ error: 'baseline_days must be between 1 and 30' }, 400)
+  const minVolume = boundedInt(body.min_volume, ALERT_BOUNDS.min_volume)
+  if (minVolume === null)
+    return json({ error: 'min_volume must be a non-negative integer' }, 400)
+  const cooldown = boundedInt(body.cooldown_minutes, ALERT_BOUNDS.cooldown_minutes)
+  if (cooldown === null)
+    return json({ error: 'cooldown_minutes must be between 0 and 43200' }, 400)
+
+  // A goal id only means something for conversions, and it must belong to THIS
+  // site — otherwise an admin on one site could point an alert at another site's
+  // goal and read its conversion counts out of the notifications.
+  let goalId: string | null = null
+  if (metric === 'conversions' && body.goal_id) {
+    goalId = String(body.goal_id)
+    const owned = (await pgq(`SELECT 1 FROM goals WHERE id = ? AND site_id = ? LIMIT 1`, [goalId, String(siteId)]))?.[0]
+    if (!owned)
+      return json({ error: 'That goal does not belong to this site' }, 404)
+  }
+
+  const validated = await validateChannels(body.channels)
+  if ('error' in validated)
+    return json({ error: validated.error }, 400)
+
+  const count = (await pgq(`SELECT COUNT(*) AS n FROM site_alerts WHERE site_id = ?`, [String(siteId)]))?.[0]?.n
+  if (Number(count ?? 0) >= ALERT_LIMIT_PER_SITE)
+    return json({ error: `alert limit reached (${ALERT_LIMIT_PER_SITE})` }, 409)
+
+  const id = randomId()
+  const now = new Date().toISOString()
+  await pgq(
+    `INSERT INTO site_alerts
+       (id, site_id, name, metric, goal_id, condition, threshold, window_minutes, baseline_days, min_volume, cooldown_minutes, channels, is_active, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, String(siteId), name, metric, goalId, condition, threshold, windowMinutes, baselineDays, minVolume, cooldown, JSON.stringify(validated.channels), true, now],
+  )
+
+  const row = (await pgq(`SELECT * FROM site_alerts WHERE id = ?`, [id]))?.[0]
+  return json({ alert: alertOut(row) }, 201)
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/alerts/{alertId}', () => new Response(null, { status: 204, headers: CORS }))
+
+route.patch('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const alertId = request.params.alertId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  // Scoped by BOTH ids: an alert id from another site must not be reachable by an
+  // admin who happens to hold one here.
+  const existing = (await pgq(`SELECT * FROM site_alerts WHERE id = ? AND site_id = ? LIMIT 1`, [String(alertId), String(siteId)]))?.[0]
+  if (!existing)
+    return json({ error: 'Alert not found' }, 404)
+
+  const body = request.jsonBody ?? {}
+  const updates: Record<string, unknown> = {}
+
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+    if (!name)
+      return json({ error: 'name cannot be empty' }, 400)
+    updates.name = name
+  }
+
+  if (body.is_active !== undefined)
+    updates.is_active = !!body.is_active
+
+  if (body.threshold !== undefined) {
+    const threshold = Number(body.threshold)
+    const condition = (body.condition ?? existing.condition) as string
+    if (!Number.isFinite(threshold))
+      return json({ error: 'threshold must be a finite number' }, 400)
+    if (isAlertCondition(condition) && isRelative(condition) && threshold <= 0)
+      return json({ error: 'a spike or drop threshold must be a positive percentage' }, 400)
+    updates.threshold = threshold
+  }
+
+  if (body.condition !== undefined) {
+    if (!isAlertCondition(body.condition))
+      return json({ error: `condition must be one of ${ALERT_CONDITIONS.join(', ')}` }, 400)
+    updates.condition = body.condition
+  }
+
+  if (body.metric !== undefined) {
+    if (!isAlertMetric(body.metric))
+      return json({ error: `metric must be one of ${ALERT_METRICS.join(', ')}` }, 400)
+    updates.metric = body.metric
+  }
+
+  for (const key of ['window_minutes', 'baseline_days', 'min_volume', 'cooldown_minutes'] as const) {
+    if (body[key] === undefined)
+      continue
+    const value = boundedInt(body[key], ALERT_BOUNDS[key])
+    if (value === null)
+      return json({ error: `${key} is out of range` }, 400)
+    updates[key] = value
+  }
+
+  if (body.channels !== undefined) {
+    const validated = await validateChannels(body.channels)
+    if ('error' in validated)
+      return json({ error: validated.error }, 400)
+    updates.channels = JSON.stringify(validated.channels)
+  }
+
+  // Re-enabling or retuning an alert clears the quiet period. Otherwise an alert
+  // switched off during an incident and back on afterwards stays silent for the
+  // rest of its cooldown, which is precisely when it is wanted.
+  if (updates.is_active === true || updates.channels !== undefined || updates.threshold !== undefined)
+    updates.last_fired_at = null
+
+  if (!Object.keys(updates).length)
+    return json({ error: 'nothing to update' }, 400)
+
+  updates.updated_at = new Date().toISOString()
+
+  // Column names come from the fixed list above, never from the request body, so
+  // this interpolation cannot be steered by a caller.
+  const columns = Object.keys(updates)
+  await pgq(
+    `UPDATE site_alerts SET ${columns.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND site_id = ?`,
+    [...columns.map(c => updates[c]), String(alertId), String(siteId)],
+  )
+
+  const row = (await pgq(`SELECT * FROM site_alerts WHERE id = ?`, [String(alertId)]))?.[0]
+  return json({ alert: alertOut(row) })
+}).middleware('auth').skipCsrf()
+
+route.delete('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  await pgq(`DELETE FROM site_alerts WHERE id = ? AND site_id = ?`, [String(request.params.alertId), String(siteId)])
+  return json({ ok: true })
+}).middleware('auth').skipCsrf()
 
 // ---------------------------------------------------------------------------
 // Shareable read-only links (management API)

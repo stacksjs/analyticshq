@@ -1,0 +1,101 @@
+<script server>
+// A DOCTYPE and <html> are correct HERE and nowhere else in this repo. stx-standards
+// §3.1 forbids them in pages and components because they suppress the generated
+// document shell; an email is not served by stx, has no layout, and every client
+// expects a complete document. Same reason the styles are inline: Gmail strips
+// <style> blocks, so a shared stylesheet would silently unstyle the whole message.
+const appName = props.appName || 'analyticshq'
+const siteName = props.siteName || 'your site'
+const alertName = props.alertName || 'Alert'
+const dashboardUrl = props.dashboardUrl || '#'
+const settingsUrl = props.settingsUrl || '#'
+// Pre-formatted by app/Mail/AnalyticsAlert.ts. The template renders a headline
+// and a direction, and decides nothing: what counts as a spike, what "no
+// baseline" reads like, and which colour goes with which direction are all
+// resolved before they arrive here.
+const headline = props.headline || ''
+const detail = props.detail || ''
+const metricLabel = props.metricLabel || ''
+const observed = props.observed || '0'
+const baseline = props.baseline || ''
+const changeLabel = props.changeLabel || ''
+const windowLabel = props.windowLabel || ''
+// '#f0806c' for a drop, '#46d3c0' for a spike or a threshold crossing.
+const accent = props.accent || '#46d3c0'
+const year = props.year || new Date().getFullYear()
+</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ alertName }} on {{ siteName }}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0e0e0e; line-height: 1.6; color: #d4d4d4;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto;">
+
+          <tr>
+            <td style="text-align: center; padding-bottom: 32px;">
+              <h1 style="color: #ececec; font-size: 28px; font-weight: 600; margin: 0;">{{ appName }}</h1>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color: #1a1a1a; border-radius: 12px; padding: 40px; border-left: 3px solid {{ accent }};">
+
+              <div style="color: {{ accent }}; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px;">{{ alertName }}</div>
+              <h2 style="color: #ececec; font-size: 22px; font-weight: 600; margin: 0 0 4px;">{{ headline }}</h2>
+              <p style="color: #6d777c; font-size: 13px; margin: 0 0 28px;">{{ siteName }} &middot; {{ windowLabel }}</p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; margin-bottom: 28px;">
+                <tr>
+                  <td style="width: 50%; vertical-align: top;">
+                    <div style="color: #6d777c; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">{{ metricLabel }}</div>
+                    <div style="color: #ececec; font-size: 26px; font-weight: 700;">{{ observed }}</div>
+                    <div style="color: {{ accent }}; font-size: 12px;">{{ changeLabel }}</div>
+                  </td>
+                  @if (baseline)
+                    <td style="width: 50%; vertical-align: top;">
+                      <div style="color: #6d777c; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;">Usually</div>
+                      <div style="color: #a0a0a0; font-size: 26px; font-weight: 700;">{{ baseline }}</div>
+                      <div style="color: #6d777c; font-size: 12px;">median, same hour</div>
+                    </td>
+                  @endif
+                </tr>
+              </table>
+
+              @if (detail)
+                <p style="color: #a0a0a0; font-size: 14px; margin: 0 0 28px; padding-top: 16px; border-top: 1px solid #262626;">{{ detail }}</p>
+              @endif
+
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background-color: #46d3c0; border-radius: 8px;">
+                    <a href="{{ dashboardUrl }}" style="display: inline-block; padding: 12px 22px; color: #04201c; font-size: 15px; font-weight: 600; text-decoration: none;">Open dashboard</a>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="text-align: center; padding-top: 24px;">
+              <p style="color: #6d777c; font-size: 12px; margin: 0 0 6px;">
+                You are getting this because the &ldquo;{{ alertName }}&rdquo; alert is switched on for {{ siteName }}.
+                <a href="{{ settingsUrl }}" style="color: #46d3c0; text-decoration: none;">Change it</a>.
+              </p>
+              <p style="color: #4a4a4a; font-size: 12px; margin: 0;">&copy; {{ year }} {{ appName }}</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
