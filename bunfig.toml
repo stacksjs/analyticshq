@@ -19,6 +19,13 @@ preload = [
   "@stacksjs/env/plugin.js",
   "./tests/setup.ts",
 ]
+# Only our tests. `storage/framework/` is a gitignored copy of the @stacksjs
+# defaults package, and it ships its own *.test.ts files — so a bare `bun test`
+# swept 88 files instead of 13 and went red on a stale assertion in the
+# framework's tax-rate tests, which is not code this repo can fix. `./buddy test`
+# already scoped correctly, so the two disagreed: the gate was green and typing
+# `bun test` by hand was red.
+root = "tests"
 coverage = false
 
 [run]
