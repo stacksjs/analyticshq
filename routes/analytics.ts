@@ -19,6 +19,7 @@ import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRel
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, validateFilters } from '../app/Analytics/filters'
+import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -192,6 +193,9 @@ interface GoalRow {
   pattern: string | null
   match_type: string | null
   value: number | null
+  /** Revenue fallback when the event does not send its own amount (#22). */
+  default_amount_minor: number | string | null
+  currency: string | null
 }
 
 function matchesGoal(
@@ -394,14 +398,47 @@ route.post('/collect', async (request: any) => {
     const isPageview = event === 'pageview'
     const eventName = String(event)
     const goals = await pgq(
-      `SELECT id, type, pattern, match_type, value FROM goals WHERE site_id = ? AND is_active = true LIMIT 100`,
+      `SELECT id, type, pattern, match_type, value, default_amount_minor, currency FROM goals WHERE site_id = ? AND is_active = true LIMIT 100`,
       [String(siteId)],
     )
+
+    // Only read the site's default currency when a goal actually matched — most
+    // beacons are ordinary pageviews matching nothing, and this is the hot path.
+    let siteCurrency: string | null = null
+    if ((goals ?? []).length) {
+      const row = (await pgq(`SELECT currency FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+      siteCurrency = normalizeCurrency(row?.currency)
+    }
+
+    // Revenue sent by the event itself (#22): analyticshq('Purchase', { value: 19.99,
+    // currency: 'USD' }). Parsed once per beacon rather than per matching goal.
+    //
+    // This is as trustworthy as the site's own front end and no more — /collect is
+    // a public endpoint and the site id ships in the snippet, so anyone can post a
+    // fabricated amount. That is inherent to client-side revenue tracking and is
+    // true of every product in this category; it is written down here so nobody
+    // later mistakes these figures for accounting data.
+    const eventProps = (body.p && typeof body.p === 'object') ? body.p as Record<string, unknown> : {}
+    const eventCurrency = normalizeCurrency(eventProps.currency)
+    const eventAmountRaw = eventProps.value ?? eventProps.revenue ?? eventProps.amount
+
     for (const goal of (goals ?? []) as GoalRow[]) {
       if (!matchesGoal(goal, { isPageview, path, eventName }))
         continue
+
+      // Precedence lives in resolveConversionAmount so it can be tested without a
+      // running server: event amount over goal default, event currency over the
+      // goal's over the site's.
+      const { amountMinor, currency } = resolveConversionAmount({
+        eventAmount: eventAmountRaw,
+        eventCurrency,
+        goalDefaultMinor: goal.default_amount_minor,
+        goalCurrency: goal.currency,
+        siteCurrency,
+      })
+
       // Deterministic id + ON CONFLICT DO NOTHING => once per session per goal. Stores the
-      // goal's value and this beacon's attribution + timestamp.
+      // amount, its currency, and this beacon's attribution + timestamp.
       await db.insertOrIgnore('conversions', {
         id: conversionId(sessionId, goal.id),
         site_id: String(siteId),
@@ -409,6 +446,11 @@ route.post('/collect', async (request: any) => {
         visitor_id: visitorId,
         session_id: sessionId,
         value: goal.value ?? null,
+        // Currency is only stored alongside an amount. A currency with no amount
+        // would create rows that group into a revenue report contributing nothing,
+        // which reads as "this currency earned zero" rather than "no sale here".
+        amount_minor: amountMinor,
+        currency,
         path,
         referrer_source: source,
         utm_source: utmParam(body.utm_source),
@@ -518,7 +560,7 @@ route.get('/api/sites', async (request: any) => {
   // cannot use. It is a convenience for the UI, never the check: every endpoint
   // re-resolves the role server-side.
   const rows = await pgq(
-    `SELECT s.id, s.name, s.domains, s.timezone, s.is_active, s.created_at,
+    `SELECT s.id, s.name, s.domains, s.timezone, s.currency, s.is_active, s.created_at,
             CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
      FROM sites s
      LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
@@ -684,6 +726,22 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     sets.push('timezone = ?')
     params.push(body.timezone)
   }
+  // Default currency for revenue events that arrive without one (#22). Empty
+  // string clears it, which is not the same as omitting the field: omitting means
+  // "leave it alone", and without the distinction there is no way to unset it.
+  if (body.currency !== undefined) {
+    if (body.currency === null || body.currency === '') {
+      sets.push('currency = ?')
+      params.push(null)
+    }
+    else {
+      const currency = normalizeCurrency(body.currency)
+      if (!currency)
+        return json({ error: 'currency must be a 3-letter ISO 4217 code' }, 400)
+      sets.push('currency = ?')
+      params.push(currency)
+    }
+  }
   // Email digest opt-in (#14). Read by app/Jobs/SendAnalyticsDigest.ts.
   //
   // It rides in `settings` rather than a column of its own, the way share_token
@@ -746,7 +804,7 @@ route.get('/api/sites/{siteId}/goals', async (request: any) => {
   if (denied)
     return denied
   const rows = await pgq(
-    `SELECT id, site_id, name, type, pattern, match_type, value, is_active
+    `SELECT id, site_id, name, type, pattern, match_type, value, default_amount_minor, currency, is_active
     FROM goals WHERE site_id = ? ORDER BY created_at DESC`,
     [siteId],
   )
@@ -776,6 +834,23 @@ route.post('/api/sites/{siteId}/goals', async (request: any) => {
   if (value != null && !Number.isFinite(value))
     return json({ error: 'value must be a finite number' }, 400)
 
+  // Revenue default (#22). Stored as minor units so nothing downstream has to
+  // guess whether "50" meant dollars or cents — the ambiguity the legacy `value`
+  // column above still carries, and the reason it is left alone rather than
+  // reinterpreted.
+  const currency = body.currency == null || body.currency === '' ? null : normalizeCurrency(body.currency)
+  if (body.currency != null && body.currency !== '' && !currency)
+    return json({ error: 'currency must be a 3-letter ISO 4217 code' }, 400)
+
+  let defaultAmountMinor: number | null = null
+  if (body.default_amount != null && body.default_amount !== '') {
+    if (!currency)
+      return json({ error: 'a default_amount needs a currency' }, 400)
+    defaultAmountMinor = toMinorUnits(body.default_amount, currency)
+    if (defaultAmountMinor == null)
+      return json({ error: 'default_amount is not a valid amount' }, 400)
+  }
+
   // Cap active goals per site to bound the /collect matching loop (defense-in-depth).
   const activeCount = (await pgq(`SELECT COUNT(*) AS n FROM goals WHERE site_id = ? AND is_active = true`, [String(siteId)]))?.[0]?.n
   if (Number(activeCount ?? 0) >= 50)
@@ -792,10 +867,26 @@ route.post('/api/sites/{siteId}/goals', async (request: any) => {
     pattern,
     match_type: matchType,
     value,
+    default_amount_minor: defaultAmountMinor,
+    currency,
     is_active: true,
   }).execute()
 
-  return json({ goal: { id, site_id: String(siteId), name, type, pattern, match_type: matchType, value, is_active: true } }, 201)
+  return json({
+    goal: {
+      id,
+      site_id: String(siteId),
+      name,
+      type,
+      pattern,
+      match_type: matchType,
+      value,
+      currency,
+      default_amount_minor: defaultAmountMinor,
+      default_amount: defaultAmountMinor == null || !currency ? null : formatMinor(defaultAmountMinor, currency),
+      is_active: true,
+    },
+  }, 201)
 })
   // Management endpoint: authenticated (bearer token — CSRF-immune) AND scoped to
   // the site's owner via requireSiteOwner() in the handler.
@@ -1290,6 +1381,68 @@ route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any)
   const result = await computeFunnel(String(siteId), steps, row.scope === 'day' ? 'day' : 'session', from, to, names)
 
   return json({ funnel: funnelOut(row), result })
+}).middleware('auth')
+
+// ---------------------------------------------------------------------------
+// Revenue (#22)
+// ---------------------------------------------------------------------------
+// Totals are reported PER CURRENCY and never summed across them. Adding dollars
+// to euros needs an exchange rate, and picking one to produce a single headline
+// number would be inventing the figure — at whatever rate happened to apply on
+// whatever day, silently, in a number the customer would reconcile against their
+// own books. A site selling in one currency sees one row, which is the common
+// case and reads no worse for being a list.
+//
+// Amounts are whole minor units (cents, yen) throughout. `amount` is the decimal
+// rendering, as a STRING, because handing back 19.99 as a float reintroduces the
+// representation problem the integer storage exists to avoid.
+
+route.options('/api/sites/{siteId}/revenue', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/revenue', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const { from, to } = window(request)
+
+  // NULL currency rows are excluded rather than bucketed: a conversion with an
+  // amount but no currency is a number nobody can interpret, and showing it under
+  // a blank heading invites it to be read as the site's default.
+  const byCurrency = await pgq(
+    `SELECT currency, SUM(amount_minor) AS amount_minor, COUNT(*) AS conversions
+     FROM conversions
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+       AND amount_minor IS NOT NULL AND currency IS NOT NULL
+     GROUP BY currency ORDER BY SUM(amount_minor) DESC`,
+    [String(siteId), from, to],
+  )
+
+  const byGoal = await pgq(
+    `SELECT c.goal_id, g.name, c.currency, SUM(c.amount_minor) AS amount_minor, COUNT(*) AS conversions
+     FROM conversions c LEFT JOIN goals g ON g.id = c.goal_id
+     WHERE c.site_id = ? AND c.timestamp >= ? AND c.timestamp <= ?
+       AND c.amount_minor IS NOT NULL AND c.currency IS NOT NULL
+     GROUP BY c.goal_id, g.name, c.currency ORDER BY SUM(c.amount_minor) DESC LIMIT 50`,
+    [String(siteId), from, to],
+  )
+
+  const shape = (row: any) => ({
+    currency: String(row.currency),
+    amountMinor: Number(row.amount_minor ?? 0),
+    amount: formatMinor(Number(row.amount_minor ?? 0), String(row.currency)),
+    conversions: Number(row.conversions ?? 0),
+  })
+
+  return json({
+    range: { from, to },
+    currencies: (byCurrency ?? []).map(shape),
+    goals: (byGoal ?? []).map((row: any) => ({
+      goal_id: row.goal_id,
+      name: row.name ?? '(deleted goal)',
+      ...shape(row),
+    })),
+  })
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------
