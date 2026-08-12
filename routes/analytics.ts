@@ -18,6 +18,7 @@ import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, s
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
+import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, validateFilters } from '../app/Analytics/filters'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -70,41 +71,94 @@ function window(req: { query: Record<string, any> }): { from: string, to: string
   return { from, to }
 }
 
-// Dimensions the Stats API can filter by, mapped to their page_views column.
-// The dashboard's click-to-filter exposes the same set. Keys are the query
-// params; columns are fixed literals (never user input), so interpolating them
-// is safe — the values are always parameterized.
-const FILTER_COLUMNS: Record<string, string> = {
-  path: 'path',
-  source: 'referrer_source',
-  referrer: 'referrer',
-  country: 'country',
-  device: 'device_type',
-  browser: 'browser',
-  os: 'os',
-  utm_source: 'utm_source',
-  utm_medium: 'utm_medium',
-  utm_campaign: 'utm_campaign',
-  utm_content: 'utm_content',
-  utm_term: 'utm_term',
+/**
+ * Build the filter fragment for a request (#23).
+ *
+ * The grammar, the columns and the SQL now live in app/Analytics/filters.ts, so
+ * saved segments and live query params are the same thing rather than two
+ * spellings of it. This stays as the request-shaped adapter every report endpoint
+ * already calls, which is why they all gained operators at once.
+ *
+ * Bare `?country=US` is still equality, so every existing dashboard link and
+ * click-to-filter URL keeps working unchanged.
+ *
+ * Returns an `error` when the filters are unusable — an over-long pattern, an
+ * unknown operator — so the endpoint can answer 400 rather than pass something
+ * malformed to the database and turn it into a 500.
+ */
+function readFilters(req: { query: Record<string, any> }): { sql: string, params: unknown[], error?: string } {
+  const specs = collectFilters(req.query ?? {})
+  const validated = validateFilters(specs)
+  if ('error' in validated)
+    return { sql: '', params: [], error: validated.error }
+  return buildFilterSql(specs)
 }
 
 /**
- * Build ` AND <col> = ?` fragments + params from any filter query params present.
- * Composes with AND, matching the dashboard's filter engine, so /pages?country=US
- * &device=Mobile narrows a page_views report to that segment.
+ * Postgres SQLSTATE 2201B, `invalid_regular_expression`.
+ *
+ * Regex syntax is not validated before the query, on purpose. Postgres uses POSIX
+ * regular expressions and JavaScript does not, so pre-checking with `new RegExp`
+ * would reject valid patterns and accept invalid ones — a gate that is wrong in
+ * both directions. Postgres is the authority on what it will accept, so it is
+ * asked, and its complaint is turned into a 400 instead of an uncaught 500.
+ *
+ * The message is passed through because it describes the caller's own input
+ * ("parentheses () not balanced") and is exactly what someone editing a pattern
+ * needs to see. It reveals nothing about the data or the schema.
  */
-function readFilters(req: { query: Record<string, any> }): { sql: string, params: unknown[] } {
-  let sql = ''
-  const params: unknown[] = []
-  for (const [key, col] of Object.entries(FILTER_COLUMNS)) {
-    const v = req.query?.[key]
-    if (typeof v === 'string' && v !== '') {
-      sql += ` AND ${col} = ?`
-      params.push(v)
-    }
+function invalidPatternMessage(error: unknown): string | null {
+  const e = error as { errno?: unknown, message?: unknown }
+  if (String(e?.errno) !== '2201B')
+    return null
+  const message = String(e?.message ?? '')
+  const detail = message.replace(/^[\s\S]*?invalid regular expression:\s*/i, '').trim()
+  return detail || 'invalid pattern'
+}
+
+/**
+ * Run a report query that carries user-supplied filters.
+ *
+ * Returns rows, or a ready-to-send 400 when the failure was a bad pattern.
+ * Anything else is rethrown — a broken query of ours is not the caller's fault
+ * and must not be reported as if it were.
+ */
+async function filteredQuery(sql: string, params: unknown[]): Promise<{ rows: any[] } | { response: Response }> {
+  try {
+    return { rows: (await pgq(sql, params)) ?? [] }
   }
-  return { sql, params }
+  catch (error) {
+    const bad = invalidPatternMessage(error)
+    if (bad)
+      return { response: json({ error: `That pattern is not valid: ${bad}` }, 400) }
+    throw error
+  }
+}
+
+/**
+ * Resolve `?segment=<id>` into filters and merge the request's own on top.
+ *
+ * Loaded per request rather than cached: a segment is small, this is one indexed
+ * primary-key read, and a stale cache would show a reader the definition they
+ * just edited rather than the one they saved.
+ */
+async function readFiltersWithSegment(request: any, siteId: string): Promise<{ sql: string, params: unknown[], error?: string }> {
+  const segmentId = request.query?.segment
+  if (typeof segmentId !== 'string' || !segmentId)
+    return readFilters(request)
+
+  // Scoped by site as well as id: a segment id from another site must not narrow
+  // a report here, and must not reveal by its absence that it exists elsewhere.
+  const row = (await pgq(`SELECT filters FROM segments WHERE id = ? AND site_id = ? LIMIT 1`, [segmentId, String(siteId)]))?.[0]
+  if (!row)
+    return { sql: '', params: [], error: 'Segment not found' }
+
+  const merged = mergeFilters(parseSegmentFilters(row.filters), request.query ?? {})
+  const specs = collectFilters(merged)
+  const validated = validateFilters(specs)
+  if ('error' in validated)
+    return { sql: '', params: [], error: validated.error }
+  return buildFilterSql(specs)
 }
 
 /** Trim a UTM param to a non-empty varchar(255), or null when absent/blank. */
@@ -1239,6 +1293,163 @@ route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any)
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------
+// Saved segments (#23)
+// ---------------------------------------------------------------------------
+// A segment is a named filter combination, stored as the same key/value bag the
+// Stats API reads from the query string — so applying one is a merge, not a
+// translation. Reading is a viewer right and writing is admin, matching funnels
+// and goals: a segment holds no credential, and its results are numbers a viewer
+// already reaches.
+//
+// Apply with `?segment=<id>` on any report endpoint. Request params win over the
+// saved definition, because a segment is a starting point the reader narrows by
+// clicking, and a save that overrode the last click would feel broken.
+
+/** Validate a segment's filter bag, reusing the live grammar rather than a copy. */
+function validateSegmentFilters(raw: unknown): { error: string } | { filters: Record<string, string> } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    return { error: 'filters must be an object of filter params' }
+
+  const bag = raw as Record<string, unknown>
+  for (const [param, value] of Object.entries(bag)) {
+    if (!parseFilterKey(param))
+      return { error: `unknown filter: ${param}` }
+    if (typeof value !== 'string' || value === '')
+      return { error: `filter ${param} needs a non-empty string value` }
+  }
+
+  const specs = collectFilters(bag)
+  if (!specs.length)
+    return { error: 'a segment needs at least one filter' }
+
+  const validated = validateFilters(specs)
+  if ('error' in validated)
+    return { error: validated.error }
+
+  const filters: Record<string, string> = {}
+  for (const [param, value] of Object.entries(bag))
+    filters[param] = String(value)
+  return { filters }
+}
+
+function segmentOut(row: any): Record<string, unknown> {
+  return {
+    id: row.id,
+    site_id: row.site_id,
+    name: row.name,
+    filters: parseSegmentFilters(row.filters),
+    created_at: row.created_at,
+  }
+}
+
+route.options('/api/sites/{siteId}/segments', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/segments', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const rows = await pgq(`SELECT * FROM segments WHERE site_id = ? ORDER BY created_at DESC`, [String(siteId)])
+  return json({ segments: (rows ?? []).map(segmentOut) })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/segments', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+  if (!name)
+    return json({ error: 'name is required' }, 400)
+
+  const validated = validateSegmentFilters(body.filters)
+  if ('error' in validated)
+    return json({ error: validated.error }, 400)
+
+  const count = (await pgq(`SELECT COUNT(*) AS n FROM segments WHERE site_id = ?`, [String(siteId)]))?.[0]?.n
+  if (Number(count ?? 0) >= 50)
+    return json({ error: 'segment limit reached (50)' }, 409)
+
+  const id = randomId()
+  const now = new Date().toISOString()
+  await pgq(
+    `INSERT INTO segments (id, site_id, name, filters, created_at) VALUES (?, ?, ?, ?, ?)`,
+    [id, String(siteId), name, JSON.stringify(validated.filters), now],
+  )
+  const row = (await pgq(`SELECT * FROM segments WHERE id = ?`, [id]))?.[0]
+  return json({ segment: segmentOut(row) }, 201)
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/segments/{segmentId}', () => new Response(null, { status: 204, headers: CORS }))
+
+route.patch('/api/sites/{siteId}/segments/{segmentId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const segmentId = request.params.segmentId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const existing = (await pgq(`SELECT * FROM segments WHERE id = ? AND site_id = ? LIMIT 1`, [String(segmentId), String(siteId)]))?.[0]
+  if (!existing)
+    return json({ error: 'Segment not found' }, 404)
+
+  const body = request.jsonBody ?? {}
+  const updates: Record<string, unknown> = {}
+
+  if (body.name !== undefined) {
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 128) : ''
+    if (!name)
+      return json({ error: 'name cannot be empty' }, 400)
+    updates.name = name
+  }
+
+  if (body.filters !== undefined) {
+    const validated = validateSegmentFilters(body.filters)
+    if ('error' in validated)
+      return json({ error: validated.error }, 400)
+    updates.filters = JSON.stringify(validated.filters)
+  }
+
+  if (!Object.keys(updates).length)
+    return json({ error: 'nothing to update' }, 400)
+
+  updates.updated_at = new Date().toISOString()
+
+  // Column names come from the fixed set above, never the request body.
+  const columns = Object.keys(updates)
+  await pgq(
+    `UPDATE segments SET ${columns.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND site_id = ?`,
+    [...columns.map(c => updates[c]), String(segmentId), String(siteId)],
+  )
+  const row = (await pgq(`SELECT * FROM segments WHERE id = ?`, [String(segmentId)]))?.[0]
+  return json({ segment: segmentOut(row) })
+}).middleware('auth').skipCsrf()
+
+route.delete('/api/sites/{siteId}/segments/{segmentId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  await pgq(`DELETE FROM segments WHERE id = ? AND site_id = ?`, [String(request.params.segmentId), String(siteId)])
+  return json({ ok: true })
+}).middleware('auth').skipCsrf()
+
+/** The filter grammar itself, so a client can build a segment UI without hardcoding it. */
+route.options('/api/filters', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/filters', async () => {
+  return json({
+    dimensions: Object.keys(FILTER_COLUMNS),
+    operators: FILTER_OPS,
+    // Spelled out rather than left to a doc page that will drift from the code.
+    syntax: '<dimension>[__<operator>]=<value>, e.g. path__matches=^/blog/',
+    limits: { maxFilters: MAX_FILTERS, maxPatternLength: MAX_PATTERN_LENGTH },
+  })
+}).middleware('auth')
+
+// ---------------------------------------------------------------------------
 // Shareable read-only links (management API)
 // ---------------------------------------------------------------------------
 // The owner mints a per-site share token; anyone with `?share=<token>` gets a
@@ -1342,12 +1553,17 @@ route.get('/api/sites/{siteId}/stats', async (request: any) => {
   if (denied)
     return denied
   const { from, to } = window(request)
-  const flt = readFilters(request)
-  const row = (await pgq(
+  const flt = await readFiltersWithSegment(request, siteId)
+  if (flt.error)
+    return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const result = await filteredQuery(
     `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors, COUNT(DISTINCT session_id) AS sessions
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}`,
     [siteId, from, to, ...flt.params],
-  ))?.[0]
+  )
+  if ('response' in result)
+    return result.response
+  const row = result.rows[0]
   return json({
     views: Number(row?.views ?? 0),
     visitors: Number(row?.visitors ?? 0),
@@ -1362,14 +1578,18 @@ route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
   if (denied)
     return denied
   const { from, to } = window(request)
-  const flt = readFilters(request)
-  const rows = await pgq(
+  const flt = await readFiltersWithSegment(request, siteId)
+  if (flt.error)
+    return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const result = await filteredQuery(
     `SELECT LEFT(timestamp, 10) AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
     GROUP BY LEFT(timestamp, 10) ORDER BY day ASC`,
     [siteId, from, to, ...flt.params],
   )
-  return json({ series: rows ?? [] })
+  if ('response' in result)
+    return result.response
+  return json({ series: result.rows })
 }).middleware('auth')
 
 route.get('/api/sites/{siteId}/pages', async (request: any) => {
@@ -1378,14 +1598,18 @@ route.get('/api/sites/{siteId}/pages', async (request: any) => {
   if (denied)
     return denied
   const { from, to } = window(request)
-  const flt = readFilters(request)
-  const rows = await pgq(
+  const flt = await readFiltersWithSegment(request, siteId)
+  if (flt.error)
+    return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const result = await filteredQuery(
     `SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
     GROUP BY path ORDER BY views DESC LIMIT 20`,
     [siteId, from, to, ...flt.params],
   )
-  return json({ pages: rows ?? [] })
+  if ('response' in result)
+    return result.response
+  return json({ pages: result.rows })
 }).middleware('auth')
 
 route.get('/api/sites/{siteId}/referrers', async (request: any) => {
@@ -1394,14 +1618,18 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
   if (denied)
     return denied
   const { from, to } = window(request)
-  const flt = readFilters(request)
-  const rows = await pgq(
+  const flt = await readFiltersWithSegment(request, siteId)
+  if (flt.error)
+    return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const result = await filteredQuery(
     `SELECT referrer_source AS source, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
     GROUP BY referrer_source ORDER BY views DESC LIMIT 20`,
     [siteId, from, to, ...flt.params],
   )
-  return json({ referrers: rows ?? [] })
+  if ('response' in result)
+    return result.response
+  return json({ referrers: result.rows })
 }).middleware('auth')
 
 // Owner-gated "top <dimension>" reports over page_views, so every dashboard
@@ -1415,14 +1643,18 @@ function topDimension(path: string, column: string, key: string): void {
     if (denied)
       return denied
     const { from, to } = window(request)
-    const flt = readFilters(request)
-    const rows = await pgq(
+    const flt = await readFiltersWithSegment(request, siteId)
+    if (flt.error)
+      return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+    const result = await filteredQuery(
       `SELECT ${column} AS name, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
       FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND ${column} IS NOT NULL AND ${column} <> ''${flt.sql}
       GROUP BY ${column} ORDER BY views DESC LIMIT 20`,
       [siteId, from, to, ...flt.params],
     )
-    return json({ [key]: rows ?? [] })
+    if ('response' in result)
+      return result.response
+    return json({ [key]: result.rows })
   }).middleware('auth')
 }
 

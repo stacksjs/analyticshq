@@ -63,7 +63,16 @@ describe('guardrail: top-dimension reports are owner-gated', () => {
   test('the topDimension helper enforces auth + site ownership', () => {
     const i = analytics.indexOf('function topDimension(')
     expect(i).toBeGreaterThan(-1)
-    const block = analytics.slice(i, i + 900)
+
+    // Bounded by the helper's first registration rather than by a character
+    // count. The window here was `i + 900`, which silently stopped covering
+    // `.middleware('auth')` the moment the handler grew — a guard that reports a
+    // missing gate because the function got longer is one people fix by raising
+    // the number, and the next growth puts them back where they started.
+    const end = analytics.indexOf('\ntopDimension(', i)
+    expect(end, 'topDimension is never registered').toBeGreaterThan(i)
+
+    const block = analytics.slice(i, end)
     expect(block).toContain('requireSiteRole(request, siteId, \'viewer\')')
     expect(block).toContain('.middleware(\'auth\')')
   })
