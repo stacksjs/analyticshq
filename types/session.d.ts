@@ -88,5 +88,5 @@ interface SessionStore {
   /** Persist a fresh login; the cookie mirror follows via an effect in the store. */
   signIn: (token: string, user?: SessionUser | null, refreshToken?: string) => void
   /** Clear both stores, expire the cookie, and send the visitor to /login. */
-  signOut: () => void
+  signOut: () => Promise<void>
 }

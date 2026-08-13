@@ -26,42 +26,26 @@
 const SESSION_TOKEN_KEY = 'token'
 const SESSION_USER_KEY = 'user'
 const SESSION_REFRESH_KEY = 'refresh_token'
-const SESSION_COOKIE = 'analyticshq_token'
 
-/**
- * Reach useCookie through window.stx, and do NOT "simplify" this to a bare call.
+/*
+ * THE COOKIE IS NO LONGER THIS FILE'S JOB (#33).
  *
- * Client <script> blocks get a generated `var { useCookie, ... } = window.stx` preamble
- * from client-script.js. Store files do not: store-loader.js transpiles and concatenates
- * them without ever importing STX_RUNTIME_GLOBALS the way composable-loader.js does. So
- * inside a store only the symbols signals.js assigns to `window` directly resolve --
- * state, effect, batch, navigate, defineStore and useLocalStorage do; useCookie is one of
- * the ~34 that live solely on window.stx and is a bare ReferenceError here.
+ * There used to be a `useCookie` mirror here, kept in step with the token by an
+ * effect, because the dashboard renders owner-scoped content on the SERVER and the
+ * server cannot read localStorage.
  *
- * That failure is silent in the worst way: the ReferenceError is thrown inside the store
- * IIFE, so defineStore never completes and useStore('session') reports "Store not found"
- * somewhere else entirely. Verified in a headless browser, not by reading the bundle.
+ * As of stacks 0.70.369 (stacksjs/stacks#2306) `LoginAction` sets the auth cookie in
+ * its own response and `LogoutAction` clears it, so the very first authenticated
+ * document request already carries it. The cookie is HttpOnly, which is what makes
+ * the mirror not merely redundant but impossible: `document.cookie` cannot write it,
+ * so every write the effect made was being refused by the browser.
  *
- * RESOLVED LAZILY, and that matters. Read at module scope this was
- * `globalThis.stx.useCookie` on the store bundle's first line -- which throws
- * `Cannot read properties of undefined` if the bundle ever executes before the signals
- * runtime has populated window.stx. The router re-runs page scripts on navigation, and
- * an ordering slip there turns one missing global into a dead store on every subsequent
- * page. A sibling app hit exactly that (`Cannot destructure property 'batch' of
- * 'window.stx' as it is undefined`), so this resolves inside the factory, which cannot
- * run before defineStore itself exists, and degrades to an in-memory signal rather than
- * throwing if the global is somehow still absent.
+ * That fixes the bug the mirror was papering over. A visitor whose cookie expired
+ * while the localStorage token survived used to get a logged-in-looking dashboard
+ * with no site switcher and no setup panel, because the server could not scope the
+ * render and nothing reloaded once the mirror wrote the cookie a moment later.
+ * There is no window now: the cookie arrives with the sign-in response.
  */
-type SessionCookieOpts = { maxAge?: number, sameSite?: 'Lax' | 'Strict' | 'None', path?: string }
-type SessionCookieFn = (name: string, opts?: SessionCookieOpts) => StxSignal<string>
-
-function sessionCookieSignal(name: string, opts: SessionCookieOpts): StxSignal<string> {
-  const fn = (globalThis as any).stx?.useCookie as SessionCookieFn | undefined
-  if (fn)
-    return fn(name, opts)
-  console.warn('[session] window.stx.useCookie unavailable; the server-readable cookie will not be mirrored this render.')
-  return state('')
-}
 
 /** Re-encode a pre-migration raw value so useLocalStorage can parse it. */
 function sessionMigrateRaw(key: string): void {
@@ -105,22 +89,6 @@ defineStore('session', (): SessionStore => {
   // the signed-out gate while localStorage still held a token (#32).
   const refresh: StxSignal<string> = useLocalStorage(SESSION_REFRESH_KEY, '')
 
-  // The dashboard and account pages render owner-scoped content on the SERVER, which
-  // cannot read localStorage -- it authenticates from this cookie. useCookie owns the
-  // serialisation (path, max-age, SameSite, and Secure derived from location.protocol),
-  // which is the string four pages used to retype by hand and could drift on.
-  const mirror: StxSignal<string> = sessionCookieSignal(SESSION_COOKIE, { maxAge: 2592000, sameSite: 'Lax' })
-
-  // Keep the cookie in step with the token for the whole session rather than only at
-  // sign-in: a visitor can arrive with a token in localStorage and no cookie (it
-  // expired, or they signed in before this shipped), and the server render depends on
-  // it. This is why no page needs an "ensure the cookie exists" block any more.
-  effect(() => {
-    const t = token()
-    if (mirror() !== t)
-      mirror.set(t)
-  })
-
   function bearer(): Record<string, string> {
     const t = token()
     return t ? { Authorization: `Bearer ${t}` } : {}
@@ -128,7 +96,31 @@ defineStore('session', (): SessionStore => {
 
   // Declared up here rather than only on the returned object because authFetch calls
   // it directly when a refresh comes back refused.
-  function signOut(): void {
+  /**
+   * End the session on BOTH sides (#33).
+   *
+   * The auth cookie is HttpOnly, so clearing it is something only the server can do
+   * — `document.cookie` cannot touch it. Skipping this call would leave a signed-out
+   * visitor holding a cookie the dashboard's `<script server>` block still
+   * authenticates from, which is a worse state than the bug this change fixed: the
+   * page would say signed out while the server kept rendering their sites.
+   *
+   * Deliberately fire-and-await, not fire-and-forget: navigating first would race the
+   * `Set-Cookie` in the response against the next document request.
+   *
+   * A failure is not allowed to trap anyone in a session they asked to leave, so the
+   * local half happens regardless. The residual case is narrow and bounded — offline
+   * at the moment of sign-out leaves the cookie until it expires, which
+   * `config.auth.tokenExpiry` caps at an hour.
+   */
+  async function signOut(): Promise<void> {
+    try {
+      await fetch('/logout', { method: 'POST', headers: bearer() })
+    }
+    catch {
+      console.warn('[session] sign-out could not reach the server; the auth cookie will persist until it expires.')
+    }
+
     batch(() => {
       token.set('')
       user.set(null)
@@ -230,7 +222,7 @@ defineStore('session', (): SessionStore => {
       // viewer who has no token at all and gets a legitimate 401: neither is a reason
       // to sign anyone out, so hand the 401 back and let the caller decide.
       if (outcome === 'refused') {
-        signOut()
+        await signOut()
         return res
       }
       if (outcome === 'unavailable')

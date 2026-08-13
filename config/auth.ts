@@ -78,6 +78,31 @@ export default {
   defaultTokenName: 'auth-token',
 
   /**
+   * The auth cookie (#33).
+   *
+   * `LoginAction` sets this server-side on sign-in and `LogoutAction` clears it,
+   * both as of stacks 0.70.369 (stacksjs/stacks#2306). Naming it here is what
+   * makes the framework's writer and this app's reader agree: the dashboard's
+   * `<script server>` block authenticates from `cookies.analyticshq_token`, and
+   * before this key existed the framework wrote a different name entirely — a
+   * cookie it wrote was never one anything read.
+   *
+   * Note `defaultTokenName` above is NOT this. It is a personal-access-token
+   * label; the framework honours it as a cookie name only for apps that had
+   * renamed it before `cookie.name` existed, and warns when the label is not a
+   * legal cookie name — which a human-readable label usually is not.
+   *
+   * The cookie is HttpOnly and the framework hardcodes that, which is the right
+   * answer and the reason this change DELETED code rather than adding it: an
+   * HttpOnly cookie cannot be written from `document.cookie`, so the session
+   * store's mirror effect and the dashboard's pre-paint bootstrap were both
+   * doing work the browser was refusing to let them do.
+   */
+  cookie: {
+    name: 'analyticshq_token',
+  },
+
+  /**
    * Password reset configuration.
    */
   passwordReset: {

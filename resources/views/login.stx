@@ -42,10 +42,10 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       error.set(data.message || 'Invalid email or password.')
       return
     }
-    // signIn persists the token and user, and the store's effect mirrors the token
-    // into the analyticshq_token cookie -- which is what the SERVER reads to render
-    // the owner-scoped dashboard, so a fresh login lands on data rather than the
-    // signed-out gate. That cookie string used to be hand-written right here.
+    // signIn persists the token and user. The analyticshq_token cookie the SERVER
+    // reads to render the owner-scoped dashboard arrives with THIS response --
+    // LoginAction sets it (#33) -- so a fresh login lands on data rather than the
+    // signed-out gate. The store no longer mirrors it, and could not: it is HttpOnly.
     //
     // The third argument is the fix for #32: LoginAction has always returned a
     // refresh token and this line has always discarded it, so the access token

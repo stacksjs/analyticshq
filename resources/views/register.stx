@@ -69,9 +69,10 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     }
     catch { /* keep the register token; see above */ }
 
-    // signIn also writes the analyticshq_token cookie through the store's effect, which
-    // register never used to do -- a freshly registered visitor reached the dashboard
-    // with a token the SERVER could not see and got the signed-out gate.
+    // The analyticshq_token cookie the SERVER needs comes from the register response
+    // itself, the same way LoginAction sets it (#33). A freshly registered visitor
+    // used to reach the dashboard with a token the server could not see, and got the
+    // signed-out gate.
     session.signIn(pack.token || pack.access_token || '', pack.user ?? data.user ?? null, pack.refresh_token || '')
     navigate('/dashboard')
   }

@@ -200,7 +200,7 @@ let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
 // are rendered from the current user's OWN sites, resolved server-side from the
-// analyticshq_token cookie the client bootstrap mirrors out of localStorage.
+// analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
 let user = null
 let ownedSites = []
 let installSnippet = ''
@@ -226,9 +226,11 @@ async function loadData() {
   // appears in any SQL string here, so the blanket rewrite is safe.
   const IS_PG = ((globalThis.process && globalThis.process.env && globalThis.process.env.DB_CONNECTION) || 'postgres') === 'postgres'
   const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
-  // Server-authenticate from the analyticshq_token cookie (mirrored from localStorage by
-  // the client bootstrap at the bottom of the page), so the switcher + setup panel
-  // are scoped to the caller's OWN sites — same shape as bughq's dashboard.
+  // Server-authenticate from the analyticshq_token cookie, so the switcher + setup
+  // panel are scoped to the caller's OWN sites. LoginAction sets that cookie in its
+  // own response (#33), so it is present on the FIRST authenticated document request
+  // -- there is no longer a window where this renders unscoped and a client block
+  // reloads to fix it.
   // Read from the injected `cookies` record (serve.js:9222), not requestContext.
   // requestContext is not part of stx at all -- it is a global installed by whichever
   // server booted, and the dev and production implementations resolve it differently
@@ -823,9 +825,9 @@ const session = useStore('session') as SessionStore
 const JSON_HEADERS: Record<string, string> = { 'Content-Type': 'application/json' }
 
 function logout(): void {
-  // Clears the token and the user, expires the analyticshq_token cookie through the
-  // store's effect, and navigates -- the three things this used to do by hand, in an
-  // order that left the cookie behind if the assign fired first.
+  // Clears the token and the user, asks the SERVER to expire the analyticshq_token
+  // cookie (it is HttpOnly, so only the server can), and navigates. signOut awaits
+  // that request before navigating so the Set-Cookie is not raced (#33).
   session.signOut()
 }
 
@@ -1666,11 +1668,17 @@ onMount(() => {
 </div>
 @endsection
 
-{{-- Pre-render bootstrap: token guard + mirror the localStorage token into the
-    analyticshq_token cookie (so the <script server> block can owner-scope the switcher
-    + setup panel), reloading once on first login. Pure navigation/cookie — no DOM
-    manipulation; all interactivity is stx directives via the <script client> block
-    above.
+{{-- Pre-render token guard: send a signed-out visitor to /login before paint.
+
+    This USED to also mirror the localStorage token into the analyticshq_token cookie
+    and reload once, so the <script server> block could owner-scope the switcher and
+    setup panel. Both halves are gone (#33): stacks 0.70.369 has LoginAction set the
+    cookie in its own response, so it is present on the very first authenticated
+    document request — and the cookie is HttpOnly, so this block could not have written
+    it anyway. Every write it made was being refused by the browser.
+
+    What remains is only the redirect, which the server cannot do for us: a visitor with
+    no cookie still gets a rendered page, just without owner-scoped content.
 
     Pushed rather than left loose, for the same reason as the styles: stx's orphan sweep
     would append it to the content section, which happens to be close to where it
@@ -1693,24 +1701,6 @@ onMount(() => {
   // emits exactly what the hand-written call did (signals.js:1005-1015) -- with the
   // upgrade to a swap coming for free if this ever runs with the router up.
   if (!t) { window.stx.navigate('/login', { replace: true }); return }
-  // useCookie owns the serialisation -- path, max-age, SameSite, and Secure derived
-  // from location.protocol -- which is the attribute string this block used to retype
-  // by hand and could drift from the session store on. Reading through it also
-  // DECODES, so the comparison is against the value the server will actually see.
-  //
-  // The condition stays "absent", not "differs from t", on purpose: a mismatch test
-  // would re-enter this branch on every load if a write were ever rejected (Safari
-  // ITP, a Secure cookie on http), and the reload below makes that an infinite loop
-  // rather than a bad render.
-  var mirror = window.stx.useCookie('analyticshq_token', { maxAge: 2592000, sameSite: 'Lax' })
-  if (!mirror()) {
-    mirror.set(t)
-    // A real document load, and { reload: true } says so rather than leaving it to a
-    // bare location call: the cookie exists so the SERVER can owner-scope this render,
-    // so a fragment swap would fetch the same signed-out HTML. `replace` keeps it out
-    // of history, which is what location.reload() did.
-    window.stx.navigate(window.stx.useRoute().fullPath, { replace: true, reload: true })
-  }
 })()
 </script>
 

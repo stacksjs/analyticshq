@@ -23,8 +23,9 @@ const loading: StxSignal<boolean> = state(false)
 // that the router is not up yet -- but that is exactly what navigate() already does
 // when window.stxRouter is absent (signals.js:1005-1015), so the native call bought
 // nothing and only opted out of the upgrade if the ordering ever changes.
-// The cookie mirror that used to live here is gone -- the session store keeps the
-// cookie in step with the token through an effect, for every page at once.
+// The cookie mirror that used to live here is gone, and so is the session store's
+// effect that replaced it (#33) -- LoginAction sets the auth cookie server-side, and
+// it is HttpOnly, so no page and no store can or needs to write it.
 if (!session.isAuthed())
   navigate('/login', { replace: true })
 
