@@ -199,6 +199,60 @@ export function buildFilterSql(specs: FilterSpec[]): { sql: string, params: unkn
   return { sql, params }
 }
 
+/**
+ * How many distinct visitors a filtered report would describe (#40).
+ *
+ * Counted over `page_views`, which is the population every filterable report is
+ * drawn from — the dimensions in `FILTER_COLUMNS` are all page_views columns, so
+ * this is the same set the report itself will narrow.
+ *
+ * Returns `null` when the count cannot be established. Callers treat that as
+ * "suppress", because a guard that fails open is not a guard: a database blip
+ * would otherwise serve exactly the report this exists to withhold.
+ */
+export async function segmentPopulation(
+  siteId: string,
+  from: string,
+  to: string,
+  filter: { sql: string, params: unknown[] },
+  query: (sql: string, params: unknown[]) => Promise<any>,
+): Promise<number | null> {
+  try {
+    const rows = await query(
+      `SELECT COUNT(DISTINCT visitor_id) AS n FROM page_views
+       WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${filter.sql}`,
+      [siteId, from, to, ...filter.params],
+    )
+    const n = Number(rows?.[0]?.n)
+    return Number.isFinite(n) ? n : null
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * Should this filtered report be withheld?
+ *
+ * Pure, so the rule is testable without a database. Three things make a report
+ * safe to serve: the guard being switched off, no filters being active, or the
+ * population clearing the floor.
+ *
+ * An unfiltered report is never suppressed. "You had 3 visitors yesterday"
+ * identifies nobody, and withholding it would make a new install look broken
+ * rather than careful — the disclosure comes from narrowing, not from smallness.
+ */
+export function shouldSuppress(minimum: number, filterCount: number, population: number | null): boolean {
+  if (minimum <= 0)
+    return false
+  if (filterCount === 0)
+    return false
+  // Unknown population suppresses: see segmentPopulation on why this fails closed.
+  if (population === null)
+    return true
+  return population < minimum
+}
+
 /** The stored shape of a segment's filters: the same bag as query params. */
 export function parseSegmentFilters(raw: string | null): Record<string, string> {
   try {

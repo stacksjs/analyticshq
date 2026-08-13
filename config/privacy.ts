@@ -29,7 +29,26 @@
  * same change.
  */
 
+import process from 'node:process'
 import { retentionDays } from '../scripts/analytics/lib'
+
+/**
+ * `ANALYTICSHQ_MIN_SEGMENT_SIZE`, or 5.
+ *
+ * Deliberately NOT the same permissive rule as `retentionDays()`, where unset
+ * means "disabled". Here unset must mean "protected": a mistyped env var that
+ * silently switched the guard off would be a privacy regression that nothing
+ * reports. Only an explicit `0` disables it.
+ */
+function minSegmentSize(): number {
+  const raw = process.env.ANALYTICSHQ_MIN_SEGMENT_SIZE
+  if (raw === undefined || raw.trim() === '')
+    return 5
+  const n = Number(raw)
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0)
+    return 5
+  return n
+}
 
 export interface PrivacyConfig {
   /**
@@ -75,6 +94,32 @@ export interface PrivacyConfig {
    */
   respectDnt: boolean
 
+  /**
+   * The smallest number of distinct visitors a FILTERED report may describe (#40).
+   *
+   * Segments narrow a population before a count is taken, and every filter is
+   * individually aggregate and innocuous. Composed, they are not: on a seeded
+   * 61-visitor site, `country=IS` plus `device=tablet` matches exactly one person,
+   * and a funnel over that segment reports their complete journey. That
+   * contradicts the claim the whole product rests on — that nobody can identify
+   * an individual visitor, the site's owner included, which is the reason there
+   * is no cookie and no consent banner.
+   *
+   * So a filtered report describing fewer than this many visitors is refused
+   * rather than served. Unfiltered totals are NEVER suppressed: "you had 3
+   * visitors yesterday" identifies nobody, and hiding it would make a new install
+   * look broken rather than careful.
+   *
+   * `0` disables the check. Read from `ANALYTICSHQ_MIN_SEGMENT_SIZE`, because an
+   * operator with a stricter obligation — or a genuinely private single-user
+   * install — should be able to change it without editing source.
+   *
+   * The cost is real and worth stating: on a low-traffic site, clicking a filter
+   * can return nothing. That is the guarantee working, and the message says so,
+   * but it is a visible behaviour change rather than a silent hardening.
+   */
+  minSegmentSize: number
+
   /** Fields the tracker is permitted to collect beyond the essentials. */
   collect: {
     /**
@@ -103,6 +148,13 @@ export default {
   },
 
   respectDnt: true,
+
+  // 5 is the conventional k for this kind of disclosure control and is small
+  // enough that an ordinary site never notices it. Parsed permissively: anything
+  // unset, negative or non-numeric means "use the default" rather than silently
+  // disabling the guard — the failure mode of a typo here should be too strict,
+  // never too loose. Set it explicitly to 0 to turn the check off.
+  minSegmentSize: minSegmentSize(),
 
   collect: {
     pageTitle: false,

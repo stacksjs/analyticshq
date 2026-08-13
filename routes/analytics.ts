@@ -20,7 +20,7 @@ import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, s
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
-import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, validateFilters } from '../app/Analytics/filters'
+import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -89,12 +89,21 @@ function window(req: { query: Record<string, any> }): { from: string, to: string
  * unknown operator — so the endpoint can answer 400 rather than pass something
  * malformed to the database and turn it into a 500.
  */
-function readFilters(req: { query: Record<string, any> }): { sql: string, params: unknown[], error?: string } {
+function readFilters(req: { query: Record<string, any> }): FilterResult {
   const specs = collectFilters(req.query ?? {})
   const validated = validateFilters(specs)
   if ('error' in validated)
-    return { sql: '', params: [], error: validated.error }
-  return buildFilterSql(specs)
+    return { sql: '', params: [], count: 0, error: validated.error }
+  return { ...buildFilterSql(specs), count: specs.length }
+}
+
+/** A parsed filter set: the SQL fragment, its parameters, and how many are active. */
+interface FilterResult {
+  sql: string
+  params: unknown[]
+  /** Number of active filters. Zero means unfiltered, which is never suppressed. */
+  count: number
+  error?: string
 }
 
 /**
@@ -145,7 +154,7 @@ async function filteredQuery(sql: string, params: unknown[]): Promise<{ rows: an
  * primary-key read, and a stale cache would show a reader the definition they
  * just edited rather than the one they saved.
  */
-async function readFiltersWithSegment(request: any, siteId: string): Promise<{ sql: string, params: unknown[], error?: string }> {
+async function readFiltersWithSegment(request: any, siteId: string): Promise<FilterResult> {
   const segmentId = request.query?.segment
   if (typeof segmentId !== 'string' || !segmentId)
     return readFilters(request)
@@ -154,14 +163,47 @@ async function readFiltersWithSegment(request: any, siteId: string): Promise<{ s
   // a report here, and must not reveal by its absence that it exists elsewhere.
   const row = (await pgq(`SELECT filters FROM segments WHERE id = ? AND site_id = ? LIMIT 1`, [segmentId, String(siteId)]))?.[0]
   if (!row)
-    return { sql: '', params: [], error: 'Segment not found' }
+    return { sql: '', params: [], count: 0, error: 'Segment not found' }
 
   const merged = mergeFilters(parseSegmentFilters(row.filters), request.query ?? {})
   const specs = collectFilters(merged)
   const validated = validateFilters(specs)
   if ('error' in validated)
-    return { sql: '', params: [], error: validated.error }
-  return buildFilterSql(specs)
+    return { sql: '', params: [], count: 0, error: validated.error }
+  return { ...buildFilterSql(specs), count: specs.length }
+}
+
+/**
+ * Withhold a filtered report that would describe too few people (#40).
+ *
+ * Returns a ready-to-send response when the segment is too small, else null.
+ * `count` is how many filters are active, and it is why an unfiltered report is
+ * never suppressed: the disclosure comes from narrowing, not from smallness.
+ *
+ * 422 rather than 200-with-a-flag, deliberately. A suppressed report returned as
+ * a success carrying zeroes is indistinguishable from a real report of zero, and
+ * every client that forgot to check the flag would quietly render "0 visitors"
+ * as though it were measured. A status the client cannot ignore is the honest
+ * shape for "this exists and you may not see it".
+ *
+ * The response says the threshold. It does not say the actual population, which
+ * would hand back the very number the guard exists to withhold — "suppressed
+ * because 1" is a disclosure.
+ */
+async function suppressedResponse(siteId: string, from: string, to: string, flt: FilterResult): Promise<Response | null> {
+  const minimum = privacy.minSegmentSize
+  if (minimum <= 0 || flt.count === 0)
+    return null
+
+  const population = await segmentPopulation(String(siteId), from, to, flt, pgq)
+  if (!shouldSuppress(minimum, flt.count, population))
+    return null
+
+  return json({
+    error: `This segment matches fewer than ${minimum} visitors, so its reports are withheld to keep individuals unidentifiable.`,
+    suppressed: true,
+    minSegmentSize: minimum,
+  }, 422)
 }
 
 /** Trim a UTM param to a non-empty varchar(255), or null when absent/blank. */
@@ -1898,6 +1940,9 @@ route.get('/api/sites/{siteId}/stats', async (request: any) => {
   const flt = await readFiltersWithSegment(request, siteId)
   if (flt.error)
     return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const withheld = await suppressedResponse(siteId, from, to, flt)
+  if (withheld)
+    return withheld
   const result = await filteredQuery(
     `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors, COUNT(DISTINCT session_id) AS sessions
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}`,
@@ -1923,6 +1968,9 @@ route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
   const flt = await readFiltersWithSegment(request, siteId)
   if (flt.error)
     return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const withheld = await suppressedResponse(siteId, from, to, flt)
+  if (withheld)
+    return withheld
   const result = await filteredQuery(
     `SELECT LEFT(timestamp, 10) AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
@@ -1943,6 +1991,9 @@ route.get('/api/sites/{siteId}/pages', async (request: any) => {
   const flt = await readFiltersWithSegment(request, siteId)
   if (flt.error)
     return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const withheld = await suppressedResponse(siteId, from, to, flt)
+  if (withheld)
+    return withheld
   const result = await filteredQuery(
     `SELECT path, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
@@ -1963,6 +2014,9 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
   const flt = await readFiltersWithSegment(request, siteId)
   if (flt.error)
     return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const withheld = await suppressedResponse(siteId, from, to, flt)
+  if (withheld)
+    return withheld
   const result = await filteredQuery(
     `SELECT referrer_source AS source, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
     FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${flt.sql}
@@ -1988,6 +2042,9 @@ function topDimension(path: string, column: string, key: string): void {
     const flt = await readFiltersWithSegment(request, siteId)
     if (flt.error)
       return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+    const withheld = await suppressedResponse(siteId, from, to, flt)
+    if (withheld)
+      return withheld
     const result = await filteredQuery(
       `SELECT ${column} AS name, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
       FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND ${column} IS NOT NULL AND ${column} <> ''${flt.sql}
