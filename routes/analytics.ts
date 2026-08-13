@@ -12,6 +12,7 @@
  * which is why the tracker is a static asset and `/health` lives under `/api`.
  */
 
+import process from 'node:process'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
@@ -22,6 +23,7 @@ import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
+import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -1426,6 +1428,133 @@ route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any)
 
   return json({ funnel: funnelOut(row), result })
 }).middleware('auth')
+
+// ---------------------------------------------------------------------------
+// First-party CNAME proxying (#27)
+// ---------------------------------------------------------------------------
+// A customer points stats.their-site.com at us and the tracker loads from there,
+// so a content blocker sees a subdomain of the site being visited rather than a
+// known analytics vendor.
+//
+// The client half already worked: public/script.js derives its collect origin
+// from its own script src, so the same asset beacons back to whichever host
+// served it. What is added here is the server knowing which hostnames it has
+// agreed to answer for, and proof the customer controls them.
+//
+// Verification is not optional. The deployment issues a TLS certificate per
+// accepted domain, so an unverified field is a way to make this service request
+// certificates for domains it has no relationship with — and without it one
+// customer could claim a hostname belonging to someone else.
+//
+// TLS termination and edge routing for the customer's hostname are DEPLOYMENT
+// work and are not done here. This decides whether a domain is claimable and
+// whether DNS agrees; acting on that is the platform's job.
+
+/** The host a customer points their CNAME at. */
+function cnameTarget(): string {
+  const configured = process.env.ANALYTICSHQ_CNAME_TARGET
+  if (configured && configured.trim())
+    return configured.trim().toLowerCase()
+  try {
+    return new URL(config.app?.url || 'https://analyticshq.org').hostname.toLowerCase()
+  }
+  catch {
+    return 'analyticshq.org'
+  }
+}
+
+route.options('/api/sites/{siteId}/domain', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/domain', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+
+  const row = (await pgq(`SELECT custom_domain, custom_domain_verified_at FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+  const appUrl = config.app?.url || 'https://analyticshq.org'
+
+  return json({
+    domain: row?.custom_domain ?? null,
+    verified: !!row?.custom_domain_verified_at,
+    verified_at: row?.custom_domain_verified_at ?? null,
+    cname_target: cnameTarget(),
+    snippet: snippetFor(String(siteId), appUrl, row?.custom_domain ?? null, row?.custom_domain_verified_at ?? null),
+  })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/domain', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const shape = checkDomainShape(request.jsonBody?.domain, cnameTarget())
+  if (!shape.ok || !shape.domain)
+    return json({ error: shape.reason ?? 'That is not a valid hostname.' }, 400)
+
+  // Claimed by another site is a 409 rather than a silent overwrite: two sites on
+  // one hostname would interleave their data with no way to separate it after.
+  const taken = (await pgq(`SELECT id FROM sites WHERE custom_domain = ? AND id <> ? LIMIT 1`, [shape.domain, String(siteId)]))?.[0]
+  if (taken)
+    return json({ error: 'That hostname is already in use by another site.' }, 409)
+
+  // Stored unverified. Re-declaring an already-verified domain resets that, so a
+  // domain cannot stay marked verified after being pointed somewhere else.
+  await pgq(
+    `UPDATE sites SET custom_domain = ?, custom_domain_verified_at = NULL WHERE id = ?`,
+    [shape.domain, String(siteId)],
+  )
+
+  return json({
+    domain: shape.domain,
+    verified: false,
+    cname_target: cnameTarget(),
+    instructions: `Create a CNAME record for ${shape.domain} pointing to ${cnameTarget()}, then verify.`,
+  }, 201)
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/domain/verify', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/domain/verify', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const row = (await pgq(`SELECT custom_domain FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+  const domain = row?.custom_domain
+  if (!domain)
+    return json({ error: 'No custom domain has been declared for this site.' }, 404)
+
+  const verdict = await verifyDomainDns(String(domain), cnameTarget())
+  if (!verdict.ok) {
+    // Left declared but unverified, so the customer can fix DNS and retry without
+    // retyping — and so nothing starts trusting it in the meantime.
+    return json({ domain, verified: false, error: verdict.reason }, 422)
+  }
+
+  const now = new Date().toISOString()
+  await pgq(`UPDATE sites SET custom_domain_verified_at = ? WHERE id = ?`, [now, String(siteId)])
+
+  const appUrl = config.app?.url || 'https://analyticshq.org'
+  return json({
+    domain,
+    verified: true,
+    verified_at: now,
+    snippet: snippetFor(String(siteId), appUrl, String(domain), now),
+    note: 'DNS is correct. Serving over this hostname also requires a TLS certificate for it, which is provisioned by the deployment.',
+  })
+}).middleware('auth').skipCsrf()
+
+route.delete('/api/sites/{siteId}/domain', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+  await pgq(`UPDATE sites SET custom_domain = NULL, custom_domain_verified_at = NULL WHERE id = ?`, [String(siteId)])
+  return json({ ok: true })
+}).middleware('auth').skipCsrf()
 
 // ---------------------------------------------------------------------------
 // Embeddable public widgets (#26)

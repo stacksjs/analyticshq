@@ -1,0 +1,35 @@
+-- First-party CNAME proxying (#27).
+--
+-- NOTE ON STYLE: no semicolons in these comments. The migration runner splits
+-- the file on ";" without first stripping "--" lines, so a semicolon inside a
+-- comment ends the statement early and the rest of the sentence runs as SQL.
+--
+-- WHAT THIS IS FOR
+--
+-- Serving the tracker and /collect from the customer's own subdomain, so a
+-- content blocker sees stats.customer.com rather than a known analytics vendor.
+-- The client half already works: public/script.js derives its collect origin
+-- from its own script src, so the same asset beacons back to whichever host
+-- served it. What was missing is the server knowing which domains it has agreed
+-- to answer for, and proving the customer controls them.
+--
+-- WHY VERIFICATION IS NOT OPTIONAL
+--
+-- Without it, anyone could type any hostname into this field. That matters for
+-- two reasons: the deployment issues a TLS certificate per accepted domain, so
+-- an unverified field is a way to make us request certificates for domains we
+-- have no relationship with, and a customer could otherwise claim a domain
+-- belonging to someone else and have it appear in their dashboard as theirs.
+-- verified_at is null until a DNS lookup has shown the record actually points
+-- here, and nothing reads the domain as usable while it is null.
+--
+-- WHY THE UNIQUE INDEX
+--
+-- Two sites claiming the same hostname is not a conflict the software can
+-- resolve after the fact -- both would generate snippets pointing at one origin
+-- and their data would interleave with no way to separate it afterwards. The
+-- database refuses the second claim instead.
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "custom_domain" varchar(255);
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "custom_domain_verified_at" varchar(32);
+-- Partial, so the many sites with no custom domain do not collide on NULL.
+CREATE UNIQUE INDEX IF NOT EXISTS "sites_custom_domain" ON "sites" ("custom_domain") WHERE "custom_domain" IS NOT NULL;
