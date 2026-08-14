@@ -961,6 +961,100 @@ async function deleteGoal(id: string | number): Promise<void> {
 function shareLinkFor(token: string): string {
   return `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${token}`
 }
+// --- Google Analytics import ------------------------------------------------
+// The "one click" the marketing has been promising. The endpoint imports ONE
+// date range per request, because no queue worker runs (jobs are cron-driven),
+// so a background job would be enqueued and never picked up. The chunking lives
+// here instead: one request per calendar year, oldest first, with the progress
+// line updating between them. That keeps every request bounded and gives the
+// person something truthful to watch.
+const gaProperty: StxSignal<string> = state('')
+const gaKey: StxSignal<string> = state('')
+const gaFrom: StxSignal<string> = state('')
+const gaBusy: StxSignal<boolean> = state(false)
+const gaProgress: StxSignal<string> = state('')
+const gaResult: StxSignal<string> = state('')
+const gaWarnings: StxSignal<string[]> = state([] as string[])
+
+/** [start, end] per calendar year, so each request covers at most one. */
+function gaYearChunks(fromIso: string, toIso: string): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  const first = Number(fromIso.slice(0, 4))
+  const last = Number(toIso.slice(0, 4))
+  for (let y = first; y <= last; y++) {
+    const start = y === first ? fromIso : `${y}-01-01`
+    const end = y === last ? toIso : `${y}-12-31`
+    out.push([start, end])
+  }
+  return out
+}
+
+async function importFromGa() {
+  if (gaBusy())
+    return
+  const property = gaProperty().trim()
+  const key = gaKey().trim()
+  if (!property || !key) {
+    await stxAlert('Paste both the GA4 property id and the service-account key.')
+    return
+  }
+  // Default to the whole of GA4's existence rather than making someone pick a
+  // date: "import everything" is what people mean, and a shorter default would
+  // silently leave history behind.
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(gaFrom()) ? gaFrom() : '2015-08-14'
+  const to = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const chunks = gaYearChunks(from, to)
+
+  gaBusy.set(true)
+  gaResult.set('')
+  gaWarnings.set([])
+  let pageViews = 0
+  let sessions = 0
+  const warnings: string[] = []
+  let failure = ''
+
+  for (let i = 0; i < chunks.length; i++) {
+    const [start, end] = chunks[i]
+    gaProgress.set(`Importing ${start.slice(0, 4)} — period ${i + 1} of ${chunks.length}…`)
+    try {
+      const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/ga4`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // `replace` only on the first chunk: it clears the whole previous import,
+        // so sending it on every chunk would delete the years we just imported.
+        body: JSON.stringify({ property, key, from: start, to: end, replace: i === 0 }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        failure = d.error || 'The import failed.'
+        break
+      }
+      pageViews += Number(d.imported?.pageViews ?? 0)
+      sessions += Number(d.imported?.sessions ?? 0)
+      for (const w of (d.warnings ?? []) as string[]) {
+        // Same warning from twelve years is one warning worth reading.
+        if (!warnings.includes(w))
+          warnings.push(w)
+      }
+    }
+    catch {
+      failure = 'Could not reach the server. Some periods may have imported.'
+      break
+    }
+  }
+
+  gaBusy.set(false)
+  gaProgress.set('')
+  gaWarnings.set(warnings)
+  if (failure) {
+    gaResult.set(`${failure}${pageViews ? ` ${pageViews.toLocaleString()} page views were imported before it stopped.` : ''}`)
+    return
+  }
+  gaResult.set(pageViews
+    ? `Imported ${pageViews.toLocaleString()} page views and ${sessions.toLocaleString()} sessions. Reload to see them.`
+    : 'Google returned no data for that property and period.')
+}
+
 async function createShare() {
   if (shareBusy())
     return
@@ -1320,6 +1414,76 @@ onMount(() => {
         <div class="pb-5 px-5">
           <p class="mb-2 text-sm text-text-2">Add this tag to every page, once — inside the &lt;head&gt;:</p>
           <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installSnippet }}</pre>
+        </div>
+      </details>
+    @endif
+
+    {{-- Import from Google Analytics. Owner-only: it writes history into this
+        site and "Replace" deletes a previous import.
+
+        The key is sent, used for one token exchange, and dropped — it is never
+        stored and never logged. Said in the UI as well as in the code, because
+        the person pasting a private key into a form is entitled to know.
+
+        Client @if inside a server @if breaks stx's @endif matching, so the
+        conditional parts use :show with their SSR state in the static style
+        (stx-standards §7.1/§7.3), as the share control above does. --}}
+    @if (ownsActive)
+      <details class="mb-8 border-border panel reveal">
+        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+          <span class="font-semibold text-sm">Import from Google Analytics</span>
+          <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">GA4</span>
+        </summary>
+        <div class="pb-5 px-5">
+          <p class="mb-3 text-sm text-text-2">
+            Brings your GA4 history over directly — no CSV export. In the Google Cloud project that owns the property:
+            create a service account, download its JSON key, enable the Analytics Data API, then add that service
+            account's email as a <span class="font-medium">Viewer</span> under GA4 → Admin → Property access management.
+          </p>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="block mb-1.5 font-medium text-text-2 text-xs" for="ga-property">GA4 property id</label>
+              <input id="ga-property" x-model="gaProperty" placeholder="123456789" class="px-3 py-2 w-full text-sm mono" style="border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
+              <p class="mt-1 text-text-3 text-xs">The digits in Admin → Property details. Not the G-XXXX measurement id.</p>
+            </div>
+            <div>
+              <label class="block mb-1.5 font-medium text-text-2 text-xs" for="ga-from">Import from (optional)</label>
+              <input id="ga-from" x-model="gaFrom" placeholder="2015-08-14" class="px-3 py-2 w-full text-sm mono" style="border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
+              <p class="mt-1 text-text-3 text-xs">Leave blank to bring over everything Google still holds.</p>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="block mb-1.5 font-medium text-text-2 text-xs" for="ga-key">Service-account JSON key</label>
+            <textarea id="ga-key" x-model="gaKey" rows="4" placeholder='{"type":"service_account","project_id":"…","private_key":"…"}' class="px-3 py-2 w-full text-xs mono" style="border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)"></textarea>
+            <p class="mt-1 text-text-3 text-xs">Used once to ask Google for your data. It is never saved, never logged, and never written to the database.</p>
+          </div>
+
+          {{-- The label is STATIC and the busy state lives in the progress span
+              beside it. A reactive mustache inside the button would make stx
+              cloak it (x-cloak is display:none until hydration), and this button
+              is not conditional — hiding it until the bundle runs is all cost.
+              The cloaked elements in the share control above are conditional,
+              which is the case cloaking is for. The button and the row are kept
+              in separate elements for the same reason: a reactive child cloaks
+              its parent. --}}
+          <div class="flex flex-wrap gap-3 items-center mt-4">
+            <button type="button" @click="importFromGa" :disabled="gaBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+          </div>
+          <p class="mt-2 text-text-3 text-xs" :show="gaProgress()" style="display:none">{{ gaProgress() }}</p>
+          <p class="mt-3 text-sm text-text-2" :show="gaResult()" style="display:none">{{ gaResult() }}</p>
+
+          {{-- Warnings are shown, never folded into the success line. A partial
+              import that reads as a clean one becomes a mystery traffic drop
+              months later. --}}
+          <div class="mt-3" :show="gaWarnings().length" style="display:none">
+            <div x-for="w in gaWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, #f59e0b 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
+          </div>
+
+          <p class="mt-4 text-text-3 text-xs">
+            GA4 only exposes daily aggregates, so individual visits cannot be recovered by anyone. We recreate page views
+            and sessions that reproduce your daily totals, which is why imported days show even traffic through the day.
+            Re-importing the same period replaces it rather than doubling it.
+          </p>
         </div>
       </details>
     @endif

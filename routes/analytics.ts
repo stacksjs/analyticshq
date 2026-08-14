@@ -25,6 +25,8 @@ import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
 import { buildReport, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
+import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
+import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -1977,6 +1979,132 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
     minimum: VITALS_MIN_SAMPLES,
   })
 }).middleware('auth')
+
+// ---------------------------------------------------------------------------
+// Google Analytics (GA4) import, straight from the Data API
+// ---------------------------------------------------------------------------
+// The site has been promising "1 click ... without a spreadsheet or a migration
+// project" while the only importer was a CLI that reads a CSV a human exported.
+// This is the path that makes that true.
+//
+// THE KEY IS NEVER PERSISTED. It arrives in the request body, is used for one
+// token exchange, and goes out of scope. It is not written to the database, not
+// logged, and not echoed in an error — `redactKey` scrubs Google's own error
+// bodies, which can quote parts of a malformed assertion back at us. If a future
+// change wants to "remember the connection", that is a stored Google credential
+// and needs its own decision, not a quiet addition here.
+//
+// ONE RANGE PER REQUEST, and the caller iterates.
+//
+// There is no queue worker running (app/Scheduler.ts drives jobs on a cron; the
+// worker in config/cloud.ts is commented out), so a background job would be
+// enqueued and never picked up — worse than synchronous, because it would look
+// like it worked. So the request does the work, and the range is bounded so the
+// work fits in a request. The dashboard walks the range a year at a time and
+// shows progress, which is where the "one click" actually lives.
+//
+// The cap is REPORTED, never silent: a partial import that claims success shows
+// up later as a traffic drop that never happened, and nobody would think to
+// blame the importer.
+
+/** Page views one request will synthesize before it stops and says so. */
+const GA4_MAX_ROWS_PER_REQUEST = 50_000
+
+route.options('/api/sites/{siteId}/import/ga4', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
+  const siteId = request.params.siteId
+  // Owner, not admin: this writes history into the site's own tables, and
+  // `replace` deletes a previous import.
+  const denied = await requireSiteOwner(request, siteId)
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  const parsed = parseServiceAccountKey(typeof body.key === 'string' ? body.key : '')
+  if ('error' in parsed)
+    return json({ error: parsed.error }, 400)
+  if (!normalizePropertyId(String(body.property ?? '')))
+    return json({ error: 'The property id must be the numeric GA4 id (the digits in "properties/123456789").' }, 400)
+
+  const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  if (body.from !== undefined && !isDate(body.from))
+    return json({ error: 'from must be YYYY-MM-DD.' }, 400)
+  if (body.to !== undefined && !isDate(body.to))
+    return json({ error: 'to must be YYYY-MM-DD.' }, 400)
+
+  let history: Awaited<ReturnType<typeof fetchGa4History>>
+  try {
+    history = await fetchGa4History({
+      propertyId: String(body.property),
+      key: parsed.key,
+      startDate: body.from as string | undefined,
+      endDate: body.to as string | undefined,
+    })
+  }
+  catch (err) {
+    // Already redacted in ga4.ts. 502 rather than 500: the failure is Google's
+    // answer (a bad key, no access to the property), not ours, and the message
+    // is the actionable part.
+    return json({ error: (err as Error).message }, 502)
+  }
+
+  if (body.replace === true) {
+    await pgq(`DELETE FROM page_views WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${GA_PAGE_VIEW_PREFIX}%`]).catch(() => {})
+    await pgq(`DELETE FROM sessions WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${GA_SESSION_PREFIX}%`]).catch(() => {})
+  }
+
+  const now = new Date()
+  let pageViews = 0
+  let sessions = 0
+  let capped = false
+  let sessBuf: Record<string, unknown>[] = []
+  let pvBuf: Record<string, unknown>[] = []
+
+  const flush = async (): Promise<void> => {
+    // Sessions first: page_views.session_id has a foreign key to it.
+    const s = buildInsert('sessions', sessBuf)
+    if (s)
+      await db.unsafe(s.sql, s.params)
+    const p = buildInsert('page_views', pvBuf)
+    if (p)
+      await db.unsafe(p.sql, p.params)
+    sessBuf = []
+    pvBuf = []
+  }
+
+  for (const record of history.records) {
+    if (pageViews >= GA4_MAX_ROWS_PER_REQUEST) {
+      capped = true
+      break
+    }
+    const rows = synthesizeRecord(String(siteId), record, now)
+    sessBuf.push(...rows.sessions)
+    pvBuf.push(...rows.pageViews)
+    sessions += rows.sessions.length
+    pageViews += rows.pageViews.length
+    if (pvBuf.length >= 2000)
+      await flush()
+  }
+  await flush()
+
+  // Every way this import can be incomplete, named. The dashboard shows these
+  // verbatim rather than reducing them to a success tick.
+  const warnings = importWarnings({
+    capped,
+    truncated: history.truncated,
+    other: history.other,
+    maxRows: GA4_MAX_ROWS_PER_REQUEST,
+  })
+
+  return json({
+    ok: true,
+    imported: { pageViews, sessions, records: history.records.length },
+    googleRows: history.rowCount,
+    skipped: history.skipped,
+    warnings,
+  })
+}).middleware('auth').skipCsrf()
 
 // ---------------------------------------------------------------------------
 // Saved segments (#23)
