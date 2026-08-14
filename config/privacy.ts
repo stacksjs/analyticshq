@@ -130,6 +130,18 @@ export interface PrivacyConfig {
     pageTitle: boolean
     /** Screen dimensions — a passive fingerprinting vector. Removed in #10. */
     screenSize: boolean
+    /**
+     * Core Web Vitals (#41). ON, unlike the two above, and the difference is the
+     * point: LCP/INP/CLS are timings the browser already computed to render the
+     * page. Nothing about the person is read, nothing is written to the device,
+     * and the stored row is a number plus a path.
+     *
+     * Unlike `pageTitle` and `screenSize` — which describe columns #10 removed
+     * and are documentation rather than switches — this one is enforced, in
+     * /collect. An operator can turn the whole feature off here without editing
+     * every site's snippet; a single site opts out with data-vitals="false".
+     */
+    webVitals: boolean
   }
 }
 
@@ -159,5 +171,6 @@ export default {
   collect: {
     pageTitle: false,
     screenSize: false,
+    webVitals: true,
   },
 } satisfies PrivacyConfig

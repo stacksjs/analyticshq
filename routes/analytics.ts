@@ -24,6 +24,7 @@ import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps 
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
+import { buildReport, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -308,6 +309,50 @@ route.post('/collect', async (request: any) => {
   // Per-site-per-day secret, not the UTC date (#9). Memoised per site-day, so
   // this is a database round-trip once a day, not once a beacon.
   const visitorId = hashVisitor(ip, ua, String(siteId), await getDailySalt(String(siteId)))
+
+  // Core Web Vitals (#41), handled here and returned early.
+  //
+  // BEFORE the sessionization block on purpose. Vitals arrive as a second beacon
+  // on every page view, so this path is now half of all ingest traffic — and it
+  // needs no session: nothing in the vitals reports groups by one. Falling
+  // through would spend an indexed SELECT per beacon computing a value that is
+  // then discarded.
+  //
+  // It also must not reach the goal matcher below. A site is free to name a goal
+  // "vitals", and a speed measurement silently recording a conversion would be a
+  // very hard thing to explain from the dashboard.
+  if (body.e === 'vitals') {
+    // Operator kill switch. 204 rather than an error for the same reason the bot
+    // and GPC paths do: the tracker ignores the body, and anything else invites
+    // a retry of a beacon we have decided not to keep.
+    if (!privacy.collect.webVitals)
+      return new Response(null, { status: 204, headers: CORS })
+    const samples = parseVitalsPayload(body.p)
+    if (!samples.length)
+      return new Response(null, { status: 204, headers: CORS })
+    let vpath = '/'
+    try {
+      vpath = clip255(new URL(String(body.u)).pathname) ?? '/'
+    }
+    catch { /* keep '/' for a malformed or absent url */ }
+    const vnow = new Date().toISOString()
+    // Same self-registration as the pageview path: web_vitals FKs to sites, so a
+    // site whose very first beacon is a vitals one would fail the constraint.
+    await db.insertOrIgnore('sites', { id: String(siteId), created_at: vnow }).catch(() => {})
+    // Raw INSERT, like segments and alerts, because web_vitals deliberately has
+    // no model — see the note on the read routes below. One multi-row statement
+    // rather than a loop: this fires on every page view, and five round-trips
+    // where one will do is five times the ingest latency.
+    if (samples.length) {
+      const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?)`).join(', ')
+      const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow])
+      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp) VALUES ${placeholders}`, params)
+        // Never 500 the public beacon, matching every other insert on this path.
+        .catch(() => {})
+    }
+    return new Response(null, { status: 204, headers: CORS })
+  }
+
   // Server-side sessionization (no client storage → cookieless/consent-free, the point of a
   // privacy-first tracker): a session is one anonymous visitor's activity within a rolling
   // 30-minute inactivity window. Primary path: reuse the session id from this visitor's most
@@ -1806,6 +1851,134 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------
+// Core Web Vitals (#41)
+// ---------------------------------------------------------------------------
+// p75 per metric, which is the convention every other tool reports and the one
+// Search Console grades against — so our number and Google's answer the same
+// question rather than inviting the owner to reconcile two.
+//
+// NOT FILTERABLE, and the response says so rather than pretending. web_vitals
+// stores the metric, the path and the timestamp; it deliberately carries no
+// country, device or browser, so a `device=Mobile` filter has nothing to narrow.
+// Silently returning unfiltered vitals under an active filter would be the worst
+// option available — the numbers would look filtered and be read as filtered —
+// so `filterable: false` travels with every response and the dashboard panel
+// says it out loud.
+//
+// Adding a device breakdown later is additive (a column plus a GROUP BY) and is
+// the obvious next step, since "is my site slow on mobile" is the question
+// people actually have. It is out of scope here because a first cut that
+// answers "is my site slow" correctly beats one that answers more, later.
+//
+// THERE IS NO WebVital MODEL, deliberately — as with segments, funnels and
+// alerts, which are all hand-written SQL. A model here is actively harmful: the
+// generator maps `schema.number()` to `integer`, and an integer `value` floors
+// CLS (a ratio of 0.05–0.25) to 0. That is precisely the bug the float column
+// exists to prevent, and it would arrive silently on any database built from the
+// generated migration rather than the one in database/migrations.
+
+const VITALS_MIN_SAMPLES = privacy.minSegmentSize
+
+route.options('/api/sites/{siteId}/vitals', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/vitals', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const { from, to } = window(request)
+
+  // percentile_disc is nearest-rank: it returns a value some visitor actually
+  // measured, matching app/Analytics/vitals.ts:percentile and CrUX. percentile_cont
+  // would interpolate and report a duration nobody experienced.
+  const totals = await pgq(
+    `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
+     FROM web_vitals
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY metric`,
+    [String(siteId), from, to],
+  )
+
+  // Per-path, for the "which page regressed" question. One metric at a time
+  // because a table of five percentiles per path is unreadable, and LCP is the
+  // one most likely to be page-specific.
+  const pathMetric = isVitalMetric(request.query?.metric) ? String(request.query.metric) : 'LCP'
+  const byPath = await pgq(
+    `SELECT path, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
+     FROM web_vitals
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?
+     GROUP BY path
+     HAVING COUNT(*) >= ?
+     ORDER BY COUNT(*) DESC LIMIT 20`,
+    // The floor is applied in SQL here rather than after the fact: a path under
+    // it must not occupy one of the 20 slots, or a busy site's report could come
+    // back full of rows that are all withheld.
+    [String(siteId), from, to, pathMetric, Math.max(1, VITALS_MIN_SAMPLES)],
+  )
+
+  return json({
+    range: { from, to },
+    metrics: buildReport((totals ?? []) as any[], VITALS_MIN_SAMPLES),
+    thresholds: VITAL_THRESHOLDS,
+    pages: {
+      metric: pathMetric,
+      rows: (byPath ?? []).map((row: any) => ({
+        path: String(row.path),
+        value: Number(row.p75),
+        samples: Number(row.samples ?? 0),
+      })),
+    },
+    // Stated, not implied. See the note above this route.
+    filterable: false,
+    minimum: VITALS_MIN_SAMPLES,
+  })
+}).middleware('auth')
+
+route.options('/api/sites/{siteId}/vitals-trends', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const { from, to } = window(request)
+  const metric = isVitalMetric(request.query?.metric) ? String(request.query.metric) : 'LCP'
+
+  // Timestamps are ISO-8601 varchars, so the first 10 chars are the UTC date —
+  // the same SUBSTRING grouping the other daily reports in this file use, rather
+  // than a cast that would forfeit the index.
+  const rows = await pgq(
+    `SELECT SUBSTRING(timestamp FROM 1 FOR 10) AS day,
+            percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75,
+            COUNT(*) AS samples
+     FROM web_vitals
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?
+     GROUP BY 1 ORDER BY 1`,
+    [String(siteId), from, to, metric],
+  )
+
+  // A day under the floor is dropped from the series rather than plotted as a
+  // gap-filled zero: a chart that dips to 0 reads as "the site got fast", which
+  // is the opposite of "we do not know".
+  const days = (rows ?? [])
+    .filter((row: any) => VITALS_MIN_SAMPLES <= 0 || Number(row.samples ?? 0) >= VITALS_MIN_SAMPLES)
+    .map((row: any) => ({
+      day: String(row.day),
+      value: Number(row.p75),
+      samples: Number(row.samples ?? 0),
+    }))
+
+  return json({
+    range: { from, to },
+    metric,
+    threshold: VITAL_THRESHOLDS[metric as keyof typeof VITAL_THRESHOLDS],
+    days,
+    filterable: false,
+    minimum: VITALS_MIN_SAMPLES,
+  })
+}).middleware('auth')
+
+// ---------------------------------------------------------------------------
 // Saved segments (#23)
 // ---------------------------------------------------------------------------
 // A segment is a named filter combination, stored as the same key/value bag the
@@ -2012,8 +2185,12 @@ route.delete('/api/sites/{siteId}/share', async (request: any) => {
 // Data deletion / erasure (management API)
 // ---------------------------------------------------------------------------
 // Operator + GDPR erasure. Owner-scoped. Visitor-level analytics live in these
-// four tables (all keyed by site_id, and by the pseudonymous visitor_id).
-const EVENT_TABLES = ['page_views', 'sessions', 'custom_events', 'conversions'] as const
+// five tables (all keyed by site_id, and by the pseudonymous visitor_id).
+//
+// web_vitals carries a visitor_id for this reason alone — nothing reads it, and
+// no vitals report groups by one. It is there so that this list can stay the
+// complete answer to "delete everything you hold about this visitor" (#41).
+const EVENT_TABLES = ['page_views', 'sessions', 'custom_events', 'conversions', 'web_vitals'] as const
 
 /** Delete rows from every event table for a site, optionally scoped to one
  * visitor. Returns per-table deleted counts (via RETURNING). */

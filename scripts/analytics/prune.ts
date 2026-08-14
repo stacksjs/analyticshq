@@ -20,6 +20,9 @@ const TABLES: [table: string, column: string][] = [
   ['sessions', 'started_at'],
   ['custom_events', 'timestamp'],
   ['conversions', 'timestamp'],
+  // One row per metric per page view, so this is the highest-volume table here
+  // and the one retention matters most for (#41).
+  ['web_vitals', 'timestamp'],
 ]
 
 const args = parseArgs()

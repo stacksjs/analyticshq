@@ -12,6 +12,10 @@
 // rewrites it to `const { ... } = await import(...)` and adds the export line, so
 // the hand-rolled `await import()` form buys nothing and loses that.
 import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
+// Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
+// .ts module for the same reason the formatters above do.
+import { buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
+import privacy from '../../config/privacy'
 
 
 // The serve layer injects the parsed query string onto the render context as `query`,
@@ -196,6 +200,9 @@ let outboundLinks = []
 let fileDownloads = []
 let entryPages = []
 let exitPages = []
+// Core Web Vitals (#41). Always the full five metrics — buildReport pads the ones
+// with no samples, so the panel can distinguish "no data yet" from "withheld".
+let vitals = []
 let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
@@ -387,6 +394,17 @@ async function loadData() {
       SELECT path, visitor_id, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp DESC, id DESC) AS rn
       FROM page_views WHERE ${sessionFilter}
     ) t WHERE t.rn = 1 GROUP BY path ORDER BY exits DESC LIMIT 8`, sessionP)) ?? []
+  // Core Web Vitals (#41). Site + range ONLY — deliberately NOT `filter`.
+  //
+  // web_vitals carries no country/device/browser column, so there is nothing for a
+  // dimension filter to narrow. Passing `filter` here would append predicates on
+  // columns that do not exist and error the whole render; passing `p` without the
+  // filter SQL would bind the wrong number of parameters. The panel says it is
+  // unfiltered rather than leaving the reader to assume otherwise.
+  vitals = buildReport((await pgq(
+    `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
+     FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY metric`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
   referrers = (await pgq(
     `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source ORDER BY views DESC LIMIT 8`, p)) ?? []
   // Top referrers: the actual referring URLs (full referrer), distinct from the normalized
@@ -540,6 +558,10 @@ try {
     fileDownloads = preloaded.fileDownloads ?? []
     entryPages = preloaded.entryPages ?? []
     exitPages = preloaded.exitPages ?? []
+    // buildReport over an empty list still yields the five metrics at 0 samples,
+    // so a host that prefetches without vitals gets "no data yet" rather than a
+    // missing panel.
+    vitals = preloaded.vitals ?? buildReport([], privacy.minSegmentSize)
     live = true
     // A host that prefetches + injects `preloaded` has already authorized the view.
     viewGranted = true
@@ -555,6 +577,20 @@ catch {
   // Database not reachable yet - render the empty state.
   live = false
 }
+
+// If loadData threw (no database yet) vitals is still the initial [], which would
+// render a panel with no rows at all rather than the five "no data yet" ones.
+// Padding here covers every path out of the try/catch above with one line.
+if (!vitals.length)
+  vitals = buildReport([], privacy.minSegmentSize)
+
+// Whether the reader is looking at a narrowed view. The vitals panel is the one
+// report that cannot honour a filter, so it has to say so exactly when one is on.
+const vitalsFiltered = activeFilters.length > 0
+// Surfaced so a withheld metric can say "3 of 5" rather than only "too few" --
+// an owner who cannot tell how far off the threshold is has no way to know
+// whether waiting a day fixes it.
+const minSegmentSize = privacy.minSegmentSize
 
 const maxPage = pages.reduce((m, p) => Math.max(m, Number(p.views || 0)), 0) || 1
 const maxEntry = entryPages.reduce((m, e) => Math.max(m, Number(e.entries || 0)), 0) || 1
@@ -1417,6 +1453,54 @@ onMount(() => {
 
       {{-- Top sources --}}
       <BreakdownPanel title="Top sources" :rows="referrers" labelKey="source" valueKey="views" :max="maxRef" filterKey="source" empty="No sources yet." />
+    </div>
+
+    {{-- Core Web Vitals (#41). Directly under the pages report because that
+        adjacency is the specific thing /features/web-vitals promises: "a
+        regression on a high-traffic page is obvious, because the vitals are one
+        click from the pages report".
+
+        p75, the field-data convention and what Search Console grades against.
+        Colours are inline hex rather than utility classes, matching the KPI
+        deltas above -- a class only ever referenced from a dynamic binding does
+        not survive crosswind's scan and renders unstyled. --}}
+    <div class="mt-6 p-5 panel reveal">
+      <div class="flex flex-wrap gap-2 items-baseline justify-between mb-4">
+        <h2 class="font-semibold text-text-3 text-xs tracking-wider uppercase">Core Web Vitals</h2>
+        <span class="text-text-3 text-xs">
+          75th percentile of real visits
+          @if (vitalsFiltered)
+            {{-- Said out loud rather than left to be assumed. Vitals are stored
+                with the metric, the path and the time and nothing else, so there
+                is no dimension for the active filter to narrow. --}}
+            · <span style="color: #f59e0b">not affected by the active filter</span>
+          @endif
+        </span>
+      </div>
+      <div class="grid gap-4 grid-cols-2 md:grid-cols-5">
+        @foreach (vitals as v)
+          <div>
+            <div class="flex gap-1.5 items-baseline">
+              <span class="font-medium text-text-3 text-xs tracking-wider uppercase">{{ v.metric }}</span>
+              @if (v.value !== null)
+                <span class="text-xs" style="color: {{ RATING_COLOR[v.rating] }}" title="{{ v.rating }}">●</span>
+              @endif
+            </div>
+            @if (v.value !== null)
+              <div class="mt-1 font-semibold tabular-nums text-lg mono">{{ formatVital(v.metric, v.value) }}</div>
+              <div class="text-text-3 text-xs mono">{{ Number(v.samples).toLocaleString() }} samples</div>
+            @elseif (v.suppressed)
+              {{-- Withheld, not missing. A p75 over fewer than k visitors is that
+                  visitor's phone rather than a statistic (#40's reasoning). --}}
+              <div class="mt-1 text-sm text-text-3">Too few visits</div>
+              <div class="text-text-3 text-xs mono">{{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }}</div>
+            @else
+              <div class="mt-1 text-sm text-text-3">No data yet</div>
+              <div class="text-text-3 text-xs">good ≤ {{ formatVital(v.metric, VITAL_THRESHOLDS[v.metric][0]) }}</div>
+            @endif
+          </div>
+        @endforeach
+      </div>
     </div>
 
     {{-- Entry / exit pages: the first / last page of each session, derived from

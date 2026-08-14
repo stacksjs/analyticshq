@@ -91,6 +91,102 @@
 
   w.analyticshq = function (name, props) { send(name, props) }
 
+  // Core Web Vitals (#41).
+  //
+  // ONE beacon per page, not one per metric. LCP, CLS and INP are not final
+  // until the page is hidden — LCP can be superseded by a later paint, CLS
+  // accumulates, INP is a running maximum — so there is nothing to gain by
+  // reporting them early and a 5x ingest bill for doing it. Everything is
+  // buffered and flushed once, at the moment the values stop changing.
+  //
+  // Opt out per site with data-vitals="false", alongside data-respect-dnt.
+  //
+  // Privacy: these are timings the browser already computed to render the page.
+  // No new identifier is read, nothing is stored on the device, and the server
+  // keeps only the number and the path — which is why this is compatible with
+  // the no-consent-banner claim in a way that, say, a heatmap would not be.
+  if (s.getAttribute('data-vitals') !== 'false' && w.PerformanceObserver) {
+    const vitals = {}
+    // The path AT LOAD. CLS and INP accumulate over the document's whole
+    // lifetime, which on an SPA spans several routes, and the standard
+    // web-vitals library attributes the total to the initial page for exactly
+    // that reason: the document is what was measured.
+    const vpath = location.pathname
+    let cls = 0
+    let inp = 0
+    let flushed = false
+
+    function obs(type, fn, extra) {
+      try {
+        const o = { type: type, buffered: true }
+        if (extra) o.durationThreshold = extra
+        new PerformanceObserver(fn).observe(o)
+      }
+      // An unsupported entry type throws here rather than failing silently, and
+      // browser support genuinely differs (no INP in Safari before 16.4). One
+      // missing metric must not take the other four with it.
+      catch (_) {}
+    }
+
+    obs('largest-contentful-paint', function (l) {
+      const e = l.getEntries()
+      if (e.length) vitals.LCP = e[e.length - 1].startTime
+    })
+    obs('paint', function (l) {
+      l.getEntries().forEach(function (e) {
+        if (e.name === 'first-contentful-paint') vitals.FCP = e.startTime
+      })
+    })
+    obs('layout-shift', function (l) {
+      // Shifts the visitor caused by interacting are excluded by definition —
+      // a layout change right after a tap is a response, not instability.
+      l.getEntries().forEach(function (e) { if (!e.hadRecentInput) cls += e.value })
+    })
+    obs('event', function (l) {
+      l.getEntries().forEach(function (e) {
+        if (e.interactionId && e.duration > inp) inp = e.duration
+      })
+    }, 16)
+
+    function flush() {
+      if (flushed) return
+      flushed = true
+      // CLS travels as the real ratio (0.0834), not scaled to an integer. The
+      // column is a float, so nothing has to unscale it at read time.
+      if (cls > 0) vitals.CLS = cls
+      if (inp > 0) vitals.INP = inp
+      try {
+        const nav = performance.getEntriesByType('navigation')[0]
+        if (nav && nav.responseStart > 0) vitals.TTFB = nav.responseStart
+      }
+      catch (_) {}
+      if (!Object.keys(vitals).length) return
+      const body = JSON.stringify({
+        s: site,
+        e: 'vitals',
+        p: vitals,
+        u: location.origin + vpath,
+        r: '',
+      })
+      try {
+        // sendBeacon over fetch(keepalive) on this path specifically: the page
+        // is being hidden or discarded, and sendBeacon is the one transport the
+        // spec guarantees will still be delivered. The Blob is what sets the
+        // JSON content type — a bare string would arrive as text/plain and the
+        // route would never parse it.
+        if (navigator.sendBeacon && navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }))) return
+        fetch(endpoint, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: body })
+      }
+      catch (_) {}
+    }
+
+    // visibilitychange is the reliable end-of-page signal; pagehide covers the
+    // Safari/bfcache cases where it does not fire. `flushed` makes the overlap
+    // harmless — whichever arrives first wins and the other is a no-op.
+    d.addEventListener('visibilitychange', function () { if (d.visibilityState === 'hidden') flush() })
+    w.addEventListener('pagehide', flush)
+  }
+
   const DLRE = /\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i
   function onLink(ev) {
     if (ev.type === 'auxclick' && ev.button !== 1) return
