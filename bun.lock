@@ -7,7 +7,7 @@
       "dependencies": {
         "@stacksjs/buddy": "^0.70.226",
         "@stacksjs/ts-cloud": "^0.7.92",
-        "@ts-analytics/tracking": "^0.1.7",
+        "@ts-analytics/tracking": "^0.1.13",
         "stacks": "^0.70.190",
       },
       "devDependencies": {
@@ -251,7 +251,7 @@
 
     "@stacksjs/whois": ["@stacksjs/whois@0.70.369", "", {}, "sha512-7tLPMbJi0g5MLZSuyBaCaXq84J11eRWObdOT8wxycCC7JcOcyEeMUMdh93VwW9Ha40HL7V1sCPh9TpNWai2XbQ=="],
 
-    "@ts-analytics/tracking": ["@ts-analytics/tracking@0.1.12", "", { "dependencies": { "bun-query-builder": "^0.1.38", "dynamodb-tooling": "^0.3.2", "ts-countries": "^0.1.2" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "@nuxt/schema": "^3.0.0" }, "optionalPeers": ["@nuxt/kit", "@nuxt/schema"], "bin": { "analytics": "./bin/cli.ts" } }, "sha512-l/yDqcvUsx2iPCFmYlq5jpDqGF6BEFb/KTcgugpjlsRXnTUahXjBf8+zfNfqq/+dEOt6Jr2tRUpHsbCMua9uCQ=="],
+    "@ts-analytics/tracking": ["@ts-analytics/tracking@0.1.13", "", { "dependencies": { "bun-query-builder": "^0.1.38", "dynamodb-tooling": "^0.3.2", "ts-countries": "^0.1.2" }, "peerDependencies": { "@nuxt/kit": "^3.0.0", "@nuxt/schema": "^3.0.0" }, "optionalPeers": ["@nuxt/kit", "@nuxt/schema"], "bin": { "analytics": "./bin/cli.ts" } }, "sha512-gBgFYOdw4kLIoXRklM56ANbn0g1caaFpDQ+k+NxGEdnbWK7UnJRLQ3qFbDLpK/vTeTzg/b8ZcSkovzknvf1pHA=="],
 
     "@ts-audio/aac": ["@ts-audio/aac@0.1.2", "", { "peerDependencies": { "@ts-audio/core": "0.1.2" } }, "sha512-9VD0vAuD22Qck6BSn0aX6c0gxqZVNP/ZZGRsAN+vRszBI6qRamfPt/QB/vPpwCLTKjdBZontzmtXSVJhIL0zXA=="],
 

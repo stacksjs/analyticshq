@@ -635,9 +635,14 @@ describe('the device column', () => {
   test('is classified by the same parser the pageview path uses', () => {
     // Two reports on one dashboard that disagree about what a device is would be
     // worse than either being wrong on its own. Both paths call parseUserAgent
-    // on the same header, so they cannot drift — including where the parser is
-    // wrong today (it tests /mobile/ before /ipad/, so an iPad Safari UA, which
-    // always contains "Mobile/15E148", classifies as mobile in BOTH).
+    // on the same header, so they cannot drift.
+    //
+    // This assertion is deliberately about the SHARED CALL, not about any
+    // particular classification — which is what let the upstream parser be fixed
+    // without touching anything here. Until @ts-analytics/tracking 0.1.13, an
+    // iPad classified as `mobile` and every iOS visit recorded `macOS`; both are
+    // now correct, and this test never needed to change because it never pinned
+    // the wrong answer.
     const collect = src.slice(src.indexOf(`route.post('/collect'`))
     expect(collect).toContain('parseUserAgent(ua).deviceType')
     expect(collect).toContain('const info = parseUserAgent(ua)')
