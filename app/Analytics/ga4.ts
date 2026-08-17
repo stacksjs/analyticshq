@@ -26,115 +26,33 @@
  * path — JWT signing, token exchange, pagination, folding — is exercised without
  * a network or a real Google project.
  */
-import { createSign } from 'node:crypto'
 import { type GaRecord, toRecord } from './ga-import'
+import { getAccessToken as exchangeToken, SCOPE_ANALYTICS_READONLY } from './google-auth'
 
-export interface ServiceAccountKey {
-  client_email: string
-  private_key: string
-  token_uri?: string
-}
+/**
+ * Auth lives in ./google-auth, shared with the Search Console import (#25).
+ *
+ * Re-exported here rather than made an import-site change at every caller: the
+ * CLI, the endpoint and the tests all reached for these through ga4.ts, and a
+ * module that quietly stops exporting what it used to is a worse trade than one
+ * extra line per name.
+ */
+export {
+  buildAssertion,
+  getAccessToken,
+  parseServiceAccountKey,
+  redactKey,
+  type ServiceAccountKey,
+} from './google-auth'
 
-const TOKEN_URL = (): string => process.env.GA4_TOKEN_URL || 'https://oauth2.googleapis.com/token'
 const API_BASE = (): string => process.env.GA4_API_BASE || 'https://analyticsdata.googleapis.com'
 
 /**
- * Parse and validate a service-account JSON key.
- *
- * Returns a plain error string rather than throwing, because every caller —
- * the CLI and the HTTP endpoint — has to show it to a person, and a stack trace
- * from JSON.parse is not an explanation. The message never quotes the input:
- * the input is a private key.
+ * The scope this importer signs its assertion with, exported so a test can
+ * assert the value the call site actually passes rather than grepping for a
+ * string literal that has since moved to another file.
  */
-export function parseServiceAccountKey(json: string): { key: ServiceAccountKey } | { error: string } {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(json)
-  }
-  catch {
-    return { error: 'That is not valid JSON. Paste the whole service-account key file, including the outer braces.' }
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-    return { error: 'The key should be a JSON object.' }
-  const obj = parsed as Record<string, unknown>
-
-  // A GA4 OAuth *client* secret is a different file that people reach for by
-  // mistake; it has `installed`/`web` at the top level and no private_key.
-  if (!obj.private_key && (obj.installed || obj.web))
-    return { error: 'That looks like an OAuth client secret, not a service-account key. Create a service account and download its JSON key.' }
-  if (typeof obj.client_email !== 'string' || !obj.client_email.includes('@'))
-    return { error: 'The key has no client_email. Download the JSON key for a service account, not an API key.' }
-  if (typeof obj.private_key !== 'string' || !obj.private_key.includes('PRIVATE KEY'))
-    return { error: 'The key has no private_key. Download the JSON key for a service account, not an API key.' }
-
-  return {
-    key: {
-      client_email: obj.client_email,
-      private_key: obj.private_key,
-      token_uri: typeof obj.token_uri === 'string' ? obj.token_uri : undefined,
-    },
-  }
-}
-
-/**
- * Strip anything key-shaped out of text bound for a log or an HTTP response.
- *
- * Google's token endpoint echoes parts of a malformed assertion back in its
- * error body, so "just don't log the key" is not sufficient on its own — the
- * error path is exactly where it would otherwise leak.
- */
-export function redactKey(text: string): string {
-  return text
-    .replace(/-----BEGIN[\s\S]*?-----END[^-]*-----/g, '[redacted private key]')
-    .replace(/[A-Za-z0-9+/]{120,}={0,2}/g, '[redacted]')
-}
-
-function b64url(data: Buffer | string): string {
-  const buf = typeof data === 'string' ? Buffer.from(data) : data
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-/**
- * Sign the JWT that Google exchanges for an access token (RS256, the only
- * algorithm the service-account grant accepts).
- *
- * `now` is injectable so a test can pin `iat`/`exp` and assert the claim set
- * exactly rather than around it.
- */
-export function buildAssertion(key: ServiceAccountKey, now: number = Math.floor(Date.now() / 1000)): string {
-  const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-  const claims = b64url(JSON.stringify({
-    iss: key.client_email,
-    // Read-only, and the narrowest scope that can run a report. A service
-    // account with edit rights on someone's analytics property is not something
-    // an importer should ever ask for.
-    scope: 'https://www.googleapis.com/auth/analytics.readonly',
-    aud: key.token_uri || TOKEN_URL(),
-    iat: now,
-    exp: now + 3600,
-  }))
-  const signingInput = `${header}.${claims}`
-  const signature = createSign('RSA-SHA256').update(signingInput).sign(key.private_key)
-  return `${signingInput}.${b64url(signature)}`
-}
-
-/** Exchange the service-account key for a short-lived access token. */
-export async function getAccessToken(key: ServiceAccountKey): Promise<string> {
-  const assertion = buildAssertion(key)
-  const res = await fetch(key.token_uri || TOKEN_URL(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${encodeURIComponent(assertion)}`,
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Google refused the service-account key (${res.status}): ${redactKey(body).slice(0, 300)}`)
-  }
-  const data = await res.json() as { access_token?: string }
-  if (!data.access_token)
-    throw new Error('Google returned no access token for that key.')
-  return data.access_token
-}
+export const GA4_SCOPE = SCOPE_ANALYTICS_READONLY
 
 /**
  * The single report the import runs.
@@ -330,7 +248,7 @@ export async function fetchGa4History(options: Ga4FetchOptions): Promise<Ga4Fetc
   if (!propertyId)
     throw new Error('The property id must be the numeric GA4 id (the digits in "properties/123456789").')
 
-  const token = await getAccessToken(options.key)
+  const token = await exchangeToken(options.key, GA4_SCOPE)
   const report = await runReport(
     token,
     propertyId,

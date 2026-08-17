@@ -203,6 +203,9 @@ let exitPages = []
 // Core Web Vitals (#41). Always the full five metrics — buildReport pads the ones
 // with no samples, so the panel can distinguish "no data yet" from "withheld".
 let vitals = []
+// Search Console queries (#25). Aggregate SEO data with no visitor dimension --
+// see the migration for why it sits outside the erasure path.
+let searchQueries = []
 // The same five, split by device class (#43). Always desktop/mobile/tablet, plus
 // an `unknown` row only when rows predating migration 48 are still in range.
 let vitalsByDevice = []
@@ -420,6 +423,21 @@ async function loadData() {
     `SELECT device_type AS device, metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
      GROUP BY 1, 2`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
+  // Search Console (#25). Site + range only, like vitals: search_queries carries
+  // no country/device/browser column for a dimension filter to narrow.
+  //
+  // The date column is YYYY-MM-DD while `from`/`to` are ISO timestamps, so the
+  // bounds are sliced to their date part -- comparing a date against a full
+  // timestamp would drop the last day of every range.
+  //
+  // CTR is derived, never stored, and summed before dividing: averaging per-row
+  // CTRs would weight a query with 2 impressions like one with 20,000.
+  searchQueries = (await pgq(
+    `SELECT query, SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
+            SUM(position * impressions) / NULLIF(SUM(impressions), 0) AS position
+     FROM search_queries WHERE site_id = ? AND date >= ? AND date <= ?
+     GROUP BY query ORDER BY clicks DESC, impressions DESC LIMIT 10`,
+    [siteId, String(from).slice(0, 10), String(to).slice(0, 10)])) ?? []
   referrers = (await pgq(
     `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source ORDER BY views DESC LIMIT 8`, p)) ?? []
   // Top referrers: the actual referring URLs (full referrer), distinct from the normalized
@@ -578,6 +596,7 @@ try {
     // missing panel.
     vitals = preloaded.vitals ?? buildReport([], privacy.minSegmentSize)
     vitalsByDevice = preloaded.vitalsByDevice ?? buildDeviceReport([], privacy.minSegmentSize)
+    searchQueries = preloaded.searchQueries ?? []
     live = true
     // A host that prefetches + injects `preloaded` has already authorized the view.
     viewGranted = true
@@ -1734,6 +1753,56 @@ onMount(() => {
         </div>
       </div>
     </div>
+
+    {{-- Search Console queries (#25).
+
+        The one report our own tracker cannot produce: search engines strip the
+        query from the referrer, so without an import the whole organic channel
+        is a single row saying "Google".
+
+        Rendered only when an import has actually happened. An empty panel here
+        would advertise a feature as broken rather than as unconfigured, and the
+        setup is three steps in someone else's console -- so the absence of the
+        panel is the honest state until data exists. --}}
+    @if (searchQueries.length)
+      <div class="mt-6 p-5 panel reveal">
+        <div class="flex flex-wrap gap-2 items-baseline justify-between mb-4">
+          <h2 class="font-semibold text-text-3 text-xs tracking-wider uppercase">Search queries</h2>
+          <span class="text-text-3 text-xs">
+            from Google Search Console
+            @if (vitalsFiltered)
+              · <span style="color: #f59e0b">not affected by the active filter</span>
+            @endif
+          </span>
+        </div>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-text-3 text-xs">
+                <th class="pb-2 pl-1 font-medium text-left">Query</th>
+                <th class="pb-2 font-medium text-right">Clicks</th>
+                <th class="pb-2 font-medium text-right">Impressions</th>
+                <th class="pb-2 font-medium text-right">CTR</th>
+                <th class="pb-2 pr-1 font-medium text-right">Position</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (searchQueries as q)
+                <tr class="border-border border-t">
+                  <td class="pl-1 py-2 truncate" title="{{ q.query }}">{{ q.query }}</td>
+                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.clicks).toLocaleString() }}</td>
+                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions).toLocaleString() }}</td>
+                  {{-- Derived here from the two stored counts, never read from a
+                      ctr column -- see the migration for why one is not stored. --}}
+                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions) > 0 ? `${(Number(q.clicks) / Number(q.impressions) * 100).toFixed(1)}%` : '—' }}</td>
+                  <td class="pr-1 py-2 tabular-nums text-right mono">{{ q.position === null ? '—' : Number(q.position).toFixed(1) }}</td>
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      </div>
+    @endif
 
     {{-- Entry / exit pages: the first / last page of each session, derived from
         page_views (session lifecycle columns aren't maintained). Display-only —

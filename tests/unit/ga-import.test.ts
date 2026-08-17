@@ -30,7 +30,9 @@ import {
   synthesizeRecord,
   toRecord,
 } from '../../app/Analytics/ga-import'
-import { buildAssertion, importWarnings, normalizePropertyId, parseServiceAccountKey, redactKey, toRecords } from '../../app/Analytics/ga4'
+import { buildAssertion, GA4_SCOPE, importWarnings, normalizePropertyId, parseServiceAccountKey, redactKey, toRecords } from '../../app/Analytics/ga4'
+import * as googleAuth from '../../app/Analytics/google-auth'
+import { SCOPE_ANALYTICS_READONLY } from '../../app/Analytics/google-auth'
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -298,10 +300,27 @@ describe('the service-account key', () => {
   test('the scope requested is read-only', () => {
     // A service account with edit rights on someone's analytics property is not
     // something an importer should ever ask for.
-    const src = code('app/Analytics/ga4.ts')
-    expect(src).toContain('analytics.readonly')
-    expect(src).not.toContain('auth/analytics.edit')
-    expect(src).not.toMatch(/auth\/analytics['"]/)
+    //
+    // Asserted on the VALUE rather than by grepping ga4.ts for the literal. The
+    // scope moved into google-auth.ts when Search Console became the second
+    // caller (#25), and a source-grep test would have gone green-because-absent
+    // rather than failing — the string was simply no longer in the file it was
+    // looking at.
+    expect(SCOPE_ANALYTICS_READONLY).toBe('https://www.googleapis.com/auth/analytics.readonly')
+    expect(GA4_SCOPE).toBe(SCOPE_ANALYTICS_READONLY)
+  })
+
+  test('every Google scope in the codebase is read-only', () => {
+    // The rule is about all of them, not just GA4's, and it has to keep holding
+    // as APIs are added. Any exported SCOPE_* that does not end in `.readonly`
+    // is a service account asking for write access to a customer's property.
+    const scopes = Object.entries(googleAuth)
+      .filter(([name, value]) => name.startsWith('SCOPE_') && typeof value === 'string') as Array<[string, string]>
+    expect(scopes.length).toBeGreaterThan(0)
+    for (const [name, value] of scopes) {
+      expect(`${name}=${value}`).toMatch(/\.readonly$/)
+      expect(value.startsWith('https://www.googleapis.com/auth/')).toBe(true)
+    }
   })
 
   test('the assertion is a well-formed RS256 JWT', () => {
@@ -313,7 +332,7 @@ describe('the service-account key', () => {
       // unsigned token.
       private_key: 'not a key',
     }
-    expect(() => buildAssertion(key)).toThrow()
+    expect(() => buildAssertion(key, GA4_SCOPE)).toThrow()
   })
 })
 

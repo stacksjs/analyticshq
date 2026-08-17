@@ -27,6 +27,7 @@ import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/
 import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
+import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -2154,6 +2155,201 @@ route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
     imported: { pageViews, sessions, records: history.records.length },
     googleRows: history.rowCount,
     skipped: history.skipped,
+    warnings,
+  })
+}).middleware('auth').skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Search Console (#25)
+// ---------------------------------------------------------------------------
+// The one thing our own tracker genuinely cannot see. Search engines strip the
+// query from the referrer, so without this the entire organic channel is a
+// single row saying "Google" — and "which searches bring people here" is the
+// question every site owner asks first.
+//
+// SAME SERVICE-ACCOUNT PATH AS THE GA4 IMPORT, and that is what let #25 ship
+// without answering the question it was blocked on. The concern in the issue was
+// a standing Google dependency: an app registered with Google, a consent screen,
+// verification for a sensitive scope, refresh tokens held for customers' Google
+// accounts. A service account needs none of it. The customer creates the
+// credential in their own Cloud project, grants it read access to their own
+// property, and we register nothing.
+//
+// NOT VISITOR DATA, and therefore deliberately outside the erasure path. Rows
+// describe searches, not visits: there is no visitor dimension in the API and
+// none in the table. Google withholds low-volume queries before we see them, so
+// the tail that could identify a person never arrives — which is also why this
+// report needs no disclosure floor of its own, and why the count of withheld
+// rows is surfaced rather than hidden (see the migration).
+
+/** One request writes at most this many rows, so a big property cannot hang it. */
+const SEARCH_MAX_ROWS_PER_REQUEST = 50_000
+
+route.options('/api/sites/{siteId}/search', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/search', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  const { from, to } = window(request)
+  // The window helper yields ISO timestamps; this table is day-granular.
+  const fromDay = String(from).slice(0, 10)
+  const toDay = String(to).slice(0, 10)
+
+  // CTR is computed here, never stored — see the migration. Summing clicks and
+  // impressions and dividing once is also the only correct way to aggregate it:
+  // averaging per-row CTRs weights a query with 2 impressions the same as one
+  // with 20,000.
+  const queries = await pgq(
+    `SELECT query, SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
+            SUM(position * impressions) / NULLIF(SUM(impressions), 0) AS position
+     FROM search_queries
+     WHERE site_id = ? AND date >= ? AND date <= ?
+     GROUP BY query
+     ORDER BY clicks DESC, impressions DESC
+     LIMIT 25`,
+    [String(siteId), fromDay, toDay],
+  )
+
+  const pages = await pgq(
+    `SELECT path, SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
+            SUM(position * impressions) / NULLIF(SUM(impressions), 0) AS position
+     FROM search_queries
+     WHERE site_id = ? AND date >= ? AND date <= ?
+     GROUP BY path
+     ORDER BY clicks DESC, impressions DESC
+     LIMIT 25`,
+    [String(siteId), fromDay, toDay],
+  )
+
+  const totals = await pgq(
+    `SELECT SUM(clicks)::int AS clicks, SUM(impressions)::int AS impressions,
+            SUM(position * impressions) / NULLIF(SUM(impressions), 0) AS position
+     FROM search_queries WHERE site_id = ? AND date >= ? AND date <= ?`,
+    [String(siteId), fromDay, toDay],
+  )
+
+  return json({
+    range: { from: fromDay, to: toDay },
+    totals: searchTotals(totals?.[0]),
+    queries: (queries ?? []).map(searchRow),
+    pages: (pages ?? []).map(searchRow),
+    // Same honesty as the vitals report: this data has no country/device/browser
+    // dimension, so the dashboard's filter bar cannot narrow it.
+    filterable: false,
+  })
+}).middleware('auth')
+
+/** Shape one grouped row, with CTR derived rather than stored. */
+function searchRow(row: any): Record<string, unknown> {
+  const clicks = Number(row.clicks ?? 0)
+  const impressions = Number(row.impressions ?? 0)
+  return {
+    ...(row.query !== undefined ? { query: String(row.query) } : { path: String(row.path) }),
+    clicks,
+    impressions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    position: row.position === null || row.position === undefined ? null : Number(row.position),
+  }
+}
+
+function searchTotals(row: any): Record<string, unknown> {
+  const clicks = Number(row?.clicks ?? 0)
+  const impressions = Number(row?.impressions ?? 0)
+  return {
+    clicks,
+    impressions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    position: row?.position === null || row?.position === undefined ? null : Number(row.position),
+  }
+}
+
+route.options('/api/sites/{siteId}/import/search-console', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/import/search-console', async (request: any) => {
+  const siteId = request.params.siteId
+  // Owner, not admin: this accepts a credential to somebody's Google property.
+  const denied = await requireSiteOwner(request, siteId)
+  if (denied)
+    return denied
+
+  const body = request.jsonBody ?? {}
+  if (typeof body.property !== 'string' || !body.property.trim())
+    return json({ error: 'property is required (for example "sc-domain:example.com").' }, 400)
+  if (typeof body.key !== 'string' || !body.key.trim())
+    return json({ error: 'key is required (the service-account JSON).' }, 400)
+
+  const parsed = parseServiceAccountKey(body.key)
+  if ('error' in parsed)
+    return json({ error: parsed.error }, 400)
+
+  const isDate = (v: unknown): boolean => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  if (body.from !== undefined && !isDate(body.from))
+    return json({ error: 'from must be YYYY-MM-DD.' }, 400)
+  if (body.to !== undefined && !isDate(body.to))
+    return json({ error: 'to must be YYYY-MM-DD.' }, 400)
+
+  let history: Awaited<ReturnType<typeof fetchSearchConsoleHistory>>
+  try {
+    history = await fetchSearchConsoleHistory({
+      siteUrl: String(body.property),
+      key: parsed.key,
+      startDate: body.from as string | undefined,
+      endDate: body.to as string | undefined,
+    })
+  }
+  catch (err) {
+    // 502: the failure is Google's answer (no access to the property, wrong
+    // property kind), not ours, and the message is the actionable part.
+    return json({ error: (err as Error).message }, 502)
+  }
+
+  let written = 0
+  let capped = false
+  let buffer: Record<string, unknown>[] = []
+  const flush = async (): Promise<void> => {
+    const stmt = buildSearchInsert(buffer)
+    if (stmt)
+      await pgq(stmt.sql, stmt.params)
+    buffer = []
+  }
+
+  for (const record of history.records) {
+    if (written >= SEARCH_MAX_ROWS_PER_REQUEST) {
+      capped = true
+      break
+    }
+    buffer.push({
+      id: await searchRowId(String(siteId), record),
+      site_id: String(siteId),
+      date: record.date,
+      query: record.query,
+      path: record.path,
+      clicks: record.clicks,
+      impressions: record.impressions,
+      position: record.position,
+    })
+    written++
+    if (buffer.length >= 1000)
+      await flush()
+  }
+  await flush()
+
+  const warnings = searchImportWarnings({
+    truncated: history.truncated,
+    anonymized: history.anonymized,
+    skipped: history.skipped,
+  })
+  if (capped)
+    warnings.unshift(`This period has more search data than one import can take (over ${SEARCH_MAX_ROWS_PER_REQUEST.toLocaleString()} rows), so it is incomplete. Import it in shorter periods.`)
+
+  return json({
+    ok: true,
+    imported: { rows: written },
+    googleRows: history.rowCount,
+    skipped: history.skipped,
+    anonymized: history.anonymized,
     warnings,
   })
 }).middleware('auth').skipCsrf()
