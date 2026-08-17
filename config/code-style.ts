@@ -83,6 +83,12 @@ const config: PickierOptions = {
     '**/storage/framework/auto-imports/**',
     '**/storage/framework/frontend-dist/**',
     '**/storage/framework/server/storage/**',
+    // The framework's own default views and components, vendored into
+    // storage/framework by the installer and gitignored like the rest of that
+    // tree. Editing them is meaningless — they are replaced on every install —
+    // but they carried all 72 of the project's lint warnings, which is enough
+    // noise to hide a real one in a file we can actually fix.
+    '**/storage/framework/defaults/**',
     '**/.bunpress/**',
     '**/docs/deps/**',
     // Generated scaffolds copied into pantry — out of project control
