@@ -1,0 +1,19 @@
+{
+  "timeZone": "Etc/UTC",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "dataStudio": {
+    "name": "analyticshq",
+    "logoUrl": "https://analyticshq.com/favicon.svg",
+    "company": "analyticshq",
+    "companyUrl": "https://analyticshq.com",
+    "addonUrl": "https://analyticshq.com/docs/connectors",
+    "supportUrl": "https://analyticshq.com/docs/connectors",
+    "description": "Privacy-first web analytics — pageviews, visitors, sources and campaigns, without cookies.",
+    "sources": ["analyticshq"],
+    "shortDescription": "Privacy-first web analytics",
+    "authType": ["KEY"],
+    "feeType": ["FREE"]
+  }
+}

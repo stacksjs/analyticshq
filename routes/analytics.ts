@@ -28,6 +28,7 @@ import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVita
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
+import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { response, route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
@@ -2353,6 +2354,90 @@ route.post('/api/sites/{siteId}/import/search-console', async (request: any) => 
     warnings,
   })
 }).middleware('auth').skipCsrf()
+
+// ---------------------------------------------------------------------------
+// BI connector (#25)
+// ---------------------------------------------------------------------------
+// One flat, groupable table for Looker Studio and anything else that speaks
+// HTTP. See app/Analytics/connect.ts for why this is a dedicated route rather
+// than share-token access to the whole Stats API: teaching every site-scoped
+// endpoint to accept a token would loosen auth on the ones that write settings,
+// add members and delete data, all to serve a read.
+//
+// Gated on the share token, which is already the long-lived, per-site,
+// read-only credential an admin can rotate or revoke. A second kind of key with
+// the same powers would mean an operator who revokes sharing still has a live
+// credential to remember to find.
+//
+// NO .middleware('auth'): the token IS the credential, and a BI tool has no way
+// to hold a one-hour bearer token. The route validates it against the site's own
+// settings and can only read.
+
+route.options('/api/connect/{siteId}/fields', () => new Response(null, { status: 204, headers: CORS }))
+route.options('/api/connect/{siteId}/report', () => new Response(null, { status: 204, headers: CORS }))
+
+/**
+ * Resolve the share token on the request, or the Response to return instead.
+ *
+ * Accepts it as `?token=` or as a bearer header, because Looker Studio's KEY
+ * auth sends whatever the connector puts in the request and other BI tools
+ * differ. 404 for an unknown site and 403 for a bad token, matching the rest of
+ * the API — site ids are public, so distinguishing them leaks nothing.
+ */
+async function requireShareToken(request: any, siteId: string): Promise<Response | null> {
+  const provided = String(
+    request.query?.token
+    || String(request.headers?.get?.('authorization') ?? '').replace(/^Bearer\s+/i, '')
+    || '',
+  )
+  // The decision itself is `shareTokenVerdict`, a pure function, so every branch
+  // is reachable from a test by calling it. When this logic was inline, the
+  // mutation that replaced the token comparison with `if (false)` — turning the
+  // endpoint into an open data export — survived the whole unit suite.
+  const exists = await siteExists(siteId)
+  const settings = exists ? await readSiteSettings(String(siteId)) : {}
+  const expected = typeof settings.share_token === 'string' ? settings.share_token : ''
+  const verdict = shareTokenVerdict(provided, expected, exists)
+  return verdict.ok ? null : json({ error: verdict.error }, verdict.status)
+}
+
+route.get('/api/connect/{siteId}/fields', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireShareToken(request, siteId)
+  if (denied)
+    return denied
+  return json({ fields: describeFields(), maxRows: CONNECT_MAX_ROWS })
+}).skipCsrf()
+
+route.get('/api/connect/{siteId}/report', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireShareToken(request, siteId)
+  if (denied)
+    return denied
+  const { from, to } = window(request)
+
+  const plan = planQuery({
+    dimensions: parseFieldList(request.query?.dimensions),
+    metrics: parseFieldList(request.query?.metrics),
+  })
+  // 400, and the message names the field. A connector failure surfaces to the
+  // user as an opaque "could not fetch data", so this text is the only
+  // diagnostic anyone gets.
+  if ('error' in plan)
+    return json({ error: plan.error }, 400)
+
+  const rows = await pgq(plan.sql, [String(siteId), from, to])
+  const shaped = (rows ?? []).map((row: any) => shapeRow(row, plan.dimensions, plan.metrics))
+
+  return json({
+    range: { from, to },
+    fields: [...plan.dimensions, ...plan.metrics],
+    rows: shaped,
+    // Said out loud rather than left to be inferred from a round number. A BI
+    // tool that silently receives the cap draws a chart of part of the data.
+    truncated: shaped.length >= CONNECT_MAX_ROWS,
+  })
+}).skipCsrf()
 
 // ---------------------------------------------------------------------------
 // Saved segments (#23)
