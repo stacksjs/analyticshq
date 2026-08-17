@@ -12,16 +12,20 @@
  * checked rather than trusted.
  */
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  buildDeviceReport,
   buildReport,
   formatVital,
+  isVitalDevice,
   isVitalMetric,
+  normalizeVitalDevice,
   parseVitalsPayload,
   percentile,
   rating,
   RATING_COLOR,
+  VITAL_DEVICES,
   VITAL_METRICS,
   VITAL_THRESHOLDS,
 } from '../../app/Analytics/vitals'
@@ -374,9 +378,12 @@ describe('the read routes', () => {
   })
 
   test('say plainly that vitals are not filtered', () => {
-    // web_vitals has no country/device/browser column, so a filter has nothing
-    // to narrow. Returning unfiltered numbers under an active filter without
-    // saying so is the worst of the available options.
+    // web_vitals has no country and no browser column, so most of the filter bar
+    // has nothing to narrow. The device column added in #43 does NOT make the
+    // report filterable: honouring one dimension of the filter while ignoring the
+    // rest would give a panel that is filtered along an axis nothing on screen
+    // identifies. Returning partly-filtered numbers under an active filter
+    // without saying so is the worst of the available options.
     expect(src).toContain('filterable: false')
   })
 
@@ -418,5 +425,324 @@ describe('the read routes', () => {
 
     const lastStatement = collect.slice(start, end).trimEnd().split('\n').pop()!.trim()
     expect(lastStatement).toMatch(/^return new Response\(null, \{ status: 204/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// By device (#43)
+// ---------------------------------------------------------------------------
+
+describe('the device classes', () => {
+  test('are the same three the pageview path already stores', () => {
+    // Same lowercase values parseUserAgent returns and page_views.device_type
+    // holds. A capitalised or renamed set here would mean the two tables could
+    // never be read against each other without a translation nobody maintains.
+    expect([...VITAL_DEVICES]).toEqual(['desktop', 'mobile', 'tablet'])
+    expect(read('database/migrations/0000000003-create-page_views-table.sql')).toContain('"device_type"')
+  })
+
+  test('isVitalDevice refuses anything else', () => {
+    expect(isVitalDevice('mobile')).toBe(true)
+    // The dashboard's device filter chips render whatever the column holds, and a
+    // hand-typed ?device=Mobile must not silently match nothing.
+    expect(isVitalDevice('Mobile')).toBe(false)
+    expect(isVitalDevice('unknown')).toBe(false)
+    expect(isVitalDevice(null)).toBe(false)
+    expect(isVitalDevice(7)).toBe(false)
+  })
+
+  test('anything unrecognised normalizes to unknown rather than disappearing', () => {
+    // Dropping would make the device rows fail to sum to the site-wide total,
+    // which is the first thing anyone checks when they distrust a breakdown.
+    expect(normalizeVitalDevice(null)).toBe('unknown')
+    expect(normalizeVitalDevice(undefined)).toBe('unknown')
+    expect(normalizeVitalDevice('')).toBe('unknown')
+    expect(normalizeVitalDevice('smart-fridge')).toBe('unknown')
+    expect(normalizeVitalDevice('mobile')).toBe('mobile')
+  })
+})
+
+describe('the device breakdown', () => {
+  const K = 5
+  const row = (device: string | null, metric: string, samples: number, p75 = 1000) =>
+    ({ device, metric, p75, samples })
+
+  test('always shows all three devices, in a fixed order', () => {
+    // A missing `mobile` row is indistinguishable from a broken one. Fixed order
+    // also means the table does not reshuffle itself between page loads as
+    // traffic shifts.
+    const report = buildDeviceReport([row('mobile', 'LCP', 100)], K)
+    expect(report.map(r => r.device)).toEqual(['desktop', 'mobile', 'tablet'])
+  })
+
+  test('every device carries the full five metrics, in the canonical order', () => {
+    const report = buildDeviceReport([row('desktop', 'LCP', 50)], K)
+    for (const device of report)
+      expect(device.metrics.map(m => m.metric)).toEqual([...VITAL_METRICS])
+  })
+
+  test('the unknown bucket is hidden until it has something in it', () => {
+    // A permanently empty column headed "unknown" is an invitation to wonder
+    // what is being withheld — and on a site installed after migration 48 it can
+    // never fill.
+    expect(buildDeviceReport([row('desktop', 'LCP', 9)], K).map(r => r.device))
+      .not.toContain('unknown')
+  })
+
+  test('rows written before the column existed show up as unknown, last', () => {
+    const report = buildDeviceReport([row(null, 'LCP', 40), row('desktop', 'LCP', 10)], K)
+    expect(report.map(r => r.device)).toEqual(['desktop', 'mobile', 'tablet', 'unknown'])
+    expect(report[3].samples).toBe(40)
+  })
+
+  test('the floor is applied per device, not per site', () => {
+    // The whole hazard of a breakdown. 40 desktop + 2 mobile is comfortably over
+    // the floor site-wide, and the mobile p75 is still two people's phones.
+    const report = buildDeviceReport([row('desktop', 'LCP', 40, 900), row('mobile', 'LCP', 2, 5000)], K)
+    const desktop = report[0].metrics.find(m => m.metric === 'LCP')!
+    const mobile = report[1].metrics.find(m => m.metric === 'LCP')!
+    expect(desktop.value).toBe(900)
+    expect(desktop.suppressed).toBe(false)
+    expect(mobile.value).toBeNull()
+    expect(mobile.suppressed).toBe(true)
+    // And the count survives, so the panel can say how far under it is.
+    expect(mobile.samples).toBe(2)
+  })
+
+  test('a withheld percentile still reports how many measurements it had', () => {
+    const [desktop] = buildDeviceReport([row('desktop', 'LCP', 2), row('desktop', 'CLS', 2)], K)
+    expect(desktop.samples).toBe(4)
+    expect(desktop.metrics.every(m => m.value === null)).toBe(true)
+  })
+
+  test('the row total counts measurements across all five metrics', () => {
+    const [desktop] = buildDeviceReport(
+      [row('desktop', 'LCP', 10), row('desktop', 'CLS', 10), row('desktop', 'TTFB', 5)],
+      K,
+    )
+    expect(desktop.samples).toBe(25)
+  })
+
+  test('the device rows account for every measurement the site-wide row has', () => {
+    // The honesty check. If these two ever disagree, one of the two reports is
+    // describing traffic the other cannot see, and an owner comparing them has
+    // no way to tell which.
+    const aggregates = [
+      row('desktop', 'LCP', 30),
+      row('mobile', 'LCP', 12),
+      row('tablet', 'LCP', 7),
+      row(null, 'LCP', 3),
+      row('smart-fridge', 'LCP', 1),
+    ]
+    const perDevice = buildDeviceReport(aggregates, K).reduce((sum, r) => sum + r.samples, 0)
+    expect(perDevice).toBe(53)
+    const siteWide = buildReport([{ metric: 'LCP', p75: 1000, samples: 53 }], K)[0].samples
+    expect(perDevice).toBe(siteWide)
+  })
+
+  test('an unrecognised device string lands in unknown, not in desktop', () => {
+    // Folding it into a real class would move someone else's numbers into a
+    // bucket an owner is about to make decisions from.
+    const report = buildDeviceReport([row('smart-fridge', 'LCP', 20, 4000)], K)
+    expect(report[0].samples).toBe(0)
+    expect(report.find(r => r.device === 'unknown')!.samples).toBe(20)
+  })
+
+  test('no data at all is three empty rows, none of them suppressed', () => {
+    const report = buildDeviceReport([], K)
+    expect(report).toHaveLength(3)
+    for (const device of report) {
+      expect(device.samples).toBe(0)
+      expect(device.metrics.every(m => m.samples === 0)).toBe(true)
+      expect(device.metrics.every(m => m.suppressed)).toBe(false)
+      expect(device.metrics.every(m => m.value === null)).toBe(true)
+    }
+  })
+
+  test('k = 0 disables the floor here too', () => {
+    const report = buildDeviceReport([row('mobile', 'LCP', 1, 4200)], 0)
+    const mobile = report[1].metrics.find(m => m.metric === 'LCP')!
+    expect(mobile.value).toBe(4200)
+    expect(mobile.suppressed).toBe(false)
+  })
+
+  test('ratings come out per device, against the same thresholds', () => {
+    // The point of the whole breakdown: the same LCP that is "good" on desktop
+    // is "poor" on mobile, and the panel has to be able to say so.
+    const report = buildDeviceReport(
+      [row('desktop', 'LCP', 40, 2000), row('mobile', 'LCP', 40, 4500)],
+      K,
+    )
+    expect(report[0].metrics.find(m => m.metric === 'LCP')!.rating).toBe('good')
+    expect(report[1].metrics.find(m => m.metric === 'LCP')!.rating).toBe('poor')
+  })
+})
+
+describe('the device column', () => {
+  const src = code('routes/analytics.ts')
+  const migration = read('database/migrations/0000000048-add-device-to-web_vitals.sql')
+
+  test('is nullable, with no default and no backfill', () => {
+    // We do not know the device for measurements taken before the column
+    // existed. Defaulting them to a real class would skew that class's
+    // percentile with rows that do not belong to it.
+    expect(migration).toMatch(/ADD COLUMN IF NOT EXISTS "device_type" varchar\(16\)/)
+    expect(migration).not.toMatch(/device_type"[^\n]*NOT NULL/)
+    expect(migration).not.toMatch(/device_type"[^\n]*DEFAULT/)
+    expect(migration).not.toMatch(/UPDATE\s+"?web_vitals"?/i)
+  })
+
+  test('carries no semicolon in a comment below the first statement', () => {
+    // Measured, not assumed. `idempotentSql` keeps the LEADING run of "--" lines
+    // verbatim as a header and then splits the rest on ";" with no comment
+    // handling, so a semicolon below the header cuts the line and re-emits the
+    // remainder of the sentence outside the comment, where it runs as SQL.
+    // Above the header it is harmless — migration 47's own note has one.
+    //
+    // Applied to every migration, not just this one: the hazard is silent, the
+    // file that trips it is whichever one someone writes next, and the failure
+    // arrives as a syntax error pointing at English.
+    const dir = join(ROOT, 'database/migrations')
+    for (const file of readdirSync(dir).filter(f => f.endsWith('.sql'))) {
+      let seenStatement = false
+      for (const line of readFileSync(join(dir, file), 'utf8').split('\n')) {
+        const trimmed = line.trimStart()
+        if (!trimmed.startsWith('--') && trimmed.length > 0) {
+          seenStatement = true
+          continue
+        }
+        if (seenStatement && trimmed.startsWith('--'))
+          expect(`${file}: ${line}`).not.toContain(';')
+      }
+    }
+  })
+
+  test('is filled from the User-Agent, never from the beacon body', () => {
+    // A device class the visitor's own payload could set is a device class an
+    // owner cannot trust — and the whole breakdown is a thing people make
+    // decisions from. It is parsed server-side, like the pageview path.
+    const collect = src.slice(src.indexOf(`route.post('/collect'`))
+    const branch = collect.slice(collect.indexOf(`if (body.e === 'vitals') {`))
+    const insert = branch.indexOf('INSERT INTO web_vitals')
+    expect(insert).toBeGreaterThan(0)
+    const before = branch.slice(0, insert)
+    expect(before).toContain('parseUserAgent(ua).deviceType')
+    // Nothing between the branch opening and the insert may read a device off
+    // the body. Written as a regex over the body accessors actually used.
+    expect(before).not.toMatch(/body\.[a-z]*\s*(?:\?\?|\|\|)?\s*['"]?(?:desktop|mobile|tablet)/i)
+  })
+
+  test('is classified by the same parser the pageview path uses', () => {
+    // Two reports on one dashboard that disagree about what a device is would be
+    // worse than either being wrong on its own. Both paths call parseUserAgent
+    // on the same header, so they cannot drift — including where the parser is
+    // wrong today (it tests /mobile/ before /ipad/, so an iPad Safari UA, which
+    // always contains "Mobile/15E148", classifies as mobile in BOTH).
+    const collect = src.slice(src.indexOf(`route.post('/collect'`))
+    expect(collect).toContain('parseUserAgent(ua).deviceType')
+    expect(collect).toContain('const info = parseUserAgent(ua)')
+    expect(collect).toContain('device_type: info.deviceType')
+  })
+
+  test('is written in the same statement as the measurement', () => {
+    // A second UPDATE would leave a window where a row has a metric and no
+    // device, which the breakdown would silently bucket as unknown.
+    const insert = src.match(/INSERT INTO web_vitals \(([^)]+)\) VALUES/)
+    expect(insert).not.toBeNull()
+    const columns = insert![1].split(',').map(c => c.trim())
+    expect(columns).toContain('device_type')
+    // The placeholder tuple has to match the column list, or every insert on the
+    // hottest write path in the app fails at runtime and is swallowed by the
+    // .catch that keeps the public beacon from 500ing.
+    const tuple = src.match(/const placeholders = samples\.map\(\(\) => `\(([^`]+)\)`\)/)
+    expect(tuple).not.toBeNull()
+    expect(tuple![1].split(',')).toHaveLength(columns.length)
+  })
+})
+
+describe('the device report routes', () => {
+  const src = code('routes/analytics.ts')
+  const vitalsRoute = src.slice(
+    src.indexOf(`route.get('/api/sites/{siteId}/vitals'`),
+    src.indexOf(`route.options('/api/sites/{siteId}/vitals-trends'`),
+  )
+
+  test('validate ?device= instead of matching it literally', () => {
+    // An unrecognised device matched literally returns an empty report, which
+    // reads as "your phone users have no measurements" rather than "you asked
+    // for a device that does not exist".
+    expect(vitalsRoute).toContain('isVitalDevice(request.query?.device)')
+  })
+
+  test('the breakdown itself is never narrowed by ?device=', () => {
+    // It is the comparison the scope is chosen from. Narrowing it would leave
+    // the caller holding one number with nothing to read it against.
+    const start = vitalsRoute.indexOf('const byDevice = await pgq(')
+    expect(start).toBeGreaterThan(0)
+    const query = vitalsRoute.slice(start, vitalsRoute.indexOf(')', vitalsRoute.indexOf('GROUP BY 1, 2')))
+    expect(query).toContain('GROUP BY 1, 2')
+    expect(query).not.toContain('${scope}')
+    expect(query).not.toContain('scopeParam')
+  })
+
+  test('the site-wide report and the per-path table do honour it', () => {
+    expect(vitalsRoute).toMatch(/WHERE site_id = \? AND timestamp >= \? AND timestamp <= \?\$\{scope\}/)
+    expect(vitalsRoute).toContain('...scopeParam')
+  })
+
+  test('echo the applied device back', () => {
+    // So a caller that mistyped it can see it was not applied, rather than
+    // reading a site-wide number as a mobile one.
+    expect(vitalsRoute).toMatch(/^\s*device,$/m)
+    expect(vitalsRoute).toMatch(/^\s*devices: buildDeviceReport\(/m)
+  })
+
+  test('the trend series can be scoped too', () => {
+    // The natural next click once the breakdown shows mobile is the slow one:
+    // has it always been, or did it regress?
+    const trends = src.slice(src.indexOf(`route.get('/api/sites/{siteId}/vitals-trends'`))
+    expect(trends).toContain('isVitalDevice(request.query?.device)')
+    expect(trends).toContain('AND device_type = ?')
+  })
+
+  test('the unknown bucket is decided in one place, not also in SQL', () => {
+    // normalizeVitalDevice inside buildDeviceReport is what turns a NULL group
+    // into `unknown`. A COALESCE in the query would be a second copy of that
+    // rule, in a language the tests above cannot reach.
+    expect(src).not.toMatch(/COALESCE\(\s*device_type/i)
+  })
+})
+
+describe('the dashboard panel', () => {
+  const view = read('resources/views/dashboard.stx')
+
+  test('renders a device row from the same helper the API uses', () => {
+    expect(view).toContain('buildDeviceReport')
+    expect(view).toContain('vitalsByDevice')
+    expect(view).toContain('By device')
+  })
+
+  test('queries vitals by site and range only, never with the filter SQL', () => {
+    // Same rule as the site-wide vitals query. `filter` appends predicates on
+    // columns web_vitals does not have (country, browser), which would error the
+    // whole render rather than just this panel.
+    const start = view.indexOf('vitalsByDevice = buildDeviceReport(')
+    expect(start).toBeGreaterThan(0)
+    const query = view.slice(start, view.indexOf('GROUP BY 1, 2', start))
+    expect(query).toContain('WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?')
+    expect(query).not.toContain('${filter}')
+  })
+
+  test('distinguishes a withheld cell from an empty one', () => {
+    // Two different facts. A dash where a number was withheld and a dot where
+    // nothing was measured, each with a title that says which.
+    expect(view).toContain('title="Withheld')
+    expect(view).toContain('title="No measurements yet"')
+  })
+
+  test('survives a database that is not there yet', () => {
+    // loadData throwing leaves vitalsByDevice as [], which would render a table
+    // with a header and no rows.
+    expect(view).toMatch(/if \(!vitalsByDevice\.length\)\s*\n\s*vitalsByDevice = buildDeviceReport\(\[\], privacy\.minSegmentSize\)/)
   })
 })

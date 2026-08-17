@@ -244,3 +244,116 @@ export function buildReport(aggregates: VitalAggregate[], minimum: number): Vita
     }
   })
 }
+
+// ---------------------------------------------------------------------------
+// By device (#43)
+// ---------------------------------------------------------------------------
+
+/**
+ * The device classes, in the order the panel shows them.
+ *
+ * Same three values `parseUserAgent` returns and `page_views.device_type`
+ * stores, lowercase and unchanged, so the two tables can be read against each
+ * other without a translation table that would eventually disagree with itself.
+ */
+export const VITAL_DEVICES = ['desktop', 'mobile', 'tablet'] as const
+
+export type VitalDevice = (typeof VITAL_DEVICES)[number]
+
+/**
+ * The bucket for measurements whose device we do not know.
+ *
+ * In practice it holds rows written before migration 48 added the column. It is
+ * deliberately not one of the three real classes: folding unattributed rows into
+ * 'desktop' would silently move someone else's numbers into a bucket an owner is
+ * about to make decisions from.
+ */
+export const VITAL_DEVICE_UNKNOWN = 'unknown'
+
+export function isVitalDevice(value: unknown): value is VitalDevice {
+  return typeof value === 'string' && (VITAL_DEVICES as readonly string[]).includes(value)
+}
+
+/**
+ * Map whatever the database (or a query string) offers onto a known bucket.
+ *
+ * Anything unrecognised — null, a legacy row, a hand-typed `?device=Mobile` —
+ * becomes `unknown` rather than being dropped. Dropping would make the device
+ * rows silently fail to sum to the site-wide total, which is the first thing
+ * anyone checks when they distrust a breakdown.
+ */
+export function normalizeVitalDevice(value: unknown): VitalDevice | typeof VITAL_DEVICE_UNKNOWN {
+  return isVitalDevice(value) ? value : VITAL_DEVICE_UNKNOWN
+}
+
+/** One metric's percentile within one device class, straight from SQL. */
+export interface VitalDeviceAggregate extends VitalAggregate {
+  device: string | null
+}
+
+export interface VitalDeviceRow {
+  device: VitalDevice | typeof VITAL_DEVICE_UNKNOWN
+  /** The same five metrics, same order, same suppression rule as the site-wide row. */
+  metrics: VitalReport[]
+  /** Total measurements behind this row, across all five metrics. */
+  samples: number
+}
+
+/**
+ * The per-device view of the same numbers `buildReport` produces site-wide.
+ *
+ * Each device's aggregates go through `buildReport` unchanged rather than
+ * through a parallel implementation, so the padding, the rating boundaries and
+ * the disclosure floor cannot drift between the headline row and the split. A
+ * bug fixed in one is fixed in both because there is only one.
+ *
+ * ## The floor bites harder here, which is the point
+ *
+ * Splitting by device divides the sample count three ways, so buckets that were
+ * comfortably over the minimum site-wide can fall under it — and each bucket is
+ * judged on its own count, not the site's. That is not a rough edge to smooth
+ * over. The p75 of a device class with two measurements is one visitor's phone
+ * and one visitor's network, handed to the site owner as a device
+ * characteristic, and the narrower the bucket the more it describes a person
+ * rather than a population. `buildReport` marks those `suppressed`, so the panel
+ * can say "too few visits" instead of quietly showing a number that means
+ * something else than it appears to.
+ *
+ * ## Why all three always appear
+ *
+ * Desktop, mobile and tablet are emitted even at zero samples, for the reason
+ * every metric is: a missing `mobile` row is indistinguishable from a broken
+ * one, and "no data yet" is the more useful answer. `unknown` is different — it
+ * appears ONLY when it has samples, because a permanently empty column headed
+ * "unknown" is an invitation to wonder what is being withheld, and for any site
+ * installed after migration 48 it will never fill.
+ */
+export function buildDeviceReport(aggregates: VitalDeviceAggregate[], minimum: number): VitalDeviceRow[] {
+  const grouped = new Map<string, VitalAggregate[]>()
+  for (const row of aggregates) {
+    const device = normalizeVitalDevice(row.device)
+    const list = grouped.get(device)
+    if (list)
+      list.push(row)
+    else
+      grouped.set(device, [row])
+  }
+
+  const unknown = grouped.get(VITAL_DEVICE_UNKNOWN) ?? []
+  const unknownSamples = unknown.reduce((sum, row) => sum + Number(row.samples ?? 0), 0)
+  const devices: Array<VitalDevice | typeof VITAL_DEVICE_UNKNOWN> = unknownSamples > 0
+    ? [...VITAL_DEVICES, VITAL_DEVICE_UNKNOWN]
+    : [...VITAL_DEVICES]
+
+  return devices.map((device) => {
+    const rows = grouped.get(device) ?? []
+    return {
+      device,
+      metrics: buildReport(rows, minimum),
+      // Summed from the aggregates rather than from the built report, so the
+      // count stays honest for a metric whose percentile was withheld: the
+      // measurements were taken, and the row should say how many.
+      samples: rows.reduce((sum, row) => sum + Number(row.samples ?? 0), 0),
+    }
+  })
+}

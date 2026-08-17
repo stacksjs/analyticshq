@@ -24,7 +24,7 @@ import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps 
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
-import { buildReport, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
+import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { response, route } from '@stacksjs/router'
@@ -338,6 +338,15 @@ route.post('/collect', async (request: any) => {
     }
     catch { /* keep '/' for a malformed or absent url */ }
     const vnow = new Date().toISOString()
+    // Device class for the breakdown (#43): "is my site slow on mobile" is the
+    // question people actually have, and it is usually the answer.
+    //
+    // Parsed here rather than borrowed from the visitor's pageview row, which
+    // would mean a lookup joining a measurement back to a particular visit — the
+    // linkage this table declines to store a session_id for. It is also the
+    // cheap half of what the early return skips: a User-Agent regex is CPU, not
+    // the indexed SELECT the sessionization block below would cost.
+    const vdevice = parseUserAgent(ua).deviceType
     // Same self-registration as the pageview path: web_vitals FKs to sites, so a
     // site whose very first beacon is a vitals one would fail the constraint.
     await db.insertOrIgnore('sites', { id: String(siteId), created_at: vnow }).catch(() => {})
@@ -346,9 +355,9 @@ route.post('/collect', async (request: any) => {
     // rather than a loop: this fires on every page view, and five round-trips
     // where one will do is five times the ingest latency.
     if (samples.length) {
-      const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?)`).join(', ')
-      const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow])
-      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp) VALUES ${placeholders}`, params)
+      const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?, ?)`).join(', ')
+      const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow, vdevice])
+      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp, device_type) VALUES ${placeholders}`, params)
         // Never 500 the public beacon, matching every other insert on this path.
         .catch(() => {})
     }
@@ -1859,18 +1868,25 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
 // Search Console grades against — so our number and Google's answer the same
 // question rather than inviting the owner to reconcile two.
 //
-// NOT FILTERABLE, and the response says so rather than pretending. web_vitals
-// stores the metric, the path and the timestamp; it deliberately carries no
-// country, device or browser, so a `device=Mobile` filter has nothing to narrow.
-// Silently returning unfiltered vitals under an active filter would be the worst
-// option available — the numbers would look filtered and be read as filtered —
-// so `filterable: false` travels with every response and the dashboard panel
-// says it out loud.
+// NOT FILTERABLE BY THE DASHBOARD'S FILTER BAR, and the response says so rather
+// than pretending. web_vitals stores the metric, the path, the timestamp and (as
+// of #43) the device class; it carries no country and no browser, so most of the
+// filter bar has nothing to narrow. Silently returning unfiltered vitals under
+// an active filter would be the worst option available — the numbers would look
+// filtered and be read as filtered — so `filterable: false` travels with every
+// response and the dashboard panel says it out loud.
 //
-// Adding a device breakdown later is additive (a column plus a GROUP BY) and is
-// the obvious next step, since "is my site slow on mobile" is the question
-// people actually have. It is out of scope here because a first cut that
-// answers "is my site slow" correctly beats one that answers more, later.
+// The device split (#43) is a BREAKDOWN, not a filter, and that is a deliberate
+// difference. Honouring `device=mobile` from the filter bar while ignoring
+// `country` and `browser` would produce a panel that is filtered along one
+// dimension and not the others — strictly worse than uniformly unfiltered,
+// because nothing on screen could tell you which. Showing all three side by side
+// also answers the actual question better: "is my site slow on mobile" is asked
+// against desktop, and a filter would hide the thing being compared to.
+//
+// An API caller can still scope a report with `?device=`, which narrows the
+// headline metrics and the per-path table and is echoed back in the response.
+// The `devices` breakdown is never scoped by it — it is the comparison.
 //
 // THERE IS NO WebVital MODEL, deliberately — as with segments, funnels and
 // alerts, which are all hand-written SQL. A model here is actively harmful: the
@@ -1890,14 +1906,41 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
     return denied
   const { from, to } = window(request)
 
+  // Optional scope. Only a real device class is honoured — an unrecognised
+  // `?device=` is ignored rather than matched literally, which would return an
+  // empty report that reads as "your phone users have no measurements" instead
+  // of "you asked for a device that does not exist".
+  const device = isVitalDevice(request.query?.device) ? String(request.query.device) : null
+  const scope = device ? ' AND device_type = ?' : ''
+  const scopeParam = device ? [device] : []
+
   // percentile_disc is nearest-rank: it returns a value some visitor actually
   // measured, matching app/Analytics/vitals.ts:percentile and CrUX. percentile_cont
   // would interpolate and report a duration nobody experienced.
   const totals = await pgq(
     `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals
-     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${scope}
      GROUP BY metric`,
+    [String(siteId), from, to, ...scopeParam],
+  )
+
+  // The device split (#43). Deliberately NOT scoped by `device` above — this is
+  // the comparison the scope is chosen from, and narrowing it would leave the
+  // caller holding one number with nothing to read it against.
+  //
+  // NULL device_type is grouped rather than dropped: those are rows written
+  // before migration 48, and dropping them would make the split fail to sum to
+  // the site-wide totals with no visible reason why. Postgres groups NULLs
+  // together, and `normalizeVitalDevice` inside buildDeviceReport is what turns
+  // that group into the `unknown` bucket — no COALESCE here, so the rule for what
+  // counts as unknown lives in one tested place instead of in the SQL as well.
+  const byDevice = await pgq(
+    `SELECT device_type AS device, metric,
+            percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
+     FROM web_vitals
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY 1, 2`,
     [String(siteId), from, to],
   )
 
@@ -1908,20 +1951,24 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
   const byPath = await pgq(
     `SELECT path, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals
-     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?${scope}
      GROUP BY path
      HAVING COUNT(*) >= ?
      ORDER BY COUNT(*) DESC LIMIT 20`,
     // The floor is applied in SQL here rather than after the fact: a path under
     // it must not occupy one of the 20 slots, or a busy site's report could come
     // back full of rows that are all withheld.
-    [String(siteId), from, to, pathMetric, Math.max(1, VITALS_MIN_SAMPLES)],
+    [String(siteId), from, to, pathMetric, ...scopeParam, Math.max(1, VITALS_MIN_SAMPLES)],
   )
 
   return json({
     range: { from, to },
     metrics: buildReport((totals ?? []) as any[], VITALS_MIN_SAMPLES),
     thresholds: VITAL_THRESHOLDS,
+    // Echoed so a caller that mistyped `?device=` can see it was not applied,
+    // rather than reading a site-wide number as a mobile one.
+    device,
+    devices: buildDeviceReport((byDevice ?? []) as any[], VITALS_MIN_SAMPLES),
     pages: {
       metric: pathMetric,
       rows: (byPath ?? []).map((row: any) => ({
@@ -1945,6 +1992,10 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
     return denied
   const { from, to } = window(request)
   const metric = isVitalMetric(request.query?.metric) ? String(request.query.metric) : 'LCP'
+  // Same scope rule as the report above, and the natural next click after the
+  // breakdown shows mobile is the slow one: "has mobile always been this slow,
+  // or did it regress?" Unrecognised values are ignored, not matched literally.
+  const device = isVitalDevice(request.query?.device) ? String(request.query.device) : null
 
   // Timestamps are ISO-8601 varchars, so the first 10 chars are the UTC date —
   // the same SUBSTRING grouping the other daily reports in this file use, rather
@@ -1954,9 +2005,9 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
             percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75,
             COUNT(*) AS samples
      FROM web_vitals
-     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?
+     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND metric = ?${device ? ' AND device_type = ?' : ''}
      GROUP BY 1 ORDER BY 1`,
-    [String(siteId), from, to, metric],
+    device ? [String(siteId), from, to, metric, device] : [String(siteId), from, to, metric],
   )
 
   // A day under the floor is dropped from the series rather than plotted as a
@@ -1973,6 +2024,7 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
   return json({
     range: { from, to },
     metric,
+    device,
     threshold: VITAL_THRESHOLDS[metric as keyof typeof VITAL_THRESHOLDS],
     days,
     filterable: false,

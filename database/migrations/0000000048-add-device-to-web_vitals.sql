@@ -1,0 +1,68 @@
+-- Core Web Vitals by device (#43).
+--
+-- NOTE ON STYLE: no semicolons in comments BELOW the first statement, and no
+-- comment block after the LAST statement.
+--
+-- Migration 47 states the first half as a blanket rule. Measured against the
+-- runner it is narrower than that, and the difference is worth writing down
+-- because the blanket version reads as superstition and gets ignored.
+--
+-- The executor's splitter is comment-aware, so it is not the hazard. idempotentSql
+-- is: it preserves the LEADING run of "--" lines verbatim as a header, then splits
+-- everything after it on ";" with no comment handling at all. A semicolon in this
+-- block is therefore harmless -- migration 47's own note contains one, inside
+-- quotes, and applied cleanly. A semicolon in a comment further down is not: the
+-- line is cut at it and the remainder of the sentence is re-emitted OUTSIDE the
+-- comment, where it becomes a statement. "-- a later note; with a semicolon"
+-- executes as "with a semicolon".
+--
+-- The second half is why every word of rationale is up here rather than beside
+-- the statement it explains. A comment block after the final statement becomes a
+-- trailing chunk of its own, and the rewrite hands it back with a ";" welded to
+-- the end -- inside the comment, where the rule above says it must not be. The
+-- file is structured so that cannot happen: prose here, statements at the bottom,
+-- nothing after them.
+--
+-- WHY A COLUMN RATHER THAN A JOIN
+--
+-- The device class is already recorded on page_views for the same visit, so in
+-- principle a vitals row could borrow it by matching visitor_id and path within
+-- some time window. That is exactly the query this table was shaped to avoid.
+-- Correlating a measurement back to a particular visitor's pageview is the
+-- linkage migration 47 declined to store a session_id for, and building it at
+-- read time instead of write time does not make it less of one. It would also
+-- be wrong often enough to matter -- a vitals beacon lands on visibilitychange,
+-- which can be minutes after the pageview and after further navigation.
+--
+-- Storing the class directly is one varchar, no join, and no new linkage.
+--
+-- WHY THIS IS NOT A NEW DISCLOSURE
+--
+-- device_type is three buckets, derived server-side from the User-Agent by the
+-- same parser the pageview path uses, and already held against the same visitor
+-- hash on page_views. It says "this measurement came from a phone", which is the
+-- entire question the breakdown exists to answer.
+--
+-- It is a device CLASS, not a device identifier -- the thing guardrail #28 rules
+-- out. Nothing here is stable enough to recognise a returning visitor by, and the
+-- columns that would have been (screen dimensions, a fingerprint) were removed in
+-- migration 37 and are not coming back through this door.
+--
+-- NULLABLE, WITH NO BACKFILL
+--
+-- Measurements taken before this column existed have no device we know of.
+-- Defaulting them to 'desktop' would be inventing data, and defaulting them to
+-- any real bucket would skew that bucket's percentile with rows that do not
+-- belong to it. They stay NULL and read as an "unknown" bucket, which the panel
+-- shows only when it actually has samples and which ages out of the retention
+-- window on its own.
+--
+-- NO INDEX ON device_type, DELIBERATELY
+--
+-- Every read of this table is already narrowed by site, metric and a timestamp
+-- range, which is precisely the existing wv_site_metric_timestamp index. The
+-- device split is a GROUP BY over rows that scan has already found, and the
+-- percentile has to read `value` from the heap regardless, so an index carrying
+-- device_type would be paid for on every write -- this is the hottest write path
+-- in the app, one row per metric per page view -- and read by nothing.
+ALTER TABLE "web_vitals" ADD COLUMN IF NOT EXISTS "device_type" varchar(16);

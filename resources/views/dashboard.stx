@@ -14,7 +14,7 @@
 import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
-import { buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
+import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
 
 
@@ -203,6 +203,9 @@ let exitPages = []
 // Core Web Vitals (#41). Always the full five metrics — buildReport pads the ones
 // with no samples, so the panel can distinguish "no data yet" from "withheld".
 let vitals = []
+// The same five, split by device class (#43). Always desktop/mobile/tablet, plus
+// an `unknown` row only when rows predating migration 48 are still in range.
+let vitalsByDevice = []
 let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
@@ -405,6 +408,18 @@ async function loadData() {
     `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
      GROUP BY metric`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
+  // The device split (#43). A second query rather than one grouped by device and
+  // rolled up in JS: the site-wide p75 is NOT the average of the three device
+  // p75s, and cannot be recovered from them -- a percentile of percentiles is a
+  // different number, and usually a wrong one. Both rows have to come from the
+  // rows they describe.
+  //
+  // NULL device_type groups on its own and becomes the `unknown` bucket inside
+  // buildDeviceReport. Same site + range scope as above, and for the same reason.
+  vitalsByDevice = buildDeviceReport((await pgq(
+    `SELECT device_type AS device, metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
+     FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
+     GROUP BY 1, 2`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
   referrers = (await pgq(
     `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source ORDER BY views DESC LIMIT 8`, p)) ?? []
   // Top referrers: the actual referring URLs (full referrer), distinct from the normalized
@@ -562,6 +577,7 @@ try {
     // so a host that prefetches without vitals gets "no data yet" rather than a
     // missing panel.
     vitals = preloaded.vitals ?? buildReport([], privacy.minSegmentSize)
+    vitalsByDevice = preloaded.vitalsByDevice ?? buildDeviceReport([], privacy.minSegmentSize)
     live = true
     // A host that prefetches + injects `preloaded` has already authorized the view.
     viewGranted = true
@@ -583,6 +599,8 @@ catch {
 // Padding here covers every path out of the try/catch above with one line.
 if (!vitals.length)
   vitals = buildReport([], privacy.minSegmentSize)
+if (!vitalsByDevice.length)
+  vitalsByDevice = buildDeviceReport([], privacy.minSegmentSize)
 
 // Whether the reader is looking at a narrowed view. The vitals panel is the one
 // report that cannot honour a filter, so it has to say so exactly when one is on.
@@ -1664,6 +1682,56 @@ onMount(() => {
             @endif
           </div>
         @endforeach
+      </div>
+
+      {{-- By device (#43). Every device side by side rather than behind a
+          selector: "is my site slow on mobile" is a question asked against
+          desktop, and a control that shows one at a time hides the comparison
+          that is the whole answer.
+
+          A plain table, because this is a grid of numbers read across and down.
+          Colour carries the rating, as in the row above -- inline hex for the
+          same reason, a class only reached through a dynamic binding does not
+          survive crosswind's scan. --}}
+      <div class="mt-5 pt-4 border-border border-t">
+        <div class="mb-3 font-medium text-text-3 text-xs tracking-wider uppercase">By device</div>
+        <div class="overflow-x-auto -mx-1">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-text-3 text-xs">
+                <th class="pb-2 pl-1 font-medium text-left">Device</th>
+                @foreach (vitals as h)
+                  <th class="pb-2 pr-1 font-medium text-right">{{ h.metric }}</th>
+                @endforeach
+              </tr>
+            </thead>
+            <tbody>
+              @foreach (vitalsByDevice as d)
+                <tr class="border-border border-t">
+                  <td class="pl-1 py-2 capitalize">
+                    {{ d.device }}
+                    <span class="ml-1 text-text-3 text-xs mono">{{ Number(d.samples).toLocaleString() }}</span>
+                  </td>
+                  @foreach (d.metrics as v)
+                    <td class="pr-1 py-2 tabular-nums text-right mono">
+                      @if (v.value !== null)
+                        <span style="color: {{ RATING_COLOR[v.rating] }}">{{ formatVital(v.metric, v.value) }}</span>
+                      @elseif (v.suppressed)
+                        {{-- Withheld, and the title says how far under the floor
+                            it is. Splitting by device divides the sample count,
+                            so this is common on small sites and has to read as
+                            "not enough people" rather than "broken". --}}
+                        <span class="text-text-3" title="Withheld — {{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }} measurements needed">—</span>
+                      @else
+                        <span class="text-text-3" title="No measurements yet">·</span>
+                      @endif
+                    </td>
+                  @endforeach
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
