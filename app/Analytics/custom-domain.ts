@@ -37,6 +37,7 @@
  */
 
 import { resolve4, resolveCname } from 'node:dns/promises'
+import { normalizeOrigin } from './install'
 
 export interface DomainVerdict {
   ok: boolean
@@ -141,6 +142,11 @@ export function snippetFor(siteId: string, appUrl: string, customDomain: string 
   // the customer a snippet that silently collects nothing until DNS catches up,
   // and "I installed it and got no data" is the worst failure mode this product
   // has.
-  const origin = customDomain && verifiedAt ? `https://${customDomain}` : appUrl.replace(/\/$/, '')
+  //
+  // normalizeOrigin, not a bare trim: callers pass `config.app.url`, which is
+  // stored WITHOUT a scheme (`ghostanalytics.localhost`). Interpolated raw that
+  // produced src="ghostanalytics.localhost/script.js" — a relative URL that
+  // resolves against the customer's own site, 404s, and reports nothing.
+  const origin = customDomain && verifiedAt ? `https://${customDomain}` : normalizeOrigin(appUrl)
   return `<script defer src="${origin}/script.js" data-site="${siteId}"></script>`
 }

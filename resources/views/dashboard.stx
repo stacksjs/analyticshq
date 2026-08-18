@@ -14,6 +14,7 @@
 import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
+import { installTargets } from '../../app/Analytics/install'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
 
@@ -216,7 +217,6 @@ let live = false
 // analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
 let user = null
 let ownedSites = []
-let installSnippet = ''
 // Read gate: the dashboard only exposes a site's data to that site's authenticated
 // OWNER, OR to anyone holding a valid ?share= token. Stays false (→ no queries, no
 // data in the response) for anyone else.
@@ -784,14 +784,23 @@ const chart = buildChart(densify(series, from, to), compare ? densify(prevSeries
 const ownsActive = viewGranted && !shareMode
 const showSiteSelect = ownsActive && ownedSites.length > 1
 
-// The install snippet is a script tag, which cannot be written literally inside a script
-// block. The previous form escaped the closing tag as <\/script>, and that escape does
-// NOT survive: Bun's transpiler normalises it back before the browser ever sees it, so
-// the protection existed only in the source. It also left the file's script-tag count
-// unbalanced, which is the signature the tag-balance check looks for.
-// Assembling the tag name means the byte sequence never exists at any stage.
-const SNIPPET_TAG = `scr${'ipt'}`
-installSnippet = `<${SNIPPET_TAG} defer\n  src="https://analyticshq.org/script.js"\n  data-site="${siteId}"></${SNIPPET_TAG}>`
+// The install snippets, one per framework (app/Analytics/install.ts).
+//
+// Two things stay tokenised rather than being baked in here:
+//
+//   - the ORIGIN, because the server cannot know it. This used to be a literal
+//     https://analyticshq.org, which handed everyone not on production a
+//     snippet pointing at the live site — and since the tracker derives its
+//     collector from its own src, that does not 404, it reports into the wrong
+//     site. The client substitutes window.location.origin, correct on
+//     localhost, behind a custom domain and in prod alike (same reason
+//     shareLinkFor does it, see the note above it).
+//   - the SCRIPT TAG, because these values cross the client payload bridge and
+//     land inside an inline script, where a literal closing tag would terminate
+//     that script early and take the rest of the page bundle with it. The old
+//     code assembled the tag name here for exactly this reason; the tokens do
+//     the same job for values that now travel further.
+const installOptions = installTargets(String(siteId))
 // No eslint-disable here any more: activeSiteId reads as unused only while the
 // only thing consuming it is the implicit bridge, which nothing can see. The
 // defineClientPayload call at the end of this block is a real reference.
@@ -838,22 +847,23 @@ const exportPayload = {
  * Everything this page hands to its client block, declared (#1868).
  *
  * Without this call the bridge is implicit: stx scrapes the client block for
- * identifiers it cannot resolve, finds these five, and serialises whatever the
- * server block happens to have bound to those names. That works, and it is
- * unchecked in both directions — a rename here silently produces `undefined`
- * over there, and the client sees `any` for all five. `stx typecheck` reported
- * exactly that: "5 values reach this block on the implicit bridge and are
- * untyped".
+ * identifiers it cannot resolve, finds them, and serialises whatever the server
+ * block happens to have bound to those names. That works, and it is unchecked
+ * in both directions — a rename here silently produces `undefined` over there,
+ * and the client sees `any` for all of them. `stx typecheck` reported exactly
+ * that: "5 values reach this block on the implicit bridge and are untyped".
  *
  * Declaring them makes the set explicit and typed, so the checker can see the
  * shape of exportPayload rather than guessing, and a name that stops existing
  * becomes an error instead of a runtime undefined.
  *
- * These five and no more. Everything else the server block computes stays
+ * These six and no more. Everything else the server block computes stays
  * server-side, which is the other half of what this call is for — it is the list
- * of what crosses, not a convenience export.
+ * of what crosses, not a convenience export. `installOptions` earns its place
+ * because the snippets are built from server config but can only be *finished*
+ * on the client, which is the one thing that knows the real origin.
  */
-defineClientPayload({ activeSiteId, exportPayload, liveNow, range, shareToken })
+defineClientPayload({ activeSiteId, exportPayload, installOptions, liveNow, range, shareToken })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -989,14 +999,48 @@ async function deleteGoal(id: string | number): Promise<void> {
 
 // Share link management (owner-only UI). POST mints/rotates a token; DELETE revokes.
 //
-// The one window.location left in this block, and it stays. stx's guard flags it, but
-// the suggested replacements do not cover this: useRoute() deliberately exposes only
-// path / fullPath / hash / query (signals.js:1048-1060), and navigate() is for going
-// somewhere, not for reading where you are. The alternative is APP_URL from the server,
-// which would hand a developer on localhost a share link pointing at the production
-// host. An absolute URL is required because this string gets copied to someone else.
+// One of the two window.location reads left in this block, and it stays. stx's guard
+// flags it, but the suggested replacements do not cover this: useRoute() deliberately
+// exposes only path / fullPath / hash / query (signals.js:1048-1060), and navigate() is
+// for going somewhere, not for reading where you are. The alternative is APP_URL from
+// the server, which would hand a developer on localhost a share link pointing at the
+// production host. An absolute URL is required because this string gets copied to
+// someone else.
 function shareLinkFor(token: string): string {
   return `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${token}`
+}
+
+// --- Install snippets -------------------------------------------------------
+// The second window.location read, and it stays for the same reason plus a
+// sharper one. These snippets are copied into someone else's codebase, and the
+// tracker resolves its collector from its own src origin — so an origin that is
+// merely *plausible* rather than correct does not fail loudly, it reports into
+// the wrong site. Only the browser knows whether this dashboard is being served
+// from localhost, a custom domain, or production.
+const installTab = state('html')
+
+/** The active target, falling back to the first rather than rendering nothing. */
+function activeInstall(): { id: string, label: string, file: string, note: string, code: string } {
+  const wanted = installTab()
+  return installOptions.find(t => t.id === wanted) ?? installOptions[0]
+}
+
+/**
+ * Finish a snippet: real origin, real script tag.
+ *
+ * Kept in step with app/Analytics/install.ts by tests/unit/install.test.ts,
+ * which asserts the rendered HTML target matches what the API's snippetFor()
+ * returns byte for byte — the two must not drift, or a support answer stops
+ * matching what the dashboard shows.
+ */
+function installCode(): string {
+  return String(activeInstall().code)
+    .split('%ORIGIN%')
+    .join(window.location.origin)
+    .split('%TAG%')
+    .join(`<${'scr'}${'ipt'}`)
+    .split('%ENDTAG%')
+    .join(`</${'scr'}${'ipt'}>`)
 }
 // --- Google Analytics import ------------------------------------------------
 // The "one click" the marketing has been promising. The endpoint imports ONE
@@ -1439,9 +1483,13 @@ onMount(() => {
     @endif
 
     {{-- Setup panel: shown to the site's owner so they can grab the install
-        snippet. Open by default until the first pageview lands. Native <details>,
-        server-rendered — no client JS. {{ }} HTML-escapes the snippet so the tag
-        shows as text rather than executing. --}}
+        snippet for whichever framework they run. Open by default until the first
+        pageview lands.
+
+        The tab strip is x-for over the server-built catalogue, and the body is
+        reactive because the origin can only be resolved in the browser — see the
+        installCode() note in the client block. {{ }} HTML-escapes the snippet so
+        the tag shows as text rather than executing. --}}
     @if (ownsActive)
       <details class="mb-8 border-border panel reveal" {{ Number(kpis.views) ? '' : 'open' }}>
         <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
@@ -1449,8 +1497,38 @@ onMount(() => {
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Snippet</span>
         </summary>
         <div class="pb-5 px-5">
-          <p class="mb-2 text-sm text-text-2">Add this tag to every page, once — inside the &lt;head&gt;:</p>
-          <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installSnippet }}</pre>
+          {{-- Tabs and prose are SERVER-rendered (@foreach, static labels, server
+              mustaches) so this panel still says something useful before the
+              bundle runs. An x-for with a reactive {{ }} label cloaked the whole
+              body — x-cloak is display:none, so a new user with nothing to look
+              at but install instructions got a blank box. Only the code block
+              below is reactive, and only because the origin lives in the
+              browser. @click / :style are attribute bindings; per the note on
+              the GA button it is reactive TEXT that triggers cloaking. --}}
+          <div class="flex flex-wrap gap-1.5 mb-3" role="tablist">
+            @foreach (installOptions as opt)
+              <button
+                type="button"
+                role="tab"
+                @click="installTab.set('{{ opt.id }}')"
+                :style="installTab() === '{{ opt.id }}'
+                  ? 'padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'
+                  : 'padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'"
+                style="padding:5px 11px;border-radius:999px;border:1px solid {{ opt.id === 'html' ? 'var(--accent)' : 'var(--border)' }};background:{{ opt.id === 'html' ? 'var(--accent)' : 'transparent' }};color:{{ opt.id === 'html' ? '#fff' : 'var(--text-2)' }};font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer"
+              >{{ opt.label }}</button>
+            @endforeach
+          </div>
+
+          @foreach (installOptions as opt)
+            <div :show="installTab() === '{{ opt.id }}'" style="{{ opt.id === 'html' ? '' : 'display:none' }}">
+              <p class="mb-2 text-sm text-text-2">{{ opt.note }}</p>
+              <p class="mb-1.5 text-text-3 text-xs mono">{{ opt.file }}</p>
+            </div>
+          @endforeach
+
+          {{-- The one reactive node. window.location.origin is the only correct
+              answer here and the server cannot know it. --}}
+          <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installCode() }}</pre>
         </div>
       </details>
     @endif
