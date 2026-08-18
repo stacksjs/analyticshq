@@ -10,6 +10,11 @@ permissions:
   packages: write
   id-token: write
 
+# Authenticates the repo-tarball fetch `bun install` performs for the
+# `github:stacksjs/ts-analytics` dep localtunnels pulls in. See deploy.yml.
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   npm:
     name: npm

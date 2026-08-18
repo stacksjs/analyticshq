@@ -16,6 +16,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+# Authenticates the repo-tarball fetch `bun install` performs for the
+# `github:stacksjs/ts-analytics` dep localtunnels pulls in. See deploy.yml.
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   # Committed env files must never carry a plaintext secret.
   #
