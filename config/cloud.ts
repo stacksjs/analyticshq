@@ -769,6 +769,15 @@ export const tsCloud: TsCloudConfig = {
         'rm -rf storage/framework/auto-imports',
         'mkdir -p storage/framework/runtime/production',
         'bun build --production --target=bun --packages=external app/ProductionServer.ts --outdir storage/framework/runtime/production --entry-naming serve.js',
+        // The schema snapshot is the differ's baseline. Its default lives in
+        // the project, and every release is a fresh releases/<sha> directory,
+        // so without a shared path the baseline is absent on every deploy: the
+        // differ re-derives it from scratch and proposes the same drops
+        // forever. That is what refused three deploys in a row on 2026-08-23,
+        // each one asking to drop columns the models had already stopped
+        // declaring. DB_SNAPSHOT_PATH (set in .env.production) points at the
+        // directory below; it has to exist before migrate runs.
+        'mkdir -p /var/www/analyticshq-shared/db-snapshot',
         'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
       ],
       // Pin the proxy target. `buddy serve` otherwise falls back to
