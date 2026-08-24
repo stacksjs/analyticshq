@@ -1,0 +1,81 @@
+<script server>
+// A DOCTYPE and <html> are correct HERE and nowhere else in this repo, for the
+// reasons analytics-digest.stx sets out: an email is not served by stx, has no
+// layout, and every client expects a complete document. Styles are inline for
+// the same reason — Gmail strips <style> blocks.
+const appName = props.appName || 'analyticshq'
+const siteName = props.siteName || 'a site'
+// Empty when the inviter has no name on their account, which changes the
+// sentence rather than printing a blank.
+const inviter = props.inviter || ''
+const roleDescription = props.roleDescription || 'view the reports'
+const acceptUrl = props.acceptUrl || '#'
+const expiresLabel = props.expiresLabel || ''
+const year = props.year || new Date().getFullYear()
+</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You have been invited to {{ siteName }}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0e0e0e; line-height: 1.6; color: #d4d4d4;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto;">
+
+          <tr>
+            <td style="text-align: center; padding-bottom: 32px;">
+              <h1 style="color: #ececec; font-size: 28px; font-weight: 600; margin: 0;">{{ appName }}</h1>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color: #161616; border: 1px solid #262626; border-radius: 12px; padding: 32px;">
+              <h2 style="color: #ececec; font-size: 20px; font-weight: 600; margin: 0 0 16px;">
+                @if (inviter)
+                  {{ inviter }} invited you to {{ siteName }}
+                @else
+                  You have been invited to {{ siteName }}
+                @endif
+              </h2>
+
+              <p style="margin: 0 0 24px; color: #a3a3a3; font-size: 15px;">
+                You can {{ roleDescription }}. Analytics on {{ appName }} are cookieless, so there is nothing to consent to and no personal data to see.
+              </p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 0 24px;">
+                <tr>
+                  <td style="background-color: #4ade9b; border-radius: 8px;">
+                    <a href="{{ acceptUrl }}" style="display: inline-block; padding: 12px 24px; color: #06281a; font-size: 15px; font-weight: 600; text-decoration: none;">Accept the invitation</a>
+                  </td>
+                </tr>
+              </table>
+
+              @if (expiresLabel)
+                <p style="margin: 0 0 8px; color: #737373; font-size: 13px;">
+                  This link stops working on {{ expiresLabel }}.
+                </p>
+              @endif
+
+              <p style="margin: 0; color: #737373; font-size: 13px;">
+                It only works for this email address, and only once. If you were not expecting it, you can ignore this message — nothing happens until you accept.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="text-align: center; padding-top: 24px;">
+              <p style="margin: 0; color: #525252; font-size: 12px;">&copy; {{ year }} {{ appName }}</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

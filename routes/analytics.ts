@@ -20,6 +20,8 @@ import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
+import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
+import { sendSiteInvite } from '../app/Mail/SiteInvite'
 import { isUnlimited, limitReachedMessage, type PlanLimits } from '../config/plans'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
@@ -707,10 +709,24 @@ route.get('/api/sites', async (request: any) => {
 // Members (#19)
 // ---------------------------------------------------------------------------
 // Membership is by user id, resolved from an email address that must already
-// have an account. There is no invite-by-email flow yet: creating a user from an
-// unauthenticated address is an account-creation path, and bolting one onto a
-// member endpoint is how invitation systems become account-takeover systems.
-// Until that exists properly, adding someone who has not signed up answers 404.
+// have an account. Someone without one is invited instead — see the invites
+// section below, which is what the dashboard actually uses. This endpoint stays
+// as the direct grant for a caller who already knows the account exists.
+//
+// Granting access is a Pro feature, so both paths are gated. Leaving this one
+// open would make the paywall a formality: the same access, one endpoint over.
+
+/** How many people can already reach this site, counting invitations not yet redeemed. */
+async function teammateCount(siteId: string): Promise<number> {
+  const rows = await pgq(
+    `SELECT
+       (SELECT COUNT(*) FROM site_members WHERE site_id = ?) AS members,
+       (SELECT COUNT(*) FROM site_invites WHERE site_id = ? AND accepted_at IS NULL) AS invites`,
+    [String(siteId), String(siteId)],
+  )
+  const row = rows?.[0] ?? {}
+  return Number(row.members ?? 0) + Number(row.invites ?? 0)
+}
 
 route.options('/api/sites/{siteId}/members', () => new Response(null, { status: 204, headers: CORS }))
 
@@ -738,10 +754,14 @@ route.post('/api/sites/{siteId}/members', async (request: any) => {
   if (!isAssignableRole(role))
     return json({ error: `role must be one of ${ASSIGNABLE_ROLES.join(', ')}` }, 400)
 
+  const capped = await requirePlanAllows(siteId, 'teammates', await teammateCount(siteId))
+  if (capped)
+    return capped
+
   const users = await pgq(`SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1`, [email])
   const userId = users?.[0]?.id
   if (userId == null)
-    return json({ error: 'No account with that email address' }, 404)
+    return json({ error: 'No account with that email address. Send an invitation instead.' }, 404)
 
   // The owner is not a member row. Adding them would create a second, lower
   // answer to "what is their role", and resolveSiteRole takes the higher of the
@@ -778,6 +798,200 @@ route.delete('/api/sites/{siteId}/members/{userId}', async (request: any) => {
 
   await pgq(`DELETE FROM site_members WHERE site_id = ? AND user_id = ?`, [String(siteId), targetId])
   return json({ members: await listSiteMembers(siteId) })
+}).middleware('auth').skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Invitations
+// ---------------------------------------------------------------------------
+// The half #19 left for later, and named as the piece an agency notices missing:
+// adding someone who does not have an account yet.
+//
+// The rule that makes this not an account-takeover flow is that redeeming an
+// invitation NEVER creates an account. It requires an authenticated user whose
+// address matches the invitation, so signing up happens through /register like
+// anyone else's and the invitation only ever grants site access to an identity
+// that already exists and has proven it controls that mailbox.
+//
+// Only a hash of the token is stored, it expires, and it is single use. See
+// app/Analytics/invites.ts for the reasoning on each.
+
+/** Pending invitations for a site. Never returns the hash — it is a credential. */
+async function listSiteInvites(siteId: string): Promise<Array<Record<string, unknown>>> {
+  const rows = await pgq(
+    `SELECT i.id, i.email, i.role, i.created_at, i.expires_at, u.email AS invited_by_email
+     FROM site_invites i
+     LEFT JOIN users u ON u.id = i.invited_by
+     WHERE i.site_id = ? AND i.accepted_at IS NULL
+     ORDER BY i.created_at DESC`,
+    [String(siteId)],
+  )
+  return (rows ?? []).map((r: any) => ({
+    id: Number(r.id),
+    email: String(r.email),
+    role: String(r.role),
+    createdAt: r.created_at ?? null,
+    expiresAt: r.expires_at ?? null,
+    invitedBy: r.invited_by_email ?? null,
+  }))
+}
+
+route.options('/api/sites/{siteId}/invites', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/invites', async (request: any) => {
+  const siteId = request.params.siteId
+  // Viewer, matching the members list: who else is being given access is part of
+  // knowing how widely a site is shared.
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  return json({ invites: await listSiteInvites(siteId) })
+}).middleware('auth')
+
+route.post('/api/sites/{siteId}/invites', async (request: any) => {
+  const siteId = request.params.siteId
+  // Role first, then plan. An outsider must get 403 without learning anything
+  // about the owner's billing, and 402 would tell them the site exists and is
+  // on the free plan.
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const capped = await requirePlanAllows(siteId, 'teammates', await teammateCount(siteId))
+  if (capped)
+    return capped
+
+  const body = request.jsonBody ?? {}
+  const email = normalizeEmail(body.email)
+  const role = body.role
+  if (!looksLikeEmail(email))
+    return json({ error: 'A valid email address is required' }, 400)
+  if (!isAssignableRole(role))
+    return json({ error: `role must be one of ${ASSIGNABLE_ROLES.join(', ')}` }, 400)
+
+  const site = (await pgq(`SELECT owner_id, name FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+
+  // Already reachable? Say so rather than sending a link that grants what they
+  // have. Both checks are by address, which is what the sender typed.
+  const existing = (await pgq(
+    `SELECT u.id FROM users u
+     WHERE LOWER(u.email) = ?
+       AND (u.id = (SELECT owner_id FROM sites WHERE id = ?)
+            OR EXISTS (SELECT 1 FROM site_members m WHERE m.site_id = ? AND m.user_id = u.id))
+     LIMIT 1`,
+    [email, String(siteId), String(siteId)],
+  ))?.[0]
+  if (existing)
+    return json({ error: 'That address can already reach this site' }, 409)
+
+  const token = mintToken()
+  const now = new Date()
+  // Re-inviting the same address reissues rather than accumulating: several live
+  // tokens for one person is several chances to leak one, and the unique index on
+  // (site_id, email) makes that the only representable state.
+  await pgq(
+    `INSERT INTO site_invites (site_id, email, role, token_hash, invited_by, created_at, expires_at, accepted_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+     ON CONFLICT (site_id, email) DO UPDATE SET
+       role = EXCLUDED.role,
+       token_hash = EXCLUDED.token_hash,
+       invited_by = EXCLUDED.invited_by,
+       created_at = EXCLUDED.created_at,
+       expires_at = EXCLUDED.expires_at,
+       accepted_at = NULL`,
+    [String(siteId), email, role, hashToken(token), Number(authUserId(request)), now.toISOString(), expiryFrom(now)],
+  )
+
+  const inviter = (await pgq(`SELECT name, email FROM users WHERE id = ? LIMIT 1`, [Number(authUserId(request))]))?.[0]
+  const expiresLabel = new Date(expiryFrom(now)).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+  // Delivery is the whole point — the token exists nowhere else — so a failed
+  // send is reported rather than swallowed. The row stays either way, so the
+  // sender can retry from the pending list without it becoming a duplicate.
+  const delivered = await sendSiteInvite({
+    to: email,
+    siteName: String(site?.name ?? siteId),
+    invitedBy: inviter?.name ?? inviter?.email ?? null,
+    role,
+    token,
+    expiresLabel,
+  }).catch(() => false)
+
+  return json({ invites: await listSiteInvites(siteId), delivered }, delivered ? 200 : 502)
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/invites/{inviteId}', () => new Response(null, { status: 204, headers: CORS }))
+
+route.delete('/api/sites/{siteId}/invites/{inviteId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  // Scoped to the site in the DELETE itself rather than looked up and then
+  // checked: an id from another site simply matches nothing.
+  await pgq(
+    `DELETE FROM site_invites WHERE id = ? AND site_id = ?`,
+    [Number(request.params.inviteId), String(siteId)],
+  )
+  return json({ invites: await listSiteInvites(siteId) })
+}).middleware('auth').skipCsrf()
+
+route.options('/api/invites/accept', () => new Response(null, { status: 204, headers: CORS }))
+
+/**
+ * Redeem an invitation.
+ *
+ * Deliberately outside the `/api/sites/{siteId}` prefix: the token names the
+ * site, and requiring the caller to also supply a site id would mean checking a
+ * role they do not have yet. `tests/unit/api-authz.test.ts` gates that prefix on
+ * naming a rank, which this correctly sits outside — like the widget and
+ * connector routes.
+ *
+ * It DOES require authentication. That is the whole design: this endpoint grants
+ * site access to an existing identity and never mints one, so there is no path
+ * here from an unauthenticated address to an account.
+ */
+route.post('/api/invites/accept', async (request: any) => {
+  const uid = authUserId(request)
+  if (!uid)
+    return json({ error: 'Unauthorized' }, 401)
+
+  const token = String((request.jsonBody ?? {}).token ?? '')
+  if (!token)
+    return json({ error: 'This invitation is no longer valid' }, 404)
+
+  const me = (await pgq(`SELECT id, email FROM users WHERE id = ? LIMIT 1`, [Number(uid)]))?.[0]
+  if (!me)
+    return json({ error: 'Unauthorized' }, 401)
+
+  // Looked up BY HASH, so a token that is not in the table simply finds nothing
+  // and no comparison happens. The stored value is never sent anywhere.
+  const invite = (await pgq(
+    `SELECT id, site_id, email, role, expires_at, accepted_at FROM site_invites WHERE token_hash = ? LIMIT 1`,
+    [hashToken(token)],
+  ))?.[0]
+
+  const refusal = inviteRefusal(invite as any, me.email)
+  if (refusal) {
+    // One body and one status for every refusal. The server distinguishes them
+    // so the page can offer "ask for a new one" on an expired link, but a holder
+    // who was not the intended recipient learns only that it did not work —
+    // never whether the token was real, or whose it was.
+    return json({ error: 'This invitation is no longer valid', reason: refusal === 'expired' ? 'expired' : 'invalid' }, 404)
+  }
+
+  // Grant, then mark redeemed. In that order: if the second write fails the
+  // worst case is a live token for access already granted, which the next
+  // attempt makes idempotent. The reverse order could consume the invitation
+  // while granting nothing.
+  await pgq(
+    `INSERT INTO site_members (site_id, user_id, role, created_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (site_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+    [String(invite.site_id), Number(me.id), String(invite.role), new Date().toISOString()],
+  )
+  await pgq(`UPDATE site_invites SET accepted_at = ? WHERE id = ?`, [new Date().toISOString(), Number(invite.id)])
+
+  const site = (await pgq(`SELECT name FROM sites WHERE id = ? LIMIT 1`, [String(invite.site_id)]))?.[0]
+  return json({ siteId: String(invite.site_id), siteName: site?.name ?? null, role: String(invite.role) })
 }).middleware('auth').skipCsrf()
 
 route.post('/api/sites', async (request: any) => {
