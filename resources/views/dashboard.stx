@@ -217,10 +217,15 @@ let live = false
 // analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
 let user = null
 let ownedSites = []
-// Read gate: the dashboard only exposes a site's data to that site's authenticated
-// OWNER, OR to anyone holding a valid ?share= token. Stays false (→ no queries, no
-// data in the response) for anyone else.
+// Read gate: the dashboard only exposes a site's data to someone this site is
+// actually reachable by — its owner, an invited member, OR anyone holding a valid
+// ?share= token. Stays false (→ no queries, no data in the response) for anyone else.
 let viewGranted = false
+// The caller's rank on the ACTIVE site: 'owner' | 'admin' | 'viewer', or null in
+// share mode. Carried to the client so the UI can hide controls a viewer cannot
+// use — a convenience only, never the check: every endpoint re-resolves the role
+// server-side on each request.
+let activeRole = null
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
@@ -259,9 +264,22 @@ async function loadData() {
     catch { user = null }
   }
   if (user) {
+    // Owned sites AND sites shared with this user. `WHERE owner_id = ?` was the
+    // whole query, which meant an invited member authenticated, held a valid
+    // role, was served by every /api/sites/** endpoint — and still landed on an
+    // empty switcher and a gated page, because this view never learned about
+    // memberships. #19 fixed exactly this shape of bug in GET /api/sites and the
+    // fix never reached the view, so sharing a site did not actually share it.
+    //
+    // Mirrors routes/analytics.ts GET /api/sites deliberately: two answers to
+    // "which sites can I reach" that disagree is what produced this.
     ownedSites = (await pgq(
-      'SELECT id, name FROM sites WHERE owner_id = ? ORDER BY created_at DESC NULLS LAST, id',
-      [Number(user.id)],
+      `SELECT s.id, s.name, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
+       FROM sites s
+       LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
+       WHERE s.owner_id = ? OR m.user_id IS NOT NULL
+       ORDER BY s.created_at DESC NULLS LAST, s.id`,
+      [Number(user.id), Number(user.id), Number(user.id)],
     )) ?? []
   }
   // Tolerant read of a site's settings JSON (holds the share token).
@@ -288,6 +306,7 @@ async function loadData() {
   if (ownedMatch) {
     siteId = String(ownedMatch.id)
     viewGranted = true
+    activeRole = ownedMatch.role || 'viewer'
   }
   else if (requestedSite && shareParam) {
     const st = (await readSettings(requestedSite)).share_token
@@ -300,6 +319,7 @@ async function loadData() {
   if (!viewGranted && ownedSites.length) {
     siteId = String(ownedSites[0].id)
     viewGranted = true
+    activeRole = ownedSites[0].role || 'viewer'
   }
   if (!viewGranted)
     return
