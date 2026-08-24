@@ -193,6 +193,17 @@ export default {
     default: '',
   },
 
+  // Read by config/services.ts and verified against every incoming webhook in
+  // app/Actions/StripeWebhook.ts, which returns 400 when it is unset. It was
+  // consumed there without ever being declared here, so a fresh clone had no
+  // way to learn the variable exists — and an unset secret does not fail
+  // loudly at boot, it fails silently at the moment a real payment arrives and
+  // the subscription never syncs.
+  STRIPE_WEBHOOK_SECRET: {
+    validation: schema.string(),
+    default: '',
+  },
+
   MEILISEARCH_HOST: {
     validation: schema.string(),
     default: '',

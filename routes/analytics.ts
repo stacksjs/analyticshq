@@ -19,6 +19,8 @@ import { db } from '@stacksjs/database'
 import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app/Analytics/badge'
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
+import { planForSite } from '../app/Analytics/entitlements'
+import { isUnlimited, limitReachedMessage, type PlanLimits } from '../config/plans'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
@@ -639,6 +641,32 @@ async function requireSiteRole(request: any, siteId: string, required: SiteRole)
 /** Destructive and ownership-transferring operations only. */
 async function requireSiteOwner(request: any, siteId: string): Promise<Response | null> {
   return requireSiteRole(request, siteId, 'owner')
+}
+
+/**
+ * Gate an action on the site being paid for.
+ *
+ * Answers **402 Payment Required**, not 403: the caller is permitted, the
+ * account simply is not on a plan that includes this. That distinction is what
+ * lets the dashboard render an upgrade prompt instead of a generic "forbidden",
+ * so `upgradeUrl` rides along rather than making the client hardcode it.
+ *
+ * Composed with `requireSiteRole`, never instead of it — being a paying
+ * customer is not permission to touch someone else's site. Call the role check
+ * first so an outsider gets 403/404 and learns nothing about the owner's
+ * billing.
+ *
+ * `count` is the number of the thing that already exists, so the same helper
+ * covers both "this plan cannot do it at all" (limit 0) and a real ceiling.
+ * Self-hosted resolves to an unlimited plan and never reaches the comparison.
+ */
+async function requirePlanAllows(siteId: string, resource: keyof PlanLimits, count: number): Promise<Response | null> {
+  const { plan, limits } = await planForSite(siteId)
+  const limit = limits[resource]
+  if (isUnlimited(limit) || count < limit)
+    return null
+
+  return json({ error: limitReachedMessage(resource, limit, plan), plan, upgradeUrl: '/pricing' }, 402)
 }
 
 // ---------------------------------------------------------------------------
