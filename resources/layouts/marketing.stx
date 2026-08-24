@@ -7,9 +7,15 @@
     hasDocumentShell() true, turns ensureDocumentShell into a no-op, and every page's
     title/description is dropped on the floor. Never add one.
 
-    Comments here are {{-- --}}, which are removed before any gate runs. An HTML
-    comment would survive into the response and be re-parsed by four separate
-    consumers downstream.
+    Comment with stx's own delimiters rather than an HTML comment: those are removed
+    before any gate runs, while an HTML comment survives into the response and is
+    re-parsed by four separate consumers downstream.
+
+    Never write stx's closing delimiter inside a comment body -- not even as an
+    example of the syntax, which is exactly how this block shipped broken to
+    production. The stripper is non-nesting: it cuts from the opening delimiter to
+    the FIRST closing one, so an inner example terminates the comment early and
+    every line after it renders as visible text at the top of the page.
 
     The name of this file IS the router's layout group: crossing between 'marketing'
     and the app shell makes the router do a full-document swap, which is the only
