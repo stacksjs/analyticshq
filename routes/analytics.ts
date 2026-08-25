@@ -728,6 +728,35 @@ async function teammateCount(siteId: string): Promise<number> {
   return Number(row.members ?? 0) + Number(row.invites ?? 0)
 }
 
+/**
+ * How many invitations may be outstanding on one site at once (#45).
+ *
+ * This is an abuse ceiling, NOT a plan limit, and the two are kept apart on
+ * purpose: plan limits are a commercial decision that we want to raise, and
+ * raising one must never quietly raise this. Pro includes unlimited teammates,
+ * so without a separate bound the sending side of this endpoint is unbounded —
+ * and it sends real email, from our domain, to any address the caller names.
+ *
+ * The cost of that is not the mail bill, it is deliverability: bulk unsolicited
+ * mail from our sending domain gets the domain blocklisted, and the mail that
+ * then stops arriving is everyone's, including password resets.
+ *
+ * A rate limit alone does not cover it — 20 a minute, patiently, is still tens
+ * of thousands. What actually distinguishes use from abuse is the *standing*
+ * count: a real team has a handful of people who have not clicked accept yet.
+ * Nobody legitimately has fifty.
+ */
+const MAX_PENDING_INVITES = 50
+
+/** Invitations on this site that have been sent and not yet redeemed. */
+async function pendingInviteCount(siteId: string): Promise<number> {
+  const rows = await pgq(
+    `SELECT COUNT(*) AS n FROM site_invites WHERE site_id = ? AND accepted_at IS NULL`,
+    [String(siteId)],
+  )
+  return Number(rows?.[0]?.n ?? 0)
+}
+
 route.options('/api/sites/{siteId}/members', () => new Response(null, { status: 204, headers: CORS }))
 
 route.get('/api/sites/{siteId}/members', async (request: any) => {
@@ -860,6 +889,15 @@ route.post('/api/sites/{siteId}/invites', async (request: any) => {
   if (capped)
     return capped
 
+  // Abuse ceiling, checked separately from the plan (#45). 429 rather than 402:
+  // this is not something upgrading fixes, and offering an upgrade here would be
+  // selling a bigger outbox to whoever is filling it.
+  if (await pendingInviteCount(siteId) >= MAX_PENDING_INVITES) {
+    return json({
+      error: `There are already ${MAX_PENDING_INVITES} invitations waiting to be accepted on this site. Revoke some before sending more.`,
+    }, 429)
+  }
+
   const body = request.jsonBody ?? {}
   const email = normalizeEmail(body.email)
   const role = body.role
@@ -916,7 +954,12 @@ route.post('/api/sites/{siteId}/invites', async (request: any) => {
   }).catch(() => false)
 
   return json({ invites: await listSiteInvites(siteId), delivered }, delivered ? 200 : 502)
-}).middleware('auth').skipCsrf()
+  // Ten a minute (#45). This is the only endpoint in the app that sends mail to
+  // an address the caller chooses, so it is the one that can spend our sending
+  // reputation. Ten is far above what inviting a team looks like and far below
+  // what makes a mailing list worth building here. `/password/forgot`, the other
+  // caller-addressed mail path, is capped at 3.
+}).middleware('auth').skipCsrf().rateLimit(10, 'minute')
 
 route.options('/api/sites/{siteId}/invites/{inviteId}', () => new Response(null, { status: 204, headers: CORS }))
 
@@ -992,7 +1035,11 @@ route.post('/api/invites/accept', async (request: any) => {
 
   const site = (await pgq(`SELECT name FROM sites WHERE id = ? LIMIT 1`, [String(invite.site_id)]))?.[0]
   return json({ siteId: String(invite.site_id), siteName: site?.name ?? null, role: String(invite.role) })
-}).middleware('auth').skipCsrf()
+  // The token is a bearer capability, so throttle guessing (#45). 256 bits makes
+  // a search infeasible on arithmetic alone, but "infeasible" is a property of
+  // the token length, and a bound that does not depend on that assumption costs
+  // nothing. Nobody legitimately redeems twenty invitations a minute.
+}).middleware('auth').skipCsrf().rateLimit(20, 'minute')
 
 route.post('/api/sites', async (request: any) => {
   const uid = authUserId(request)

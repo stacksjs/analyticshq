@@ -256,3 +256,52 @@ describe('the endpoints that carry all this', () => {
       .toContain('DELETE FROM site_invites WHERE id = ? AND site_id = ?')
   })
 })
+
+describe('sending is bounded (#45)', () => {
+  const createInvite = routeBlock(`route.post('/api/sites/{siteId}/invites'`)
+  const acceptInvite = routeBlock(`route.post('/api/invites/accept'`)
+
+  test('the only endpoint that mails a caller-chosen address is rate limited', () => {
+    // This is the one place in the app where a caller names the recipient, so it
+    // is the one that can spend our sending reputation. Deliverability damage is
+    // shared: the mail that stops arriving includes everyone's password resets.
+    expect(createInvite).toMatch(/\.rateLimit\(\d+, 'minute'\)/)
+  })
+
+  test('and is more generous than /password/forgot, but not by much', () => {
+    const limit = Number(createInvite.match(/\.rateLimit\((\d+), 'minute'\)/)?.[1])
+    expect(limit).toBeGreaterThan(3)
+    expect(limit).toBeLessThanOrEqual(20)
+  })
+
+  test('redeeming is rate limited too, because the token is a bearer capability', () => {
+    // 256 bits makes guessing infeasible on arithmetic alone. A bound that does
+    // not rest on that assumption costs nothing.
+    expect(acceptInvite).toMatch(/\.rateLimit\(\d+, 'minute'\)/)
+  })
+
+  test('a standing ceiling on unaccepted invitations exists', () => {
+    // A rate limit alone does not cover patient abuse — 10 a minute, all day, is
+    // still tens of thousands. What separates use from abuse is the standing
+    // count: a real team has a handful of people yet to click accept.
+    expect(routes).toContain('MAX_PENDING_INVITES')
+    expect(createInvite).toContain('pendingInviteCount(siteId)')
+  })
+
+  test('the ceiling answers 429, not 402', () => {
+    // 402 would offer an upgrade, which here means selling a bigger outbox to
+    // whoever is filling it. This is not something paying more should fix.
+    const i = createInvite.indexOf('MAX_PENDING_INVITES')
+    const block = createInvite.slice(i, i + 400)
+    expect(block).toContain('429')
+    expect(block).not.toContain('402')
+  })
+
+  test('the ceiling is not a plan limit', () => {
+    // Kept out of config/plans.ts on purpose: plan limits are a commercial
+    // decision we want to raise, and raising one must never quietly raise this.
+    const plans = readFileSync(join(ROOT, 'config/plans.ts'), 'utf8')
+    expect(plans).not.toContain('MAX_PENDING_INVITES')
+    expect(plans).not.toContain('pending')
+  })
+})
