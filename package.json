@@ -78,6 +78,7 @@
   },
   "dependencies": {
     "@stacksjs/buddy": "^0.72.64",
+    "@stacksjs/stx": "^0.2.231",
     "@stacksjs/ts-cloud": "^0.11.5",
     "@ts-analytics/tracking": "^0.1.13",
     "stacks": "^0.72.64"
