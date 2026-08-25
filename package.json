@@ -77,10 +77,10 @@
     "sqlite": "^3.47.2"
   },
   "dependencies": {
-    "@stacksjs/buddy": "^0.72.50",
+    "@stacksjs/buddy": "^0.72.64",
     "@stacksjs/ts-cloud": "^0.11.5",
     "@ts-analytics/tracking": "^0.1.13",
-    "stacks": "^0.72.50"
+    "stacks": "^0.72.64"
   },
   "devDependencies": {
     "better-dx": "^0.2.25"
