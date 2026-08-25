@@ -1,0 +1,177 @@
+<script server>
+/**
+ * Where an invitation link lands.
+ *
+ * app/Mail/SiteInvite.ts sends people here. Without this page that email was a
+ * link to a 404 — the API could redeem an invitation but nobody could reach it.
+ *
+ * The token rides in the query string rather than the path because this app has
+ * no dynamic-param views, and because that is already the established shape for
+ * a capability URL here: the dashboard share link is `?share=<token>`. Query and
+ * path leak equivalently into server logs; the extra exposure a query string
+ * normally carries is the Referer header, and this page loads nothing
+ * third-party (tests/unit/no-third-party-assets.test.ts enforces that), so
+ * there is nowhere for it to leak to.
+ *
+ * ## What this page will and will not say
+ *
+ * It names the site, because whoever holds the link almost certainly holds the
+ * email, and that already named it — showing it here reveals nothing new. It
+ * does NOT redeem anything on its own: accepting is an authenticated POST, so
+ * merely opening the link (a mail client prefetching it, a scanner following it)
+ * cannot consume the invitation.
+ *
+ * Signing up happens at /register like anyone else's account. This page never
+ * creates one, which is the rule that keeps an invitation system from becoming
+ * an account-takeover system.
+ */
+import { db } from '@stacksjs/database'
+import { hashToken, inviteRefusal } from '../../app/Analytics/invites'
+
+useSeoMeta({
+  title: 'Your invitation - analyticshq',
+  // A capability URL must never be indexed, and must not travel in a Referer.
+  robots: 'noindex, nofollow',
+  referrer: 'no-referrer',
+})
+
+const queryParams = typeof query !== 'undefined' ? query : {}
+const token = String(queryParams.token || '')
+
+const IS_PG = (process.env.DB_CONNECTION || 'postgres') === 'postgres'
+const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
+
+// Who is reading this page, if anyone. Same cookie path the dashboard uses.
+let viewer = null
+const authToken = (typeof cookies !== 'undefined' ? cookies.analyticshq_token : '') || ''
+if (authToken) {
+  try {
+    const { Auth } = await import('@stacksjs/auth')
+    viewer = await Auth.getUserFromToken(authToken)
+  }
+  catch { viewer = null }
+}
+
+let invite = null
+let siteName = ''
+if (token) {
+  try {
+    // By hash. The raw token is never stored, so a token that is not ours simply
+    // matches nothing and no comparison happens.
+    invite = (await pgq(
+      `SELECT i.id, i.site_id, i.email, i.role, i.expires_at, i.accepted_at, s.name AS site_name
+       FROM site_invites i LEFT JOIN sites s ON s.id = i.site_id
+       WHERE i.token_hash = ? LIMIT 1`,
+      [hashToken(token)],
+    ))?.[0] ?? null
+    siteName = invite?.site_name || invite?.site_id || ''
+  }
+  catch { invite = null }
+}
+
+// One decision function shared with the endpoint, so the page cannot offer an
+// Accept button for something the API will refuse.
+const refusal = token ? inviteRefusal(invite, viewer?.email) : 'not_found'
+
+// `wrong_account` is the one refusal that is not terminal — the reader may
+// simply be signed in as the wrong person, or not at all.
+const state = !token
+  ? 'missing'
+  : refusal === null
+    ? 'ready'
+    : refusal === 'expired'
+      ? 'expired'
+      : refusal === 'wrong_account'
+        ? (viewer ? 'wrong_account' : 'signed_out')
+        : 'invalid'
+
+const roleLabel = invite?.role === 'admin' ? 'view the reports and change settings' : 'view the reports'
+// Round-trips the reader back here after they sign in or register.
+const returnTo = `/invite?token=${encodeURIComponent(token)}`
+
+// The token is the only thing that crosses. Everything else this block resolved
+// — the invite row, the viewer, the refusal — stays server-side: the client has
+// no decision to make, it only posts the token back for the server to re-check.
+const inviteToken = token
+defineClientPayload({ inviteToken })
+</script>
+
+<script client>
+const session = useStore('session') as SessionStore
+const busy: StxSignal<boolean> = state(false)
+const failed: StxSignal<string> = state('')
+
+async function accept(): Promise<void> {
+  if (busy())
+    return
+  busy.set(true)
+  failed.set('')
+  try {
+    const res = await session.authFetch('/api/invites/accept', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.siteId) {
+      // Straight into the site they were invited to, rather than a generic
+      // dashboard that would make them hunt for it in the switcher.
+      window.location.href = `/dashboard?site=${encodeURIComponent(d.siteId)}`
+      return
+    }
+    failed.set(d.error || 'This invitation is no longer valid.')
+  }
+  catch {
+    failed.set('Something went wrong. Please try again.')
+  }
+  busy.set(false)
+}
+</script>
+
+<div class="flex items-center justify-center px-4 py-16 min-h-screen">
+  <div class="max-w-md w-full">
+
+    <h1 class="mb-6 font-semibold text-2xl text-center">analyticshq</h1>
+
+    <div class="px-6 py-6 panel">
+
+      @if (state === 'ready')
+        <h2 class="mb-2 font-semibold text-lg">You have been invited to {{ siteName }}</h2>
+        <p class="mb-5 text-sm text-text-2">You will be able to {{ roleLabel }}. Analytics here are cookieless, so there is no personal data to see.</p>
+        {{-- Static label. A reactive mustache as an element's own text makes stx
+            cloak it, and the primary control on this page must not be
+            display:none before the bundle runs. --}}
+        <button type="button" @click="accept()" :disabled="busy()" class="w-full btn primary">Accept the invitation</button>
+        <span :show="busy()" style="display:none" class="block mt-2 text-center text-text-3 text-xs">Accepting…</span>
+        <p :show="failed() !== ''" style="display:none;color:var(--danger, #f87171)" class="mt-3 text-center text-xs">{{ failed() }}</p>
+
+      @elseif (state === 'signed_out')
+        <h2 class="mb-2 font-semibold text-lg">You have been invited to {{ siteName }}</h2>
+        <p class="mb-5 text-sm text-text-2">Sign in as <span class="mono">{{ invite.email }}</span> to accept. If you do not have an account yet, create one with that address.</p>
+        <a href="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block mb-2 w-full text-center btn primary">Sign in</a>
+        <a href="/register?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn ghost">Create an account</a>
+
+      @elseif (state === 'wrong_account')
+        <h2 class="mb-2 font-semibold text-lg">This invitation is for someone else</h2>
+        {{-- Names the invited address only to a reader who is already signed in,
+            so it cannot be harvested by opening the link alone. --}}
+        <p class="mb-5 text-sm text-text-2">It was sent to <span class="mono">{{ invite.email }}</span>, and you are signed in as <span class="mono">{{ viewer.email }}</span>. Sign in as the invited address to accept it.</p>
+        <a href="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn primary">Switch account</a>
+
+      @elseif (state === 'expired')
+        <h2 class="mb-2 font-semibold text-lg">This invitation has expired</h2>
+        <p class="mb-5 text-sm text-text-2">Invitations are good for 14 days. Ask whoever invited you to send a new one.</p>
+        <a href="/" class="block w-full text-center btn ghost">Back to analyticshq</a>
+
+      @else
+        {{-- One page for every remaining refusal: unknown token, already
+            redeemed, malformed. The server knows which; a holder who was not the
+            recipient learns only that it did not work. --}}
+        <h2 class="mb-2 font-semibold text-lg">This invitation is no longer valid</h2>
+        <p class="mb-5 text-sm text-text-2">It may have already been used, been revoked, or never existed. Ask whoever invited you to send a new one.</p>
+        <a href="/" class="block w-full text-center btn ghost">Back to analyticshq</a>
+      @endif
+
+    </div>
+  </div>
+</div>

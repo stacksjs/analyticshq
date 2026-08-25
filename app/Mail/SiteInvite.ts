@@ -41,7 +41,10 @@ export async function sendSiteInvite(options: SiteInviteOptions): Promise<boolea
   // normalizeOrigin because config.app.url is stored without a scheme, and a
   // scheme-less href in an email resolves against the mail client, not us.
   const appUrl = normalizeOrigin(config.app?.url || 'https://analyticshq.org')
-  const acceptUrl = `${appUrl}/invite/${encodeURIComponent(token)}`
+  // Query, not a path segment: this app has no dynamic-param views, and `?token=`
+  // matches the shape the dashboard share link already uses. resources/views/
+  // invite.stx is what serves it.
+  const acceptUrl = `${appUrl}/invite?token=${encodeURIComponent(token)}`
   const inviter = (invitedBy ?? '').trim()
   const subject = inviter
     ? `${inviter} invited you to ${siteName} on ${appName}`
