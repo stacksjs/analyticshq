@@ -78,10 +78,50 @@ Breakdown lists are capped at the top 20 by views. (Filters don't apply to
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/sites` | List the sites you own |
+| `GET /api/sites` | List the sites you can reach — owned and shared — each with your `role` |
 | `POST /api/sites` | Create a site — `{ name, domain? }` → `{ site }` |
 | `PATCH /api/sites/{id}` | Edit `name`, `domains`, or `timezone` (IANA); partial |
 | `DELETE /api/sites/{id}` | Delete the site and cascade-erase all its data |
+
+## Team
+
+Three ranks: `viewer` reads reports, `admin` also changes settings, goals,
+sharing and people, `owner` also destroys. Owner is `sites.owner_id` and is not
+assignable; an effective role is the higher of owner and membership.
+
+`role` on `GET /api/sites` is a convenience so a UI can hide controls. It is
+never the check — every endpoint re-resolves the role server-side per request.
+
+**Granting access is a Pro feature.** Both endpoints that do so answer
+`402 Payment Required` with `{ error, plan, upgradeUrl }` when the site's owner
+has no active subscription. Entitlement resolves from the site OWNER, not the
+caller, so an admin managing a client's paid site does not need their own plan.
+A self-hosted install (no `STRIPE_SECRET_KEY`) is unlimited.
+
+| Endpoint | Rank | Purpose |
+|----------|------|---------|
+| `GET /api/sites/{id}/members` | viewer | Who can reach this site, owner first |
+| `POST /api/sites/{id}/members` | admin + Pro | Grant access to an address that **already has an account** — `{ email, role }`. 404 if no such account; invite them instead |
+| `DELETE /api/sites/{id}/members/{userId}` | admin | Remove someone. The owner cannot be removed |
+| `GET /api/sites/{id}/invites` | viewer | Pending invitations. Never returns the token |
+| `POST /api/sites/{id}/invites` | admin + Pro | Invite by email — `{ email, role }`. Emails a link; re-inviting the same address reissues rather than adding a second live token. `502` means the row was written but the email did not send |
+| `DELETE /api/sites/{id}/invites/{inviteId}` | admin | Revoke a pending invitation |
+| `POST /api/invites/accept` | authenticated | Redeem — `{ token }` |
+
+### Redeeming an invitation
+
+The link carries a token; only its SHA-256 is stored, so nothing recoverable
+sits in the database. It expires after 14 days, works once, and is bound to the
+address it was sent to.
+
+Redemption **requires an authenticated caller** and never creates an account.
+Someone without one signs up through `/register` as normal and then redeems, so
+there is no path from an unauthenticated address to an account here — that is
+how invitation systems become account-takeover systems.
+
+Every refusal answers `404` with one identical message. A `reason` of `expired`
+accompanies it so a page can offer "ask for a new one", but a holder who was not
+the intended recipient learns only that it did not work.
 
 ## Goals & sharing
 
