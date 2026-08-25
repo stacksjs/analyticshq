@@ -15,6 +15,8 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtD
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
 import { installTargets } from '../../app/Analytics/install'
+import { listSiteMembers } from '../../app/Analytics/access'
+import { siteIsPro } from '../../app/Analytics/entitlements'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
 
@@ -226,6 +228,10 @@ let viewGranted = false
 // use — a convenience only, never the check: every endpoint re-resolves the role
 // server-side on each request.
 let activeRole = null
+// Team panel state, resolved once the read gate has granted.
+let teamMembers = []
+let teamInvites = []
+let teamIsPro = false
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
@@ -326,6 +332,34 @@ async function loadData() {
   // Owner (not a share viewer): surface any existing share token for the link UI.
   if (!shareMode)
     shareToken = (await readSettings(siteId)).share_token || ''
+
+  // Team: who can already reach this site, and who has been invited but has not
+  // accepted yet. Resolved server-side and rendered with @foreach so the panel
+  // says something before the bundle runs — an x-for over a reactive list is the
+  // shape that cloaked the install panel into a blank box, and x-cloak is
+  // display:none. Mutations re-read from the server rather than patching these
+  // in place, for the same reason.
+  //
+  // listSiteMembers is the same function the members endpoint uses, so the panel
+  // cannot show a different answer from the API it posts to.
+  if (viewGranted && !shareMode) {
+    try {
+      teamMembers = await listSiteMembers(siteId)
+      teamInvites = (await pgq(
+        `SELECT id, email, role, expires_at FROM site_invites
+         WHERE site_id = ? AND accepted_at IS NULL ORDER BY created_at DESC`,
+        [String(siteId)],
+      )) ?? []
+      // Drives the paywall copy. The endpoints enforce independently — this only
+      // decides whether to show an invite form or an upgrade prompt.
+      teamIsPro = await siteIsPro(siteId)
+    }
+    catch {
+      // A team panel that cannot load must not take the whole dashboard with it.
+      teamMembers = []
+      teamInvites = []
+    }
+  }
   // Resolve the site's timezone for chart bucketing. `timestamp` is a stored UTC
   // ISO string; for UTC keep the fast string-prefix, otherwise convert to the
   // site's zone first. siteTz is sanitized to IANA-safe characters, so it is safe
@@ -802,6 +836,11 @@ const chart = buildChart(densify(series, from, to), compare ? densify(prevSeries
 // Whether the signed-in user OWNS the site currently shown (not a share viewer) —
 // gates the setup panel + all management affordances.
 const ownsActive = viewGranted && !shareMode
+// Who may change the team. A viewer can SEE who else has access — that is part of
+// knowing how widely a site is shared, and why GET members only needs viewer —
+// but cannot invite or remove. The endpoints enforce this independently; hiding
+// the controls only avoids offering a button that answers 403.
+const canManageTeam = ownsActive && (activeRole === 'owner' || activeRole === 'admin')
 const showSiteSelect = ownsActive && ownedSites.length > 1
 
 // The install snippets, one per framework (app/Analytics/install.ts).
@@ -1206,6 +1245,85 @@ async function revokeShare() {
   if (failed)
     await stxAlert('Could not revoke the share link. It may still be active — please try again.')
 }
+// --- Team -------------------------------------------------------------------
+// The lists themselves are server-rendered (see the panel markup). These only
+// mutate and then re-read, rather than maintaining a second copy of the team in
+// client state that could disagree with the one the server just rendered.
+const inviteEmail = state('')
+const inviteRole = state('viewer')
+const inviteBusy = state(false)
+
+/** Re-read the panel from the server after a change. */
+function reloadTeam() {
+  window.location.reload()
+}
+
+async function sendInvite() {
+  if (inviteBusy())
+    return
+  const email = inviteEmail().trim()
+  if (!email) {
+    await stxAlert('Enter the email address to invite.')
+    return
+  }
+  inviteBusy.set(true)
+  let message = ''
+  try {
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, role: inviteRole() }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok) {
+      inviteEmail.set('')
+      inviteBusy.set(false)
+      reloadTeam()
+      return
+    }
+    // 402 carries the plan message and where to upgrade; 502 means the row was
+    // written but the email did not go out, which the sender has to know because
+    // the link has no other delivery.
+    message = res.status === 502
+      ? 'The invitation was created but the email could not be sent. Try revoking it and inviting again.'
+      : (d.error || 'Could not send that invitation.')
+  }
+  catch {
+    message = 'Could not send that invitation.'
+  }
+  inviteBusy.set(false)
+  if (message)
+    await stxAlert(message)
+}
+
+async function revokeInvite(id: string, email: string) {
+  if (!(await stxConfirm(`Revoke the invitation to ${email}? The link they were sent will stop working.`)))
+    return
+  try {
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (res.ok) {
+      reloadTeam()
+      return
+    }
+  }
+  catch {}
+  await stxAlert('Could not revoke that invitation. It may still be usable — please try again.')
+}
+
+async function removeMember(userId: string, email: string) {
+  if (!(await stxConfirm(`Remove ${email} from this site? They lose access immediately.`)))
+    return
+  try {
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+    if (res.ok) {
+      reloadTeam()
+      return
+    }
+  }
+  catch {}
+  await stxAlert('Could not remove that person. They may still have access — please try again.')
+}
+
 // Created ONCE, not per click. useTimeout starts on creation and registers an
 // onDestroy hook, so calling it inside the handler would stack a fresh hook on every
 // copy. The run at page load is harmless: it clears a flag that is already false.
@@ -1549,6 +1667,103 @@ onMount(() => {
           {{-- The one reactive node. window.location.origin is the only correct
               answer here and the server cannot know it. --}}
           <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installCode() }}</pre>
+        </div>
+      </details>
+    @endif
+
+    {{-- Team. Everyone who can reach this site, plus anyone invited who has not
+        accepted yet.
+
+        Lists are SERVER-rendered with @foreach and server mustaches, for the
+        reason spelled out on the install panel above: an x-for whose rows carry
+        reactive {{ }} makes stx cloak the container, and x-cloak is display:none.
+        A mutation re-reads from the server rather than patching a reactive list
+        in place — invites are rare and correctness is worth more than avoiding a
+        reload here.
+
+        Visible to any member (a viewer should be able to tell how widely a site
+        is shared); only admin and owner get the controls. --}}
+    @if (ownsActive)
+      <details class="mb-8 border-border panel reveal">
+        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+          <span class="font-semibold text-sm">Team</span>
+          <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">{{ teamMembers.length }} with access</span>
+        </summary>
+        <div class="pb-5 px-5">
+
+          @foreach (teamMembers as m)
+            <div class="flex gap-3 items-center justify-between py-2" style="border-bottom: 1px solid var(--border)">
+              <div class="min-w-0">
+                <span class="text-sm">{{ m.name || m.email }}</span>
+                @if (m.name)
+                  <span class="ml-2 text-text-3 text-xs">{{ m.email }}</span>
+                @endif
+              </div>
+              <div class="flex flex-shrink-0 gap-2 items-center">
+                <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">{{ m.role }}</span>
+                {{-- The owner has no membership row to remove, so offering it
+                    would be a button that reports success and changes nothing. --}}
+                @if (canManageTeam && m.role !== 'owner')
+                  <button type="button" @click="removeMember('{{ m.userId }}', '{{ m.email }}')" style="padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-3);font:600 11px/1 var(--sans,ui-sans-serif);cursor:pointer">Remove</button>
+                @endif
+              </div>
+            </div>
+          @endforeach
+
+          @if (teamInvites.length)
+            <p class="mb-1 mt-4 text-text-3 text-xs">Invited, not yet accepted</p>
+            @foreach (teamInvites as inv)
+              <div class="flex gap-3 items-center justify-between py-2" style="border-bottom: 1px solid var(--border)">
+                <div class="min-w-0">
+                  <span class="text-sm text-text-2">{{ inv.email }}</span>
+                  <span class="ml-2 text-text-3 text-xs">expires {{ String(inv.expires_at || '').slice(0, 10) }}</span>
+                </div>
+                <div class="flex flex-shrink-0 gap-2 items-center">
+                  <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">{{ inv.role }}</span>
+                  @if (canManageTeam)
+                    <button type="button" @click="revokeInvite('{{ inv.id }}', '{{ inv.email }}')" style="padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-3);font:600 11px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
+                  @endif
+                </div>
+              </div>
+            @endforeach
+          @endif
+
+          @if (canManageTeam)
+            @if (teamIsPro)
+              <div class="flex flex-wrap gap-2 items-center mt-4">
+                <input
+                  type="email"
+                  x-model="inviteEmail"
+                  placeholder="teammate@example.com"
+                  autocomplete="off"
+                  style="flex:1 1 15rem;min-height:34px;padding:0 0.65rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)"
+                >
+                <select x-model="inviteRole" style="min-height:34px;padding:0 0.5rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)">
+                  <option value="viewer">can view</option>
+                  <option value="admin">can manage</option>
+                </select>
+                {{-- Static label. It was `{{ inviteBusy() ? 'Sending…' : 'Send
+                    invitation' }}`, and stx cloaks any element whose own text is
+                    a reactive mustache — so the primary control on this panel was
+                    display:none until the bundle ran. Busy state is carried by
+                    :disabled, an ATTRIBUTE binding, which does not cloak, and by
+                    the sibling below, which is supposed to start hidden. --}}
+                <button type="button" @click="sendInvite()" :disabled="inviteBusy()" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Send invitation</button>
+                <span :show="inviteBusy()" style="display:none;color:var(--text-3);font:400 12px/1 var(--sans,ui-sans-serif)">Sending…</span>
+              </div>
+              <p class="mt-2 text-text-3 text-xs">They get an emailed link that works once, for that address only, and expires in 14 days.</p>
+            @else
+              {{-- The paywall. Server-rendered from the site owner's plan, so it
+                  is correct before any JS runs; the endpoint answers 402
+                  regardless of what this shows. --}}
+              <div class="mt-4 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
+                <p class="mb-1 font-semibold text-sm">Invite your teammates with Pro</p>
+                <p class="mb-3 text-text-3 text-xs">Share this site with as many people as you like, each with their own login and their own level of access. Included in Pro at no extra cost per person.</p>
+                <a href="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</a>
+              </div>
+            @endif
+          @endif
+
         </div>
       </details>
     @endif
