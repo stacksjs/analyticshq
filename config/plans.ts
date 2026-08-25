@@ -65,9 +65,16 @@ export function billingEnabled(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY)
 }
 
-/** True for a limit that is not actually bounded. */
+/**
+ * True for a limit that is not actually bounded.
+ *
+ * Compared against Infinity rather than written as `!Number.isFinite(value)`,
+ * which is also true for NaN — so a limit that arrived malformed would read as
+ * "unlimited" and open the gate. A bad limit has to fail closed. Callers pair
+ * this with `count < limit`, which is false for NaN, so the two agree on denial.
+ */
 export function isUnlimited(value: number): boolean {
-  return !Number.isFinite(value)
+  return value === Number.POSITIVE_INFINITY
 }
 
 /**
