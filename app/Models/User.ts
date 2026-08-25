@@ -20,10 +20,17 @@ export default defineModel({
     },
     billable: true,
     useTimestamps: true,
-    useApi: {
-      uri: 'users',
-      routes: ['index', 'store', 'show'],
-    },
+    // NO useApi. It generated `GET /api/users`, which returned the entire users
+    // table — every name and email address — and answered an UNAUTHENTICATED
+    // request locally. Auto-CRUD reads are public unless a model opts in to
+    // middleware, and row scoping only engages for a model that declares
+    // `ownership` or carries a `team_id`; this one does neither, so nothing
+    // narrowed it either.
+    //
+    // Nothing in this app ever called it. Every route the app actually serves is
+    // hand-written in routes/, with the guard on it, so the generated set was
+    // pure attack surface. Do not re-add it to expose a user endpoint — write
+    // one in routes/ where the guard is visible next to the handler.
   },
 
   attributes: {

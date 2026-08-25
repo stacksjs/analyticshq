@@ -9,10 +9,11 @@ export default defineModel({
 
   traits: {
     useTimestamps: true,
-    useApi: {
-      uri: 'goals',
-      routes: ['index', 'store', 'show', 'update', 'destroy'],
-    },
+    // NO useApi. It generated `/api/goals`, a flat unscoped surface over every
+    // goal on every site, next to the real endpoints at
+    // `/api/sites/{siteId}/goals` which resolve a per-site role first. A goal
+    // carries a customer's conversion names and values, and nothing in this app
+    // ever called the generated set.
   },
 
   belongsTo: ['Site'],

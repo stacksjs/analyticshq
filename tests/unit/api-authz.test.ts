@@ -7,7 +7,7 @@
  * without a red test.
  */
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const analytics = readFileSync(join(import.meta.dir, '../../routes/analytics.ts'), 'utf8')
@@ -160,6 +160,51 @@ describe('guardrail: no site-scoped endpoint is left ungated', () => {
       const end = rest.indexOf('\nroute.')
       const block = end === -1 ? rest : rest.slice(0, end)
       expect(block).toMatch(/requireSiteRole\(request, siteId, '(viewer|admin|owner)'\)|requireSiteOwner\(request, siteId\)/)
+    })
+  }
+})
+
+/**
+ * No model may generate its own REST API (#49).
+ *
+ * Every test above reads `routes/analytics.ts` and asserts a guard is PRESENT.
+ * None of them can see whether it RUNS — and for one endpoint, it did not.
+ *
+ * `useApi` on a model makes the ORM generate CRUD at `/api/{uri}` from
+ * `storage/framework/orm/routes.ts`. Site declared it with the same five paths
+ * this file guards by hand, and the generated `PATCH /api/sites/{id}` took
+ * precedence: site updates were broken outright for everyone, including the
+ * owner, answering 400 "Invalid ID parameter" because the generated handler
+ * coerces the id to a number and site ids here are strings. The guard in
+ * `routes/analytics.ts` was correct, asserted by the tests above, and never
+ * executed.
+ *
+ * The generated routes also apply no row scoping unless the model declares
+ * `ownership` or carries a `team_id`, and reads are public unless the model opts
+ * into middleware. `User` declared `useApi`, so `GET /api/users` returned every
+ * name and email address in the database to an unauthenticated request.
+ *
+ * So this is not a style rule. A model quietly re-adding `useApi` can both
+ * expose an unguarded surface and disable a guarded one, and nothing else in
+ * this suite would notice. Routes belong in `routes/`, where the guard sits next
+ * to the handler and the tests above can see it.
+ */
+describe('models do not generate routes', () => {
+  const modelsDir = join(import.meta.dir, '../../app/Models')
+  const models = readdirSync(modelsDir).filter(f => f.endsWith('.ts'))
+
+  test('there are models to check, so this cannot pass vacuously', () => {
+    expect(models.length).toBeGreaterThan(4)
+  })
+
+  for (const file of models) {
+    test(`${file} declares no useApi`, () => {
+      // Comments stripped: these models explain at length why they do NOT carry
+      // the trait, and matching the explanation would fail a correct file.
+      const code = readFileSync(join(modelsDir, file), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '')
+      expect({ file, useApi: /\buseApi\b/.test(code) }).toEqual({ file, useApi: false })
     })
   }
 })
