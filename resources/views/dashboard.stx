@@ -1526,18 +1526,19 @@ onMount(() => {
 .filter-clear { color: var(--text-3); text-decoration: none; }
 .filter-clear:hover { color: var(--text); }
 
-/* Account chrome. Plain CSS rather than utility classes: these five controls sat
-   on ~700 characters of inline style each, which is why the Upgrade control ended
-   up with a client-reactive :style and became the one link on the page that could
-   not use the SPA router. Every token here is themed, so the chrome follows
-   light/dark with the rest of the app instead of pinning its own colours. */
+/* Account chrome. Plain CSS rather than utility classes: these controls sat on
+   ~700 characters of inline style each, which is why the Upgrade control ended up
+   with a client-reactive :style and became the one link on the page that could not
+   use the SPA router. Every token here is themed, so the chrome follows light/dark
+   with the rest of the app instead of pinning its own colours.
+
+   One variant, not three. .chrome-cta and .chrome-pro existed for the Upgrade/Pro
+   button that now lives on /account, and were deleted with it rather than left
+   behind — an unused accent style is how the next person ends up reintroducing the
+   duplication this removed. */
 .chrome-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); font: 500 13px/1 var(--sans, ui-sans-serif); text-decoration: none; cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 .chrome-btn:hover { color: var(--text); border-color: var(--accent); }
 .chrome-icon { padding: 7px 10px; font-size: 14px; line-height: 1; }
-.chrome-cta { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.chrome-cta:hover { color: #fff; filter: brightness(1.06); }
-.chrome-pro { background: transparent; border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.chrome-pro:hover { color: var(--accent); }
 </style>
 @endpush
 
@@ -1550,28 +1551,24 @@ onMount(() => {
   {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
       viewer isn't signed in as the owner.
 
-      Previously this was two controls: an Upgrade button and Log out. There was no
-      route to /account from anywhere in the app, so the account page — which has
-      existed and answered 200 all along — was reachable only by typing the URL.
+      Three controls, and deliberately no plan CTA. There used to be an Upgrade
+      button here, which was duplication: /account already carries a Plan section
+      showing Free or Pro, an active badge, and the same /pricing link as either
+      "Upgrade to Pro" or "Manage plan". Billing belongs with the account, not
+      pinned to every view of the numbers.
 
-      Every reactive branch here is TWO elements toggled with `:show`, never one
-      element with a reactive attribute. The Upgrade/Pro control used to be a single
-      anchor with `:href` and `:style` bound to isPro(); that pattern is why it is
-      the one link on this page that could not become an StxLink, since StxLink emits
-      static and server-dynamic attributes only and a client-reactive `:style` would
-      have been dropped silently. Split in two, both halves are plain StxLinks with
-      static styling and the SPA router handles them.
+      The route to /account is the point of this block. That page has existed and
+      answered 200 all along with nothing anywhere linking to it, so the only way
+      in was to type the URL.
 
-      `style="display:none"` on the initially-hidden half is not decoration: without
-      it both halves render before hydration and the header visibly doubles. --}}
+      isPro() is still read further down for the team-panel paywall — dropping the
+      button here did not orphan it. --}}
   @if (ownsActive)
     <div style="position:fixed;top:16px;right:18px;z-index:60;display:flex;gap:6px;align-items:center">
       <button type="button" @click="toggleTheme" class="chrome-btn chrome-icon" aria-label="Toggle light or dark theme" title="Toggle theme">
         <span :show="!theme.isDark()" aria-hidden="true">☾</span>
         <span :show="theme.isDark()" style="display:none" aria-hidden="true">☀</span>
       </button>
-      <StxLink to="/pricing" :show="!isPro()" class="chrome-btn chrome-cta">Upgrade</StxLink>
-      <StxLink to="/account" :show="isPro()" style="display:none" class="chrome-btn chrome-pro">Pro</StxLink>
       <StxLink to="/account" class="chrome-btn">Account</StxLink>
       <button type="button" @click="logout" class="chrome-btn">Log out</button>
     </div>
