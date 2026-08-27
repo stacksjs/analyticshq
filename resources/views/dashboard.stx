@@ -1572,9 +1572,9 @@ onMount(() => {
       </div>
       <nav class="flex gap-1.5 items-center">
         @foreach (ranges as r)
-          <a href="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
+          <StxLink to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
             class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ !isCustom && r.key === range ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ r.label }}</a>
+            style="{{ !isCustom && r.key === range ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ r.label }}</StxLink>
         @endforeach
         <form method="get" class="inline-flex gap-1.5 items-center" title="Custom date range">
           <input type="hidden" name="site" value="{{ siteId }}">
@@ -1589,9 +1589,9 @@ onMount(() => {
           <button type="submit" class="px-3.5 py-1.5 font-medium text-sm border pill"
             style="{{ isCustom ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border); background: var(--panel);' }} cursor: pointer;">Apply</button>
         </form>
-        <a href="{{ compareToggleUrl() }}" title="Overlay the previous period on the chart"
+        <StxLink to="{{ compareToggleUrl() }}" title="Overlay the previous period on the chart"
           class="px-3.5 py-1.5 font-medium text-sm border pill"
-          style="{{ isAll ? 'display:none' : (compare ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)') }}">Compare</a>
+          style="{{ isAll ? 'display:none' : (compare ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)') }}">Compare</StxLink>
         <button type="button" @click="exportCsv"
           class="px-3.5 py-1.5 font-medium text-sm border pill"
           style="color: var(--text-2); border-color: var(--border); background: var(--panel); cursor: pointer;">Export CSV</button>
@@ -1603,12 +1603,12 @@ onMount(() => {
     @if (activeFilters.length)
       <div class="flex flex-wrap gap-2 items-center mb-6 reveal">
         @foreach (activeFilters as f)
-          <a href="{{ removeFilterUrl(f.key) }}" class="font-medium text-xs filter-pill pill" title="Remove filter">
+          <StxLink to="{{ removeFilterUrl(f.key) }}" class="font-medium text-xs filter-pill pill" title="Remove filter">
             <span><span class="text-text-3">{{ f.label }}:</span> <span class="text-text mono">{{ f.value }}</span></span>
             <span class="fx" aria-hidden="true">×</span>
-          </a>
+          </StxLink>
         @endforeach
-        <a href="?site={{ siteId }}&range={{ range }}{{ compare ? '&compare=1' : '' }}" class="ml-1 font-medium text-xs filter-clear">Clear all</a>
+        <StxLink to="?site={{ siteId }}&range={{ range }}{{ compare ? '&compare=1' : '' }}" class="ml-1 font-medium text-xs filter-clear">Clear all</StxLink>
       </div>
     @endif
 
@@ -1759,7 +1759,7 @@ onMount(() => {
               <div class="mt-4 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
                 <p class="mb-1 font-semibold text-sm">Invite your teammates with Pro</p>
                 <p class="mb-3 text-text-3 text-xs">Share this site with as many people as you like, each with their own login and their own level of access. Included in Pro at no extra cost per person.</p>
-                <a href="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</a>
+                <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
               </div>
             @endif
           @endif
@@ -1952,14 +1952,14 @@ onMount(() => {
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top pages</h2>
         @forelse (pages as p)
-          <a href="{{ addFilterUrl('path', p.path) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
+          <StxLink to="{{ addFilterUrl('path', p.path) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%; background: var(--bar);"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ p.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono" title="Bounce rate — of sessions that landed on this page, the share that bounced">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : '—' }}</span>
               <span class="font-medium tabular-nums mono">{{ Number(p.views).toLocaleString() }}</span>
             </span>
-          </a>
+          </StxLink>
         @empty
           <div class="py-8 text-center text-sm text-text-3">No pages yet.</div>
         @endforelse
@@ -2178,14 +2178,14 @@ onMount(() => {
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrer channels</h2>
       @forelse (channels as c)
-        <a href="{{ addFilterUrl('channel', c.name) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
+        <StxLink to="{{ addFilterUrl('channel', c.name) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxChannel) * 100) }}%; background: var(--bar);"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ c.name }}</span>
           <span class="flex relative gap-2.5 items-baseline">
             <span class="tabular-nums text-text-3 mono">{{ Math.round((Number(c.views) / channelTotal) * 100) || (c.views ? '<1' : '0') }}%</span>
             <span class="font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
           </span>
-        </a>
+        </StxLink>
       @empty
         <div class="py-8 text-center text-sm text-text-3">No channel data yet.</div>
       @endforelse
@@ -2197,14 +2197,14 @@ onMount(() => {
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
-        <a href="{{ addFilterUrl('referrer', r.url) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
+        <StxLink to="{{ addFilterUrl('referrer', r.url) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(r.views) / maxReferrerUrl) * 100) }}%; background: var(--bar);"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ r.url }}</span>
           <span class="flex relative gap-3.5 items-baseline">
             <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(r.visitors).toLocaleString() }}</span>
             <span class="font-medium tabular-nums mono" title="Views">{{ Number(r.views).toLocaleString() }}</span>
           </span>
-        </a>
+        </StxLink>
       @empty
         <div class="py-8 text-center text-sm text-text-3">No referrers yet.</div>
       @endforelse
@@ -2316,11 +2316,11 @@ onMount(() => {
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top campaigns</h2>
       @forelse (campaigns as c)
-        <a href="{{ addFilterUrl('campaign', c.campaign) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
+        <StxLink to="{{ addFilterUrl('campaign', c.campaign) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
           <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxCampaign) * 100) }}%; background: var(--bar);"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ c.campaign }}</span>
           <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
-        </a>
+        </StxLink>
       @empty
         <div class="py-8 text-center text-sm text-text-3">No campaign data yet.</div>
       @endforelse

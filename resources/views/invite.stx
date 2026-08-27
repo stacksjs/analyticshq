@@ -148,20 +148,20 @@ async function accept(): Promise<void> {
       @elseif (state === 'signed_out')
         <h2 class="mb-2 font-semibold text-lg">You have been invited to {{ siteName }}</h2>
         <p class="mb-5 text-sm text-text-2">Sign in as <span class="mono">{{ invite.email }}</span> to accept. If you do not have an account yet, create one with that address.</p>
-        <a href="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block mb-2 w-full text-center btn primary">Sign in</a>
-        <a href="/register?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn ghost">Create an account</a>
+        <StxLink to="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block mb-2 w-full text-center btn primary">Sign in</StxLink>
+        <StxLink to="/register?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn ghost">Create an account</StxLink>
 
       @elseif (state === 'wrong_account')
         <h2 class="mb-2 font-semibold text-lg">This invitation is for someone else</h2>
         {{-- Names the invited address only to a reader who is already signed in,
             so it cannot be harvested by opening the link alone. --}}
         <p class="mb-5 text-sm text-text-2">It was sent to <span class="mono">{{ invite.email }}</span>, and you are signed in as <span class="mono">{{ viewer.email }}</span>. Sign in as the invited address to accept it.</p>
-        <a href="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn primary">Switch account</a>
+        <StxLink to="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn primary">Switch account</StxLink>
 
       @elseif (state === 'expired')
         <h2 class="mb-2 font-semibold text-lg">This invitation has expired</h2>
         <p class="mb-5 text-sm text-text-2">Invitations are good for 14 days. Ask whoever invited you to send a new one.</p>
-        <a href="/" class="block w-full text-center btn ghost">Back to analyticshq</a>
+        <StxLink to="/" class="block w-full text-center btn ghost">Back to analyticshq</StxLink>
 
       @else
         {{-- One page for every remaining refusal: unknown token, already
@@ -169,7 +169,7 @@ async function accept(): Promise<void> {
             recipient learns only that it did not work. --}}
         <h2 class="mb-2 font-semibold text-lg">This invitation is no longer valid</h2>
         <p class="mb-5 text-sm text-text-2">It may have already been used, been revoked, or never existed. Ask whoever invited you to send a new one.</p>
-        <a href="/" class="block w-full text-center btn ghost">Back to analyticshq</a>
+        <StxLink to="/" class="block w-full text-center btn ghost">Back to analyticshq</StxLink>
       @endif
 
     </div>
