@@ -209,6 +209,38 @@ export default {
    * instead: see the data-no-router on the OAuth anchors in login.stx/register.stx.
    */
   app: {
+    /**
+     * Pre-paint theme bootstrap.
+     *
+     * resources/layouts/app.stx has carried a full light AND dark palette from
+     * the start — `:root` light, a prefers-color-scheme dark block, and
+     * `[data-theme]` overrides for both. So the app already followed the OS
+     * setting; what it never had was a way to override it, because nothing
+     * wrote that attribute.
+     *
+     * This declaration is what makes the override flash-free. `useColorMode`
+     * runs inside the signals runtime, after hydration begins, which is far too
+     * late — every cold load would paint the OS theme and then snap to the
+     * stored preference. stx emits a render-blocking snippet from these same
+     * options and puts it above the stylesheet, so the root element is correct
+     * before the first paint.
+     *
+     * The values MUST match resources/stores/theme.ts exactly. If the boot
+     * script and useColorMode disagree on either the key or the attribute, the
+     * flash returns and the toggle appears to do nothing on reload.
+     *
+     * `darkClass` alongside `attribute`, not instead of it: our own tokens key
+     * off [data-theme], but crosswind's darkMode defaults to the class strategy,
+     * so every `dark:` utility in @stacksjs/components compiles to `.dark .…`
+     * and would never match without it.
+     */
+    colorMode: {
+      storageKey: 'analyticshq_theme',
+      attribute: 'data-theme',
+      darkClass: 'dark',
+      initialMode: 'auto',
+    },
+
     head: {
       // Present on all 32 views today, which is why the fonts live here and not in
       // public/marketing.css — the 5 app/auth pages do not load that file.
