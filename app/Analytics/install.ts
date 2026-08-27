@@ -115,19 +115,28 @@ export function installTargets(siteId: string): InstallTarget[] {
     {
       id: 'vue',
       label: 'Vue',
-      file: 'index.html',
-      note: 'Vite serves index.html as-is, so the tag belongs there rather than in a component — it should load once per document, not once per mount.',
+      file: 'main.ts',
+      note: `A real Vue 3 plugin: it injects the tag and gives you a typed track(). Route changes are tracked with no router wiring. If you would rather put the tag in index.html — which loads it fractionally earlier — the plugin detects it and will not add a second.`,
       code: [
-        `<head>`,
-        `  ${tag}`,
-        `</head>`,
+        `// bun add ${PACKAGE_NAME}`,
+        ``,
+        `import { tsAnalytics } from '${PACKAGE_NAME}/vue'`,
+        ``,
+        `createApp(App)`,
+        `  .use(tsAnalytics, {`,
+        `    appId: '${id}',`,
+        `    apiEndpoint: '${ORIGIN_TOKEN}',`,
+        `  })`,
+        `  .mount('#app')`,
       ].join('\n'),
     },
     {
       id: 'react',
       label: 'React',
       file: 'index.html',
-      note: 'Same as Vue for Vite and CRA. For Next.js use the Next tab instead — it has its own script primitive.',
+      // No longer "same as Vue" — Vue has a plugin now and this does not, so the
+      // tag in index.html is the whole integration here.
+      note: 'Vite and CRA serve index.html as-is, so the tag belongs there rather than in a component — it should load once per document, not once per mount. For Next.js use the Next tab instead; it has its own script primitive.',
       code: [
         `<head>`,
         `  ${tag}`,

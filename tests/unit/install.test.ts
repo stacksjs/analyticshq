@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { snippetFor } from '../../app/Analytics/custom-domain'
 import {
   ENDTAG_TOKEN,
@@ -97,6 +99,17 @@ describe('the install targets', () => {
     expect(nuxt.code).not.toContain('@stacksjs/ts-analytics')
   })
 
+  test('the vue target uses the plugin, not a bare tag', () => {
+    // Vue had no SDK until @ts-analytics/tracking 0.1.15, so this target used to
+    // be the index.html snippet with a note explaining why. Now there is a real
+    // plugin, and a customer told to paste a script tag would never discover the
+    // typed track().
+    const vue = byId('vue')
+    expect(vue.code).toContain(`${PACKAGE_NAME}/vue`)
+    expect(vue.code).toContain('.use(tsAnalytics')
+    expect(vue.file).toBe('main.ts')
+  })
+
   test('the next target uses next/script rather than a raw tag', () => {
     const next = byId('next')
     expect(next.code).toContain('next/script')
@@ -109,6 +122,49 @@ describe('the install targets', () => {
     // snippet has to show it being kept rather than replaced.
     expect(byId('svelte').code).toContain('%sveltekit.head%')
   })
+})
+
+/**
+ * The public homepage keeps its own copy of these snippets.
+ *
+ * `dashboard.stx` renders from installTargets(), so it is covered by everything
+ * above. `index.stx` does not — it hardcodes the same snippets again with
+ * syntax-highlighting markup wrapped around them, and that copy drifted: it went
+ * on telling visitors `npm i @stacksjs/ts-analytics` for seven weeks after the
+ * rename, which installs 0.1.6 — the build whose endpoint is localhost and whose
+ * track() is a no-op. The marketing page is the acquisition path, so it was the
+ * worst possible place for that to rot.
+ *
+ * Reconciling the two properly means teaching install.ts to emit highlighted
+ * markup, or the homepage to render plain code. Until then this asserts the one
+ * property that actually bit us.
+ */
+describe('the marketing homepage agrees with the canonical snippets', () => {
+  const homepage = readFileSync(join(import.meta.dir, '../../resources/views/index.stx'), 'utf8')
+
+  test('never names the renamed package', () => {
+    expect({ namesRenamedPackage: homepage.includes('@stacksjs/ts-analytics') })
+      .toEqual({ namesRenamedPackage: false })
+  })
+
+  test('names the published package wherever it shows an install', () => {
+    expect({ namesPublishedPackage: homepage.includes(PACKAGE_NAME) })
+      .toEqual({ namesPublishedPackage: true })
+  })
+
+  test('offers the Vue plugin now that one exists', () => {
+    expect({ offersVuePlugin: homepage.includes(`${PACKAGE_NAME}/vue`) })
+      .toEqual({ offersVuePlugin: true })
+  })
+
+  test('every framework in the picker has a snippet block', () => {
+    // A picker option with no matching :show block renders an empty code panel.
+    const options = [...homepage.matchAll(/<option value="([a-z]+)">/g)].map(m => m[1])
+    expect(options.length).toBeGreaterThan(3)
+    for (const id of options)
+      expect({ id, hasBlock: homepage.includes(`framework() === '${id}'`) }).toEqual({ id, hasBlock: true })
+  })
+
 })
 
 describe('renderInstallCode', () => {
