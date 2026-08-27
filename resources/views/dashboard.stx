@@ -315,6 +315,11 @@ async function loadData() {
     activeRole = ownedMatch.role || 'viewer'
   }
   else if (requestedSite && shareParam) {
+    // Deliberately no expiry. A public, permanent read-only URL is the norm for
+    // analytics — it is what Fathom, Plausible and Simple Analytics all ship —
+    // and a link that dies an hour after it is minted is a support ticket, not a
+    // safeguard. Revocation is the control: POST rotates the token and DELETE
+    // removes it, both of which kill the old URL immediately.
     const st = (await readSettings(requestedSite)).share_token
     if (st && String(st) === String(shareParam)) {
       siteId = String(requestedSite)
@@ -2420,9 +2425,21 @@ onMount(() => {
     What remains is only the redirect, which the server cannot do for us: a visitor with
     no cookie still gets a rendered page, just without owner-scoped content.
 
+    NOT EMITTED ON A SHARE VIEW. The read gate above grants access on a valid
+    ?share= token without requiring a session, and then renders the whole
+    dashboard — but this guard ran regardless, found no token in localStorage, and
+    sent the recipient straight to /login. A read-only link handed to someone
+    outside the team was therefore unusable by exactly the people it exists for,
+    and looked like a login wall rather than a bug.
+
+    Gated server-side rather than teaching the guard about `?share=`: the server
+    has already decided, and a client-side re-read of the query string would be a
+    second implementation of the same rule, free to disagree with the first.
+
     Pushed rather than left loose, for the same reason as the styles: stx's orphan sweep
     would append it to the content section, which happens to be close to where it
     belongs; @stack('scripts') in app.stx puts it there deliberately. --}}
+@if (!shareMode)
 @push('scripts')
 <script>
 ;(function () {
@@ -2445,3 +2462,4 @@ onMount(() => {
 </script>
 
 @endpush
+@endif

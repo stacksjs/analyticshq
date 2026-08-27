@@ -169,12 +169,36 @@
         r: '',
       })
       try {
-        // sendBeacon over fetch(keepalive) on this path specifically: the page
-        // is being hidden or discarded, and sendBeacon is the one transport the
-        // spec guarantees will still be delivered. The Blob is what sets the
-        // JSON content type — a bare string would arrive as text/plain and the
-        // route would never parse it.
-        if (navigator.sendBeacon && navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }))) return
+        // sendBeacon ONLY when the collector is same-origin.
+        //
+        // sendBeacon is spec'd to set the request's credentials mode to
+        // "include", and a credentialed request cannot be answered with
+        // `Access-Control-Allow-Origin: *`. /collect answers every origin with
+        // the wildcard, deliberately — it is a public endpoint that must accept
+        // beacons from any customer domain without an allowlist — so every
+        // cross-origin sendBeacon here was refused by the browser before it left:
+        //
+        //   Access to resource at 'https://analyticshq.org/collect' from origin
+        //   'https://easyotc.com' has been blocked by CORS policy: … must not be
+        //   the wildcard '*' when the request's credentials mode is 'include'.
+        //
+        // It failed silently. sendBeacon returns true once the request is
+        // QUEUED, not once it is delivered, so the `return` below was taken and
+        // the fetch fallback never ran. Core Web Vitals — the only payload that
+        // goes through this path — were lost on every cross-origin install,
+        // which is every install except our own dogfooding.
+        //
+        // The fix is not to relax CORS. Echoing the origin with
+        // Allow-Credentials would make sendBeacon work and would also start
+        // sending cookies to the collector on every beacon, on a product whose
+        // entire pitch is that it sets none.
+        //
+        // fetch(keepalive) has no such problem: default credentials mode is
+        // same-origin, so the wildcard is valid, and the browser still delivers
+        // it after the page goes away. Its 64KB cap is irrelevant here — this
+        // body is a handful of numbers.
+        const sameOrigin = endpoint.indexOf(location.origin + '/') === 0
+        if (sameOrigin && navigator.sendBeacon && navigator.sendBeacon(endpoint, new Blob([body], { type: 'application/json' }))) return
         fetch(endpoint, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: body })
       }
       catch (_) {}
