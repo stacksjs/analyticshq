@@ -187,6 +187,50 @@ describe('countryFromIp against the real database', () => {
   })
 })
 
+/**
+ * What we tell visitors has to match what the code does.
+ *
+ * The CDN-header claim outlived the mechanism by the entire life of the
+ * product: four public pages asserted that country "resolves from your CDN edge
+ * headers", on a product whose own production box has no CDN, so the sentence
+ * was decorating a feature that returned nothing. `config/privacy.ts` already
+ * says in prose that changing geo means changing `competitors.ts` in the same
+ * commit — this is that rule, enforced.
+ */
+describe('the public copy matches how country actually resolves', () => {
+  const surfaces = [
+    'resources/views/index.stx',
+    'resources/views/features.stx',
+    'resources/views/features/geography.stx',
+    'resources/data/competitors.ts',
+  ].map(rel => ({ rel, src: readFileSync(join(import.meta.dir, '../..', rel), 'utf8') }))
+
+  test('no page claims country comes from a CDN edge header', () => {
+    // Not a style rule. On any host without a CDN — every self-hosted install,
+    // and analyticshq.org itself — that sentence describes a feature that
+    // silently records nothing.
+    for (const { rel, src } of surfaces) {
+      const claims = /CDN edge header|from your CDN|resolved at the edge|Edge-resolved/i.exec(src)
+      expect({ rel, claim: claims?.[0] ?? null }).toEqual({ rel, claim: null })
+    }
+  })
+
+  test('the DB-IP attribution is rendered somewhere a visitor can reach', () => {
+    // CC BY 4.0 on the country database. This is a license obligation, so it
+    // cannot quietly disappear in a copy edit.
+    const geography = surfaces.find(s => s.rel.endsWith('geography.stx'))!.src
+    expect(geography).toContain('db-ip.com')
+    expect(geography).toContain('CC BY 4.0')
+  })
+
+  test('the country-only promise is still made', () => {
+    // The invariant behind #7 and #28. If this ever stops being claimed it
+    // should be because the product changed, which is a decision, not an edit.
+    const competitors = surfaces.find(s => s.rel.endsWith('competitors.ts'))!.src
+    expect(competitors).toMatch(/Country only/)
+  })
+})
+
 describe('the ingest path is wired to all of this', () => {
   const routes = readFileSync(join(import.meta.dir, '../../routes/analytics.ts'), 'utf8')
 

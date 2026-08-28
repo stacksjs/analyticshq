@@ -2,7 +2,7 @@
 useSeoMeta({
   canonical: 'https://analyticshq.org/features/geography',
   title: "Geography and devices - analyticshq",
-  description: "Country, device, browser, and operating system, resolved at the edge from your CDN header. See who visits without tracking who they are — no cookie, no stored IP.",
+  description: "Country, device, browser, and operating system, resolved on your own server. See who visits without tracking who they are — no cookie, no stored IP, no third-party lookup.",
 })
 
 // Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
@@ -21,7 +21,7 @@ const crumbs = [
       <section class="feat-hero shell">
         <span class="kicker">Audience</span>
         <h1>See who visits, without tracking who they are.</h1>
-        <p>Country, device, browser, and operating system, resolved at the edge. Country comes from your CDN headers, never a third-party geo-IP lookup.</p>
+        <p>Country, device, browser, and operating system. Country is resolved on your own server from a local database — the visitor's IP is never stored and never sent to anyone.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
           <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
@@ -62,8 +62,8 @@ const crumbs = [
           <div class="flow-step">
             <span class="flow-num">01</span>
             <div>
-              <h3>The edge tags the request</h3>
-              <p>Your CDN already knows the request country and passes it in a header, so no IP is stored or sent to a lookup service.</p>
+              <h3>The country is resolved in memory</h3>
+              <p>Your server looks the address up in a country database sitting on its own disk, then discards it. Nothing is stored and nothing is asked of a lookup service. Behind a CDN that already tags the country, that header is used instead.</p>
             </div>
           </div>
           <div class="flow-step">
@@ -86,8 +86,8 @@ const crumbs = [
       <section class="reveal section shell" aria-label="What you get">
         <div class="metrics">
           <div class="metric">
-            <div class="m-value">Edge-resolved</div>
-            <div class="m-label">Country from CDN headers means no stored IP and no third-party geo service.</div>
+            <div class="m-value">Locally resolved</div>
+            <div class="m-label">A country database on your own server means no stored IP and no third-party geo service.</div>
           </div>
           <div class="metric">
             <div class="m-value">Device aware</div>
@@ -98,6 +98,18 @@ const crumbs = [
             <div class="m-label">Combine geography with any source or goal to answer a real question.</div>
           </div>
         </div>
+      </section>
+
+      {{-- DB-IP attribution. Required by CC BY 4.0, which is the license on the
+          country database we ship, so this is a license obligation and not a
+          courtesy — it stays on a page a visitor can actually reach. --}}
+      <section class="reveal section shell" aria-label="Data attribution">
+        <p class="text-sm text-text-3">
+          Country data from
+          <a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">IP Geolocation by DB-IP</a>,
+          used under
+          <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener noreferrer" target="_blank">CC BY 4.0</a>.
+        </p>
       </section>
 
       <section class="reveal section shell" aria-labelledby="related-heading">

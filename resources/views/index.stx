@@ -15,7 +15,7 @@ const featureCells = [
   { slug: 'metrics', cls: 'cell b tint', title: 'Pageviews, sessions and bounce', body: 'Every hit rolls up into sessions with entry and exit paths, duration, and bounce rate.' },
   { slug: 'sources', cls: 'cell c', title: 'Sources and referrers', body: 'Each referrer is classified automatically, so search, social, and direct traffic separate at a glance.' },
   { slug: 'goals', cls: 'cell d', title: 'Goals, events and campaigns', body: 'Tag inbound links with UTM parameters and fire a conversion with a one-line analyticshq() call.' },
-  { slug: 'geography', cls: 'cell e tint', title: 'Geography and devices', body: 'Country, device, browser, and OS. Country resolves from your CDN edge headers, never a third-party lookup.' },
+  { slug: 'geography', cls: 'cell e tint', title: 'Geography and devices', body: 'Country, device, browser, and OS. Country resolves on your own server, never a third-party lookup.' },
   { slug: 'web-vitals', cls: 'cell f', title: 'Core Web Vitals', body: 'Real-user LCP, INP, and CLS beside your traffic, so a slow page shows up before it costs you visitors.' },
 ]
 

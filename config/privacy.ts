@@ -17,8 +17,8 @@
  * These are not neutral knobs. The defaults here are the privacy posture the
  * comparison pages claim, so changing one is a change to what we tell visitors:
  *
- * - `geo.granularity: 'country'` — `/compare/umami` says "Country only, from CDN
- *   edge headers. IP discarded." and `/compare/plausible` contrasts with their
+ * - `geo.granularity: 'country'` — `/compare/umami` says "Country only, resolved
+ *   locally. IP discarded." and `/compare/plausible` contrasts with their
  *   city-level resolution.
  * - `respectDnt: true` — `/compare/simple-analytics` credits them for honoring
  *   DNT and now claims parity.
@@ -74,8 +74,14 @@ export interface PrivacyConfig {
 
   geo: {
     /**
-     * `'country'` resolves from CDN edge headers and discards the IP.
-     * `'none'` records no location at all.
+     * `'country'` resolves the country and discards the IP. `'none'` records no
+     * location at all.
+     *
+     * Resolution is local: a CDN edge header when one is present, otherwise a
+     * country database on this machine (`app/Analytics/geo.ts`). It used to be
+     * CDN headers *only*, which meant it silently resolved nothing at all on any
+     * host without a CDN in front of it — including this one, for the entire
+     * life of the product.
      *
      * There is deliberately no city or region option. Adding one would be a
      * product decision, not a configuration change.

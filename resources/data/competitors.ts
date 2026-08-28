@@ -147,7 +147,7 @@ export const competitors: Record<string, Competitor> = {
     ],
     reasons: [
       { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
-      { n: '02', h: 'Country-only, held on principle', b: 'Fathom resolves visitors to city level. analyticshq deliberately stops at country, from your CDN edge headers, keeping the aggregate-only line as strict as it goes.' },
+      { n: '02', h: 'Country-only, held on principle', b: 'Fathom resolves visitors to city level. analyticshq deliberately stops at country, resolved on your own server, keeping the aggregate-only line as strict as it goes.' },
       { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; analyticshq trades that polish for openness and full data ownership.' },
     ],
     metrics: [
@@ -361,7 +361,7 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Bounce rate', them: 'Not reported', us: 'Bounce rate on every page and entry point' },
       { dim: 'Entry and exit pages', them: 'Not reported', us: 'Entry and exit paths, per session' },
       { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line analyticshq() goals with conversion rate and value' },
-      { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country only, from your CDN edge headers' },
+      { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country only, resolved on your own server' },
       // Was "DNT respect is on the roadmap" until #8 shipped. Kept honest in
       // both directions: they still deserve the credit for doing it first.
       { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Honored too, by default — DNT and Global Privacy Control' },
@@ -405,7 +405,7 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
       { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'No per-person view. Reports are aggregate, full stop.' },
       { dim: 'Cross-session identity', them: 'identify() stitches a user’s sessions across time', us: 'No identify(), no distinct-ID stitching, by design.' },
-      { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country only, from CDN edge headers. IP discarded.' },
+      { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country only, resolved locally. IP discarded.' },
       { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes — Postgres-native, self-hostable, Stacks-integrated.' },
       { dim: 'Cookies & consent', them: 'Cookieless, no banner needed', us: 'Cookieless, no banner needed.' },
     ],
