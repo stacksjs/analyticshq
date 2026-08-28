@@ -68,7 +68,7 @@
     "test:types": "./buddy test:types",
     "bud": "./buddy",
     "stx": "./buddy",
-    "vendor:map": "bun build node_modules/ts-maps/dist/index.js --outfile public/vendor/ts-maps.js --minify --target browser --format esm && cp node_modules/ts-maps/src/core-map/ts-maps.css public/vendor/ts-maps.css",
+    "vendor:map": "bun build node_modules/ts-maps/dist/index.js --outfile public/vendor/ts-maps.js --minify --target browser --format esm && cp node_modules/ts-maps/src/core-map/ts-maps.css public/vendor/ts-maps.css && shasum -a 256 node_modules/ts-maps/dist/index.js | cut -d' ' -f1 > public/vendor/ts-maps.source-sha256",
     "account": "bun scripts/account.ts",
     "account:list": "bun scripts/account.ts --list",
     "account:rotate": "bun scripts/account.ts --rotate"

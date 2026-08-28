@@ -44,24 +44,36 @@ describe('the vendored bundle stays in step with the dependency', () => {
       .toEqual({ bundle: true, geojson: true })
   })
 
-  test('the committed bundle is what `bun run vendor:map` produces today', async () => {
-    // Rebuilds from node_modules and compares bytes, rather than trusting a
-    // version string: ts-maps 0.3.2 still reports 0.3.1 from its own internal
-    // constant, so that marker cannot detect an upgrade at all.
+  test('the bundle was built from the ts-maps that is installed now', () => {
+    // Compares the hash of the BUILD INPUT, recorded at vendor time, against the
+    // input as it stands.
     //
-    // Failing here means someone bumped ts-maps without re-vendoring. The fix is
-    // `bun run vendor:map`, not editing this test.
-    const built = await Bun.build({
-      entrypoints: [join(root, 'node_modules/ts-maps/dist/index.js')],
-      target: 'browser',
-      format: 'esm',
-      minify: true,
-    })
-    expect(built.success).toBe(true)
-    const fresh = await built.outputs[0].text()
-    const digest = (s: string) => createHash('sha256').update(s).digest('hex').slice(0, 16)
-    expect({ vendored: digest(readFileSync(bundle, 'utf8')) })
-      .toEqual({ vendored: digest(fresh) })
+    // Not the version string: ts-maps 0.3.2 still reports 0.3.1 from its own
+    // internal constant, so that marker cannot see an upgrade at all.
+    //
+    // And not the built output either — that was the first attempt and it failed
+    // in CI while passing locally. `bun build --minify` differs between bun
+    // versions, CI runs `bun-version: latest`, so byte-comparing the artifact
+    // pins it to whichever bun happened to build it and breaks on every bun
+    // release. The input hash is stable across all of that and still catches the
+    // thing that matters.
+    //
+    // Failing here means ts-maps moved without re-vendoring. Run
+    // `bun run vendor:map`; do not edit this test.
+    const recorded = readFileSync(join(root, 'public/vendor/ts-maps.source-sha256'), 'utf8').trim()
+    const actual = createHash('sha256')
+      .update(readFileSync(join(root, 'node_modules/ts-maps/dist/index.js')))
+      .digest('hex')
+    expect({ recorded }).toEqual({ recorded: actual })
+  })
+
+  test('the vendored bundle is a real ts-maps build, not a stub', () => {
+    // The input hash cannot see a hand-edited or truncated output, so assert the
+    // artifact still looks like what it claims to be.
+    const src = readFileSync(bundle, 'utf8')
+    expect(src.length).toBeGreaterThan(100_000)
+    for (const symbol of ['TsMap', 'GeoJSON', 'EPSG4326'])
+      expect({ symbol, present: src.includes(symbol) }).toEqual({ symbol, present: true })
   })
 
   test('package.json can regenerate it', () => {
