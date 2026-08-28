@@ -46,6 +46,7 @@ import {
   randomId,
   referrerSource,
 } from '../app/Analytics/tracking'
+import { countryFromIp } from '../app/Analytics/geo'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -3199,4 +3200,27 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
 // statically also lets it derive its own collect origin from `document
 // .currentScript.src`, so one asset works on every host that fronts this app.
 
-route.get('/api/health', () => response.json({ status: 'ok', app: 'analyticshq' }))
+/**
+ * `geo` reports whether the IP-to-country database is actually loadable on this
+ * box — not whether it was configured, whether it was fetched, or whether the
+ * code that reads it exists.
+ *
+ * It is here because country resolution fails *silently* by design: a missing
+ * database returns null so that a geo problem can never cost a pageview
+ * (`app/Analytics/geo.ts`). That is the right trade, and it means a broken
+ * deploy looks exactly like a site with no visitors — which is the failure mode
+ * that let country stay empty for the entire life of the product. The file is
+ * gitignored and fetched by the deploy workflow, so "did it reach the server"
+ * is otherwise unanswerable without shell access.
+ *
+ * Safe to expose unauthenticated: it is one boolean about our own
+ * configuration. It reveals nothing about any site, visitor, or address, and
+ * `/api/health` is already public.
+ */
+route.get('/api/health', () => response.json({
+  status: 'ok',
+  app: 'analyticshq',
+  // A known-routable address. Resolving it proves the database opened and
+  // answered, which a file-exists check would not.
+  geo: countryFromIp('8.8.8.8') !== null,
+}))
