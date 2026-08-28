@@ -393,7 +393,12 @@ route.post('/collect', async (request: any) => {
   const info = parseUserAgent(ua)
   // 'none' records no location at all; there is deliberately no city/region
   // option, since adding one would be a product decision, not config (#11).
-  const country = privacy.geo.granularity === 'country' ? geoCountry(request.headers) : undefined
+  //
+  // `ip` is the one already read above for the visitor hash — geo resolves from
+  // the same value, in the same request, and it is discarded with it. Passing it
+  // here is what makes country work at all on a host with no CDN in front of it,
+  // which is every self-hosted install and our own production box.
+  const country = privacy.geo.granularity === 'country' ? geoCountry(request.headers, ip) : undefined
   const now = new Date().toISOString()
 
   let url: URL | null = null

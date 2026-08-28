@@ -10,6 +10,8 @@
 
 import { createHash } from 'node:crypto'
 import { getCountryFromHeaders } from '@ts-analytics/tracking'
+import { normCountry } from './country'
+import { countryFromIp } from './geo'
 
 // Re-export the shared primitives so route code has a single import site.
 export {
@@ -73,11 +75,39 @@ export function clientIp(headers: Headers): string {
   )
 }
 
-/** Country from CDN geo headers (via ts-analytics), no third-party lookup. */
-export function geoCountry(headers: Headers): string | undefined {
+/**
+ * Country as an ISO 3166-1 alpha-2 code, or `null`.
+ *
+ * Two sources, CDN header first:
+ *
+ *  1. `cf-ipcountry` and friends, when something upstream already resolved it.
+ *     Free and authoritative when present, and keeps working for a self-hoster
+ *     behind Cloudflare or CloudFront who never fetches a database.
+ *  2. A local IP lookup (`./geo`). This is the path that actually runs for us —
+ *     analyticshq.org has no CDN in front of it, which is why country was
+ *     empty for the entire life of the product.
+ *
+ * ## Both sources are normalized, and that is not cosmetic
+ *
+ * `getCountryFromHeaders` returns the full English NAME for the ~50 codes it
+ * knows ("United States") and the bare code only for the ones it does not.
+ * `page_views.country` is `varchar(2)`. So the header path — the one path that
+ * was believed to work — would have errored or truncated on every recognized
+ * country, turning the Netherlands into a country called "Ne". It never
+ * surfaced because the header was never present to begin with.
+ */
+export function geoCountry(headers: Headers, ip?: string): string | null {
   const obj: Record<string, string> = {}
   headers.forEach((v, k) => { obj[k.toLowerCase()] = v })
-  return getCountryFromHeaders(obj)
+
+  const fromHeader = getCountryFromHeaders(obj)
+  if (fromHeader) {
+    const code = normCountry(fromHeader)
+    if (code)
+      return code
+  }
+
+  return ip ? countryFromIp(ip) : null
 }
 
 /** A short, URL-safe random id (for pageview / event primary keys). */

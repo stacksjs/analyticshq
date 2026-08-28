@@ -24,6 +24,7 @@
  * a claim we cannot support, and this one is at least obviously uniform.
  */
 import { createHash } from 'node:crypto'
+import { normCountry } from './country'
 
 /** One GA row, already normalized — whatever produced it. */
 export interface GaRecord {
@@ -67,28 +68,15 @@ export const normOs = (v: string): string => OS_MAP[v] || v || 'Unknown'
 
 /**
  * GA4's "country" dimension is the full English name; `page_views.country` is a
- * varchar(2) ISO code. Prefer a 2-letter value as-is, else map the common names,
- * else null — an unmapped country becomes "no country recorded" rather than a
- * truncated guess like "Ne" for the Netherlands.
+ * varchar(2) ISO code.
+ *
+ * The mapping moved to `./country` when the live ingest path turned out to need
+ * exactly the same coercion — it normalized here, for backfilled rows, and not
+ * at `/collect`, so the column's invariant held for imported history and not for
+ * real traffic. Imported *and* re-exported: `toRecord` below calls it, and
+ * existing callers import it from this module.
  */
-const COUNTRY_MAP: Record<string, string> = {
-  'United States': 'US', 'United Kingdom': 'GB', 'Germany': 'DE', 'France': 'FR', 'Canada': 'CA', 'Australia': 'AU',
-  'India': 'IN', 'Japan': 'JP', 'Brazil': 'BR', 'Netherlands': 'NL', 'Spain': 'ES', 'Italy': 'IT', 'Sweden': 'SE',
-  'Switzerland': 'CH', 'Ireland': 'IE', 'Poland': 'PL', 'Mexico': 'MX', 'South Korea': 'KR', 'China': 'CN', 'Russia': 'RU',
-  'Norway': 'NO', 'Denmark': 'DK', 'Finland': 'FI', 'Belgium': 'BE', 'Austria': 'AT', 'Portugal': 'PT', 'Greece': 'GR',
-  'Turkey': 'TR', 'Israel': 'IL', 'South Africa': 'ZA', 'Singapore': 'SG', 'Hong Kong': 'HK', 'Taiwan': 'TW',
-  'Indonesia': 'ID', 'Thailand': 'TH', 'Malaysia': 'MY', 'Philippines': 'PH', 'Vietnam': 'VN', 'New Zealand': 'NZ',
-  'Argentina': 'AR', 'Chile': 'CL', 'Colombia': 'CO', 'Ukraine': 'UA', 'Czech Republic': 'CZ', 'Czechia': 'CZ',
-  'Romania': 'RO', 'Hungary': 'HU', 'United Arab Emirates': 'AE', 'Saudi Arabia': 'SA', 'Egypt': 'EG', 'Nigeria': 'NG',
-  'Pakistan': 'PK', 'Bangladesh': 'BD',
-}
-
-export function normCountry(v: string): string | null {
-  const s = (v || '').trim()
-  if (/^[A-Za-z]{2}$/.test(s))
-    return s.toUpperCase()
-  return COUNTRY_MAP[s] || null
-}
+export { normCountry }
 
 /** GA spells "no referrer" several ways; they all mean Direct. */
 export function normSource(v: string): string {

@@ -95,3 +95,9 @@ storage/framework/cache/
 
 # Machine-local ts-cloud state and dashboard credentials.
 /storage/cloud/
+
+# The IP-to-country database (DB-IP Lite, MMDB). An ~8MB binary blob on a monthly
+# release cadence under its own license — fetched by the deploy workflow, not
+# vendored. Committing it would add 8MB to every clone twelve times a year to
+# carry data that is stale the month after it lands. See app/Analytics/geo.ts.
+/storage/geo/
