@@ -78,10 +78,12 @@ export function normalizeOrigin(raw: string): string {
 /**
  * Every supported install path, in the order the tabs appear.
  *
- * Only Nuxt has a real module — the rest are placements of the same tag, which
- * is the honest answer. Listing them separately is still worth it: someone in a
- * Next app needs to be told `next/script` and `app/layout.tsx`, and telling them
- * "add it to <head>" is how installs get abandoned.
+ * Three of these are real integrations shipped in {@link PACKAGE_NAME} — Stacks
+ * (a config block), Nuxt (a module) and Vue (a plugin). The rest are placements
+ * of the same tag, which is the honest answer. Listing them separately is still
+ * worth it: someone in a Next app needs to be told `next/script` and
+ * `app/layout.tsx`, and telling them "add it to <head>" is how installs get
+ * abandoned.
  */
 export function installTargets(siteId: string): InstallTarget[] {
   const id = String(siteId ?? '')
@@ -94,6 +96,31 @@ export function installTargets(siteId: string): InstallTarget[] {
       file: 'index.html',
       note: 'Works on any site. Add it once, inside <head>.',
       code: tag,
+    },
+    {
+      id: 'stacks',
+      label: 'Stacks',
+      file: 'config/ui.ts',
+      // Config-driven rather than a tag, because stx already owns tag injection:
+      // process.js calls injectAnalytics() on every render and places the script
+      // before the closing head. tsAnalyticsStxConfig() just hands it a correct
+      // `custom` driver block. This is the same mechanism analyticshq.org uses to
+      // measure itself, so it is the one integration here that is continuously
+      // exercised in production.
+      note: `A config block, not a tag: stx injects the script itself on every render. A plain stx app puts the same call in stx.config.ts. SPA route changes are tracked with no router wiring, and the block goes inert on its own if the App ID is missing, so a fresh checkout never beacons at production.`,
+      code: [
+        `// bun add ${PACKAGE_NAME}`,
+        ``,
+        `import { tsAnalyticsStxConfig } from '${PACKAGE_NAME}/stx'`,
+        ``,
+        `export default {`,
+        `  // ...the rest of your UI config`,
+        `  analytics: tsAnalyticsStxConfig({`,
+        `    appId: '${id}',`,
+        `    apiEndpoint: '${ORIGIN_TOKEN}',`,
+        `  }),`,
+        `}`,
+      ].join('\n'),
     },
     {
       id: 'nuxt',

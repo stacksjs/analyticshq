@@ -57,17 +57,20 @@ const comparison = [
 </script>
 
 <script client>
-// Install-snippet framework picker (HTML / Vue / Nuxt / React / Next). HTML and
-// React get the plain script tag in their entry HTML; Vue, Nuxt and Next each
-// have a real integration, so they show that instead — Vue and Nuxt from
-// @ts-analytics/tracking, Next through next/script.
+// Install-snippet framework picker (HTML / Stacks / Vue / Nuxt / React / Next).
+// HTML and React get the plain script tag in their entry HTML; Stacks, Vue, Nuxt
+// and Next each have a real integration, so they show that instead — Stacks, Vue
+// and Nuxt from @ts-analytics/tracking, Next through next/script.
+//
+// Stacks is a config block rather than a tag because stx injects the script
+// itself on every render; pasting a tag as well would double every pageview.
 //
 // These snippets are a second copy of app/Analytics/install.ts, which is what
 // the signed-in dashboard renders. They drifted once already, naming a package
 // that had been renamed seven weeks earlier, so tests/unit/install.test.ts now
 // asserts this file agrees with that module on the package name.
 const framework = state('html')
-const FILE_FOR = { html: 'index.html', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
+const FILE_FOR = { html: 'index.html', stacks: 'config/ui.ts', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
 function pickFramework(e: Event): void {
   framework.set(e.target.value)
 }
@@ -172,6 +175,7 @@ function pickFramework(e: Event): void {
                 <span>{{ FILE_FOR[framework()] }}</span>
                 <select class="code-lang" @change="pickFramework" aria-label="Choose your framework">
                   <option value="html">HTML</option>
+                  <option value="stacks">Stacks</option>
                   <option value="vue">Vue</option>
                   <option value="nuxt">Nuxt</option>
                   <option value="react">React</option>
@@ -180,6 +184,12 @@ function pickFramework(e: Event): void {
               </div>
               <pre :show="framework() === 'html'" style="display:none">&lt;!-- analyticshq --&gt;
 &lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+              <pre :show="framework() === 'stacks'" style="display:none"><span class="cmt">// bun add @ts-analytics/tracking — official Stacks / stx config</span>
+<span class="tok">import</span> { tsAnalyticsStxConfig } <span class="tok">from</span> <span class="str">'@ts-analytics/tracking/stx'</span>
+
+<span class="tok">export default</span> {
+  analytics: tsAnalyticsStxConfig({ appId: <span class="str">'YOUR_SITE_ID'</span> }),
+}</pre>
               <pre :show="framework() === 'vue'" style="display:none"><span class="cmt">// npm i @ts-analytics/tracking — official Vue 3 plugin</span>
 <span class="tok">import</span> { tsAnalytics } <span class="tok">from</span> <span class="str">'@ts-analytics/tracking/vue'</span>
 

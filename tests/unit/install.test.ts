@@ -53,7 +53,7 @@ describe('normalizeOrigin', () => {
 
 describe('the install targets', () => {
   test('cover the frameworks the tabs advertise', () => {
-    expect(targets.map(t => t.id)).toEqual(['html', 'nuxt', 'vue', 'react', 'next', 'svelte'])
+    expect(targets.map(t => t.id)).toEqual(['html', 'stacks', 'nuxt', 'vue', 'react', 'next', 'svelte'])
   })
 
   test('every target carries a label, a file and a note', () => {
@@ -85,10 +85,29 @@ describe('the install targets', () => {
     // These strings cross stx's client payload bridge and land inside an inline
     // script. A literal </script> there closes that tag early and kills the
     // rest of the page bundle.
+    //
+    // Every field is checked, not just `code`. The whole object is what gets
+    // serialized, so a `note` explaining where the tag goes is exactly as
+    // capable of ending the bundle as the snippet is — and is the likelier
+    // place to write one by hand, since prose does not look like code.
     for (const t of targets) {
-      expect(t.code).not.toContain('<script')
-      expect(t.code).not.toContain('</script>')
+      for (const [field, value] of Object.entries(t)) {
+        expect({ id: t.id, field, opens: value.includes('<script') }).toEqual({ id: t.id, field, opens: false })
+        expect({ id: t.id, field, closes: value.includes('</script') }).toEqual({ id: t.id, field, closes: false })
+      }
     }
+  })
+
+  test('the stacks target is a config block, not a pasted tag', () => {
+    // stx owns tag injection — process.js calls injectAnalytics() on every
+    // render. Telling a Stacks user to paste a <script> into a layout would put
+    // a second tracker on the page alongside the one their config already
+    // injects, and double every pageview.
+    const stacks = byId('stacks')
+    expect(stacks.code).toContain(`${PACKAGE_NAME}/stx`)
+    expect(stacks.code).toContain('tsAnalyticsStxConfig')
+    expect(stacks.code).not.toContain(TAG_TOKEN)
+    expect(stacks.file).toBe('config/ui.ts')
   })
 
   test('the nuxt target names the package that is actually published', () => {
@@ -150,6 +169,14 @@ describe('the marketing homepage agrees with the canonical snippets', () => {
   test('names the published package wherever it shows an install', () => {
     expect({ namesPublishedPackage: homepage.includes(PACKAGE_NAME) })
       .toEqual({ namesPublishedPackage: true })
+  })
+
+  test('offers the Stacks config now that one exists', () => {
+    // The homepage sells a Stacks-family product to a Stacks-shaped audience;
+    // omitting the one integration that ships in this repo's own config would be
+    // the strangest gap on the page.
+    expect({ offersStacksConfig: homepage.includes(`${PACKAGE_NAME}/stx`) })
+      .toEqual({ offersStacksConfig: true })
   })
 
   test('offers the Vue plugin now that one exists', () => {
