@@ -180,6 +180,7 @@ let pages = []
 let referrers = []
 let referrerUrls = []
 let countries = []
+let countryMap = []
 let devices = []
 let browsers = []
 let systems = []
@@ -519,6 +520,13 @@ async function loadData() {
     `SELECT utm_term AS term, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_term IS NOT NULL AND utm_term != '' GROUP BY utm_term ORDER BY views DESC LIMIT 8`, p)) ?? []
   countries = (await pgq(
     `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country ORDER BY views DESC LIMIT 8`, p)) ?? []
+  // Same aggregate, no LIMIT: the list shows a top 8, the map shades every
+  // country that has anything. No new exposure — /api/sites/{id}/countries
+  // already serves an unfiltered breakdown, and the k-anonymity floor that
+  // applies to FILTERED reports applies to this identically, because it is the
+  // same `filter` clause.
+  countryMap = (await pgq(
+    `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country`, p)) ?? []
   devices = (await pgq(
     `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p)) ?? []
   browsers = (await pgq(
@@ -694,6 +702,22 @@ const maxExit = exitPages.reduce((m, e) => Math.max(m, Number(e.exits || 0)), 0)
 const maxRef = referrers.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 const maxReferrerUrl = referrerUrls.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 const maxCountry = countries.reduce((m, c) => Math.max(m, Number(c.views || 0)), 0) || 1
+
+/**
+ * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
+ * what `page_views.country` holds and what the map's feature ids are.
+ *
+ * An object rather than the row array the panels use: this crosses the client
+ * payload bridge and the map does one lookup per country, so the shape that
+ * costs nothing to serialize is also the shape it wants. Codes are upper-cased
+ * defensively — every writer normalizes now (app/Analytics/country.ts), but rows
+ * predating that are still in the table and would silently miss the map.
+ */
+const countryTotals = Object.fromEntries(
+  countryMap
+    .filter(c => c.country)
+    .map(c => [String(c.country).toUpperCase(), Number(c.views || 0)]),
+)
 const maxDevice = devices.reduce((m, d) => Math.max(m, Number(d.views || 0)), 0) || 1
 const maxBrowser = browsers.reduce((m, b) => Math.max(m, Number(b.views || 0)), 0) || 1
 const maxSystem = systems.reduce((m, s) => Math.max(m, Number(s.views || 0)), 0) || 1
@@ -927,7 +951,7 @@ const exportPayload = {
  * because the snippets are built from server config but can only be *finished*
  * on the client, which is the one thing that knows the real origin.
  */
-defineClientPayload({ activeSiteId, exportPayload, installOptions, liveNow, range, shareToken })
+defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareToken })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -2205,6 +2229,51 @@ onMount(() => {
       </div>
     </div>
 
+    {{-- Visitors by country.
+
+        Every element here is STATIC or a SERVER mustache. stx cloaks any element
+        whose own text is a reactive mustache, and x-cloak is display:none — the
+        install panel, the team list and the invite button have each been blanked
+        that way. The map is drawn into an empty div by a plain module script, so
+        nothing in this subtree is reactive and nothing can be hidden.
+
+        A <div>, not <main>: the router's fragment extraction slices from the
+        first <main> to the last </main>, so a second one makes the SPA swap the
+        wrong span.
+
+        The bar list below is NOT redundant. A browser-side map is blank until
+        the bundle runs, and it is the only thing a reader gets with JS off, on a
+        share link opened in a locked-down browser, or while 340KB of map engine
+        is still in flight. It also carries the exact numbers, which a shaded
+        polygon cannot. --}}
+    <div class="mt-6 p-5 panel reveal">
+      <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Visitors by country</h2>
+      @if (countries.length)
+        <div
+          id="country-map"
+          data-country-map
+          data-filter-base="{{ filterQuery(() => {}) }}"
+          style="width:100%;aspect-ratio:2.5/1;min-height:180px;border-radius:10px;overflow:hidden;background:var(--bg)"
+        ></div>
+        {{-- Counts cross as a data attribute rather than an inline script: a JSON
+            blob inside a script body is the shape that has broken this file
+            before, and stx forbids @json there for exactly that reason. --}}
+        <div hidden data-country-totals="{{ JSON.stringify(countryTotals) }}"></div>
+        {{-- Filled by the map script when a country has traffic but no polygon
+            to shade. Natural Earth's 110m boundaries omit city-states — Singapore
+            and Hong Kong among them — and those are ordinary traffic sources for
+            these sites. Without saying so, a reader sees Singapore in the list
+            below and nothing on the map and concludes the map is broken.
+
+            Server-rendered empty and filled with textContent, NOT a reactive
+            mustache: reactive text is what stx cloaks, and x-cloak is
+            display:none. --}}
+        <p data-country-missing hidden class="mt-2 text-text-3 text-xs"></p>
+      @else
+        <div class="py-8 text-center text-sm text-text-3">No country data yet.</div>
+      @endif
+    </div>
+
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Top countries --}}
       <BreakdownPanel title="Top countries" :rows="countries" labelKey="country" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
@@ -2439,6 +2508,162 @@ onMount(() => {
     Pushed rather than left loose, for the same reason as the styles: stx's orphan sweep
     would append it to the content section, which happens to be close to where it
     belongs; @stack('scripts') in app.stx puts it there deliberately. --}}
+{{-- The country choropleth.
+
+    A plain module script tag rather than a client-script block, which is the
+    same escape hatch the sign-in guard below uses. ts-maps is a browser module
+    served from our own origin, and this is the path that can `import` one: there
+    is no client bundler in this app, and a client-script block is transformed
+    for signals rather than shipped as a module.
+
+    NOTE: no literal script tag appears anywhere in this comment, deliberately.
+    stx's comment stripper does not nest, and a tag written inside a comment has
+    previously eaten the comment terminator and the next real script with it.
+
+    Vendored under /vendor rather than loaded from a CDN — required, not stylistic:
+    tests/unit/no-third-party-assets.test.ts fails the build on jsdelivr/unpkg, and
+    a privacy product fetching a 340KB library from someone else's server on every
+    dashboard load would be the exact thing it argues against.
+
+    Everything is deferred until the panel is on screen, and every failure is
+    silent: the bar list underneath already shows the same data with real numbers,
+    so a map that cannot draw costs the reader nothing. --}}
+@push('scripts')
+<script type="module">
+;(async function () {
+  const host = document.querySelector('[data-country-map]')
+  if (!host) return
+
+  const totalsEl = document.querySelector('[data-country-totals]')
+  let totals = {}
+  try { totals = JSON.parse(totalsEl?.getAttribute('data-country-totals') || '{}') }
+  catch (_) { return }
+  const values = Object.values(totals)
+  if (!values.length) return
+  const max = Math.max.apply(null, values)
+
+  let TsMap, GeoJSON, EPSG4326, world
+  try {
+    // Loaded in parallel: 340KB of engine and 170KB of geometry, neither of
+    // which blocks anything else on the page.
+    const [mod, geo] = await Promise.all([
+      import('/vendor/ts-maps.js'),
+      fetch('/vendor/world-countries.geojson').then(r => r.json()),
+    ])
+    ;({ TsMap, GeoJSON, EPSG4326 } = mod)
+    world = geo
+  }
+  catch (_) { return }
+
+  // Read the theme tokens rather than hardcoding hex: the palette is defined once
+  // in resources/layouts/app.stx and flips on [data-theme]. ts-maps takes colors
+  // as JS options and has no CSS-variable support of its own, so unlike the
+  // hand-rolled traffic chart these have to be resolved and re-applied by hand.
+  function tokens() {
+    const s = getComputedStyle(document.documentElement)
+    return {
+      accent: s.getPropertyValue('--accent').trim() || '#059669',
+      border: s.getPropertyValue('--border').trim() || 'rgba(15,23,42,0.08)',
+      empty: s.getPropertyValue('--bar').trim() || 'rgba(5,150,105,0.16)',
+    }
+  }
+
+  /**
+   * Fill for a country. sqrt rather than linear: one dominant market is the norm
+   * for these sites, and a linear ramp renders every other country as
+   * indistinguishable near-black.
+   */
+  function styleFor(t) {
+    return function (f) {
+      const n = totals[f.id] || 0
+      return {
+        color: t.border,
+        weight: 0.5,
+        fillColor: n ? t.accent : t.empty,
+        fillOpacity: n ? 0.2 + Math.sqrt(n / max) * 0.8 : 0.35,
+      }
+    }
+  }
+
+  let map, layer
+  try {
+    map = new TsMap(host, {
+      // Equirectangular. The Mercator default inflates Greenland and Russia to
+      // the point of misreading the data.
+      crs: EPSG4326,
+      zoomControl: false,
+      attributionControl: false,
+      // A report, not an explorer: dragging or zooming a choropleth only ever
+      // loses the reader their view of it.
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      keyboard: false,
+    })
+    layer = new GeoJSON(world, { style: styleFor(tokens()) })
+    layer.addTo(map)
+    // Antarctica is trimmed: fitting the layer's own bounds runs to -90 and
+    // spends a fifth of a short panel on a landmass with no visitors.
+    map.fitBounds([[-58, -180], [84, 180]], { animate: false })
+  }
+  catch (_) { return }
+
+  // Hover and click, matching the bar list exactly: same label, same numbers,
+  // same filter URL. A country on the map and its row in the list must not
+  // disagree about what clicking does.
+  const names = {}
+  for (const f of world.features) names[f.id] = f.properties && f.properties.name
+  layer.eachLayer(function (l) {
+    const code = l.feature && l.feature.id
+    const n = totals[code] || 0
+    if (l.bindTooltip)
+      l.bindTooltip(`${names[code] || code}: ${n.toLocaleString()}`, { sticky: true })
+    if (n && l.on) {
+      l.on('click', function () {
+        const base = host.getAttribute('data-filter-base') || '?'
+        const q = new URLSearchParams(base.slice(1))
+        q.set('country', code)
+        window.stx.navigate(`?${q.toString()}`)
+      })
+    }
+  })
+
+  // Countries with traffic that the 110m boundaries cannot draw (Singapore,
+  // Hong Kong, Malta, Monaco, Bahrain, Macau — city-states omitted at this
+  // resolution). Named explicitly rather than left as a silent gap: they appear
+  // in the list below with exact numbers, and a reader who sees them there and
+  // nowhere on the map would reasonably think the map is wrong.
+  const missing = Object.keys(totals).filter(c => !(c in names))
+  if (missing.length) {
+    const note = document.querySelector('[data-country-missing]')
+    if (note) {
+      const label = missing.map(c => names[c] || c).join(', ')
+      note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale — see the list below.`
+      note.removeAttribute('hidden')
+    }
+  }
+
+  // Re-style on a theme flip. The colors came from computed CSS, and ts-maps
+  // holds them as plain JS options — nothing re-reads them on its own, so
+  // without this the map keeps the palette it was born with.
+  const themeWatch = new MutationObserver(function () {
+    try { layer.setStyle(styleFor(tokens())) }
+    catch (_) {}
+  })
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
+
+  // A Leaflet-lineage map measures its container once. This panel can be sized
+  // by a late font or a reveal animation, which leaves the map convinced it is
+  // its old size and the polygons offset inside it.
+  if (map.invalidateSize) {
+    try { new ResizeObserver(() => map.invalidateSize({ animate: false })).observe(host) }
+    catch (_) {}
+  }
+})()
+</script>
+@endpush
+
 @if (!shareMode)
 @push('scripts')
 <script>

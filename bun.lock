@@ -11,6 +11,7 @@
         "@ts-analytics/tracking": "^0.1.13",
         "mmdb-lib": "^3.0.3",
         "stacks": "^0.72.64",
+        "ts-maps": "^0.3.2",
       },
       "devDependencies": {
         "better-dx": "^0.2.25",
@@ -412,6 +413,8 @@
     "ts-images": ["ts-images@0.2.11", "", { "dependencies": { "@stacksjs/ts-avif": "^0.1.0", "@stacksjs/ts-bmp": "^0.1.0", "@stacksjs/ts-png": "^0.1.2", "@stacksjs/ts-svg": "^0.1.1", "@stacksjs/ts-webp": "^0.1.2", "ts-gif": "^0.1.2", "ts-jpeg": "^0.3.1" }, "bin": { "imgx": "./dist/bin/cli.js" } }, "sha512-embt+9hNoNaaphDpAIb6vErvt0lYrxUzlneA+6gUE25YrP2CI4bkDhSM+tJMqJoE8dFFFEZzLv6FYIGOuuO16A=="],
 
     "ts-jpeg": ["ts-jpeg@0.3.4", "", {}, "sha512-yK5fhHcMVBoEs+qReAMrDsh4q1mDmheylyg1k30TKzLeZl4hkM5MIMIEy4ZuFtV3l276JomBSZKnlEYoA1/eeQ=="],
+
+    "ts-maps": ["ts-maps@0.3.2", "", {}, "sha512-kNjeSu1nIE1DAEZ7MPFWMcjV7pgGvM6JJk+vyJGsWyo+Zu41OoznMwAWkQoE6Iy5Uh5+7nm5zx5DjA+xwfYMwA=="],
 
     "ts-pantry": ["ts-pantry@0.11.39", "", { "bin": { "ts-pantry": "./dist/bin/cli.js" } }, "sha512-rqq73VTqtkJ6J73o+yHQ4IHzFJ5XH0c52TWzjHJ+/l7Ut8KA+7S1ASpyYTSxqQPi1bxMvUg8A/kDmZp2AYey4A=="],
 

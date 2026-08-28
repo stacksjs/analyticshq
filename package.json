@@ -68,6 +68,7 @@
     "test:types": "./buddy test:types",
     "bud": "./buddy",
     "stx": "./buddy",
+    "vendor:map": "bun build node_modules/ts-maps/dist/index.js --outfile public/vendor/ts-maps.js --minify --target browser --format esm && cp node_modules/ts-maps/src/core-map/ts-maps.css public/vendor/ts-maps.css",
     "account": "bun scripts/account.ts",
     "account:list": "bun scripts/account.ts --list",
     "account:rotate": "bun scripts/account.ts --rotate"
@@ -82,7 +83,8 @@
     "@stacksjs/ts-cloud": "^0.11.5",
     "@ts-analytics/tracking": "^0.1.13",
     "mmdb-lib": "^3.0.3",
-    "stacks": "^0.72.64"
+    "stacks": "^0.72.64",
+    "ts-maps": "^0.3.2"
   },
   "devDependencies": {
     "better-dx": "^0.2.25"

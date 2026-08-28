@@ -1,0 +1,929 @@
+/* required styles */
+
+.tsmap-pane,
+.tsmap-tile,
+.tsmap-marker-icon,
+.tsmap-marker-shadow,
+.tsmap-tile-container,
+.tsmap-pane > svg,
+.tsmap-pane > canvas,
+.tsmap-zoom-box,
+.tsmap-image-layer,
+.tsmap-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width:100%;
+}
+
+.tsmap-container {
+  overflow: hidden;
+}
+
+.tsmap-tile,
+.tsmap-marker-icon,
+.tsmap-marker-shadow {
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Safari renders non-retina tile on retina better with this, but Chrome is worse */
+
+.tsmap-safari {
+  .tsmap-tile {
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  /* hack that prevents hw layers "stretching" when loading new tiles */
+  .tsmap-tile-container {
+    width: 1600px;
+    height: 1600px;
+    -webkit-transform-origin: 0 0;
+  }
+}
+
+.tsmap-marker-icon,
+.tsmap-marker-shadow {
+  display: block;
+}
+
+/* .tsmap-container svg: reset svg max-width declaration shipped in Joomla! (joomla.org) 3.x */
+/* .tsmap-container img: map is broken in FF if you have max-width: 100% on tiles */
+
+.tsmap-container {
+  .tsmap-overlay-pane svg {
+    max-width: none !important;
+    max-height: none !important;
+  }
+
+  .tsmap-marker-pane img,
+  .tsmap-shadow-pane img,
+  .tsmap-tile-pane img,
+  img.tsmap-image-layer,
+  .tsmap-tile {
+    max-width: none !important;
+    max-height: none !important;
+    width: auto;
+    padding: 0;
+  }
+
+  img.tsmap-tile {
+    /* See: https://bugs.chromium.org/p/chromium/issues/detail?id=600120 */
+    mix-blend-mode: plus-lighter;
+  }
+
+  &.tsmap-touch-zoom {
+    touch-action: pan-x pan-y;
+  }
+
+  &.tsmap-touch-drag {
+    /* Fallback for FF which doesn't support pinch-zoom */
+    touch-action: none;
+    touch-action: pinch-zoom;
+
+    &.tsmap-touch-zoom {
+      touch-action: none;
+    }
+  }
+
+  -webkit-tap-highlight-color: transparent;
+
+  a {
+    -webkit-tap-highlight-color: rgba(51, 181, 229, 0.4);
+  }
+}
+
+.tsmap-tile {
+  visibility: hidden;
+}
+
+.tsmap-tile-loaded {
+  visibility: inherit;
+}
+
+.tsmap-zoom-box {
+  width: 0;
+  height: 0;
+  box-sizing: border-box;
+  z-index: 800;
+}
+
+.tsmap-pane {
+  z-index: 400;
+}
+
+.tsmap-tile-pane {
+  z-index: 200;
+}
+
+.tsmap-overlay-pane {
+  z-index: 400;
+}
+
+.tsmap-shadow-pane {
+  z-index: 500;
+}
+
+.tsmap-marker-pane {
+  z-index: 600;
+}
+
+.tsmap-tooltip-pane {
+  z-index: 650;
+}
+
+.tsmap-popup-pane {
+  z-index: 700;
+}
+
+.tsmap-map-pane {
+  canvas {
+    z-index: 100;
+  }
+
+  svg {
+    z-index: 200;
+  }
+}
+
+/* control positioning */
+
+.tsmap-control {
+  position: relative;
+  z-index: 800;
+  pointer-events: auto;
+  float: left;
+  clear: both;
+}
+
+.tsmap-top,
+.tsmap-bottom {
+  position: absolute;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.tsmap-top {
+  top: 0;
+  .tsmap-control {
+    margin-top: 10px;
+  }
+}
+
+.tsmap-right {
+  right: 0;
+  .tsmap-control {
+    float: right;
+    margin-right: 10px;
+  }
+}
+
+.tsmap-bottom {
+  bottom: 0;
+  .tsmap-control {
+    margin-bottom: 10px;
+  }
+}
+
+.tsmap-left {
+  left: 0;
+  .tsmap-control {
+    margin-left: 10px;
+  }
+}
+
+/* zoom and fade animations */
+
+.tsmap-fade-anim {
+  .tsmap-popup {
+    opacity: 0;
+    transition: opacity 0.2s linear;
+  }
+
+  .tsmap-map-pane .tsmap-popup {
+    opacity: 1;
+  }
+}
+
+.tsmap-zoom-animated {
+  transform-origin: 0 0;
+  svg& {
+    will-change: transform;
+  }
+}
+
+.tsmap-zoom-anim {
+  .tsmap-zoom-animated {
+    transition: transform 0.25s cubic-bezier(0, 0, 0.25, 1);
+  }
+
+  .tsmap-tile {
+    transition: none;
+  }
+
+  .tsmap-zoom-hide {
+    visibility: hidden;
+  }
+}
+
+.tsmap-pan-anim .tsmap-tile {
+  transition: none;
+}
+
+/* Upright panes — counter-rotate the pane so marker icons, popups and
+ * tooltips stay visually upright when the map is rotated (bearing != 0).
+ * The transform and transform-origin are driven from JS (see
+ * `TsMap._applyBearingToPanes`). */
+.tsmap-upright {
+  will-change: transform;
+}
+
+/* cursors */
+
+.tsmap-interactive {
+  cursor: pointer;
+}
+
+.tsmap-grab {
+  cursor: grab;
+}
+
+.tsmap-crosshair {
+  cursor: crosshair;
+
+  .tsmap-interactive {
+    cursor: crosshair;
+  }
+}
+
+.tsmap-popup-pane,
+.tsmap-control {
+  cursor: auto;
+}
+
+.tsmap-dragging {
+  .tsmap-grab {
+    cursor: grabbing;
+
+    .tsmap-interactive {
+      cursor: grabbing;
+    }
+  }
+
+  .tsmap-marker-draggable {
+    cursor: grabbing;
+  }
+}
+
+/* marker & overlays interactivity */
+.tsmap-marker-icon,
+.tsmap-marker-shadow,
+.tsmap-image-layer,
+.tsmap-pane > svg path,
+.tsmap-tile-container {
+  pointer-events: none;
+}
+
+.tsmap-marker-icon.tsmap-interactive,
+.tsmap-image-layer.tsmap-interactive,
+.tsmap-pane > svg path.tsmap-interactive,
+svg.tsmap-image-layer.tsmap-interactive path {
+  pointer-events: auto;
+}
+
+/* visual tweaks */
+
+.tsmap-container {
+  /* Matched to the land colour of a light basemap, so tiles fade in against
+     their own background instead of flashing a dark band on every pan. */
+  background: #e8eaed;
+  outline-offset: 1px;
+
+  a {
+    color: #1a73e8;
+  }
+}
+
+/* prevent showing outline-box on Chromium when clicking on a vector with a tooltip */
+path.tsmap-interactive:focus:not(:focus-visible) {
+  outline: 0;
+}
+
+.tsmap-zoom-box {
+  border: 2px dotted #38f;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* general typography */
+.tsmap-container {
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 12px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+/* general toolbar styles */
+
+/*
+ * Map chrome, styled the way a modern map is expected to look.
+ *
+ * What this replaces was inherited from Leaflet's 2011 defaults: 26px targets
+ * (well under the 44px every touch guideline asks for), a 4px radius, and
+ * `0 1px 5px rgba(0,0,0,0.65)` — a shadow at 65% black, which over a light
+ * basemap reads as a smudge rather than elevation.
+ *
+ * The values here follow the conventions every major map now shares: a white
+ * card, an 8px radius, a soft two-part shadow (a tight contact edge plus a
+ * wide ambient falloff), hairline dividers instead of solid #ccc borders, and
+ * the system UI font rather than Lucida Console. Controls also gain a real
+ * focus ring, which the old chrome suppressed entirely.
+ */
+.tsmap-bar {
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.3),
+    0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+
+  a {
+    position: relative;
+    background-color: #fff;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    display: block;
+    text-align: center;
+    text-decoration: none;
+    color: black;
+    background-position: 50% 50%;
+    background-repeat: no-repeat;
+    display: block;
+    color: #3c4043;
+    transition: background-color 120ms ease;
+
+    &:hover {
+      background-color: #f1f3f4;
+    }
+
+    /* Visible only for keyboard users: a ring on every mouse click is noise,
+       and no ring at all makes the control unusable without a pointer. */
+    &:focus-visible {
+      outline: 2px solid #1a73e8;
+      outline-offset: -2px;
+      background-color: #f1f3f4;
+    }
+
+    /*
+     * Inset seam between stacked buttons.
+     *
+     * A full-width `border-bottom` runs edge to edge and visually cuts the
+     * card in two, so a zoom control reads as two stacked cards rather than
+     * one control with a divider. Every modern map insets this line; drawing
+     * it as a pseudo-element is also what lets the last child simply not have
+     * one, without a border reset.
+     */
+    &:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      right: 8px;
+      bottom: 0;
+      left: 8px;
+      height: 1px;
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    &:first-child {
+      border-top-left-radius: 8px;
+      border-top-right-radius: 8px;
+    }
+
+    &:last-child {
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+
+    &.tsmap-disabled {
+      cursor: default;
+      background-color: #fff;
+      color: #bdc1c6;
+    }
+  }
+}
+
+/* Dark basemaps get dark chrome; white cards on a dark map glare. */
+@media (prefers-color-scheme: dark) {
+  .tsmap-dark .tsmap-bar a:not(:last-child)::after {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .tsmap-dark .tsmap-bar a {
+    background-color: #292a2d;
+    color: #e8eaed;
+
+    &:hover,
+    &:focus-visible {
+      background-color: #35363a;
+    }
+
+    &.tsmap-disabled {
+      background-color: #292a2d;
+      color: #5f6368;
+    }
+  }
+}
+
+.tsmap-control-layers-toggle {
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: block;
+}
+
+/*
+ * Touch used to shrink these to 30px with a 2px radius, which is smaller than
+ * the pointer size and the wrong way round — a finger needs a bigger target
+ * than a cursor, not a smaller one. 40px already clears the 44px guideline
+ * once the control's own padding is counted, so both inputs share it.
+ */
+.tsmap-touch .tsmap-bar a {
+  width: 40px;
+  height: 40px;
+  line-height: 40px;
+}
+
+/* zoom control */
+
+/* Scoped under .tsmap-bar so it outranks the `.tsmap-bar a` colour above —
+   the zoom glyphs sit a shade lighter than label ink, as they do on every
+   map that draws them as characters rather than icons. */
+.tsmap-bar a.tsmap-control-zoom-in,
+.tsmap-bar a.tsmap-control-zoom-out {
+  color: #5f6368;
+
+  font:
+    400 21px / 40px -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  text-indent: 0;
+}
+
+/* layers control */
+
+.tsmap-control-layers {
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.3),
+    0 2px 6px 2px rgba(60, 64, 67, 0.15);
+  background: #fff;
+  border-radius: 8px;
+
+  .tsmap-control-layers-list {
+    display: none;
+  }
+}
+
+.tsmap-control-layers-toggle {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2736%27 height=%2736%27 viewBox=%270 0 36 36%27%3E%3Crect x=%274%27 y=%274%27 width=%2714%27 height=%2714%27 fill=%27%23fff%27 stroke=%27%23666%27 stroke-width=%271.5%27/%3E%3Crect x=%2710%27 y=%2710%27 width=%2714%27 height=%2714%27 fill=%27%23e8e8e8%27 stroke=%27%23666%27 stroke-width=%271.5%27/%3E%3Crect x=%2716%27 y=%2716%27 width=%2714%27 height=%2714%27 fill=%27%23d0d0d0%27 stroke=%27%23666%27 stroke-width=%271.5%27/%3E%3C/svg%3E');
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 36px;
+  height: 36px;
+
+  .tsmap-touch & {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+.tsmap-control-layers-expanded {
+  .tsmap-control-layers-toggle {
+    display: none;
+  }
+
+  .tsmap-control-layers-list {
+    display: block;
+    position: relative;
+  }
+}
+
+.tsmap-control-layers-list {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.tsmap-control-layers-expanded {
+  padding: 6px 10px 6px 6px;
+  color: #333;
+  background: #fff;
+}
+
+.tsmap-control-layers-scrollbar {
+  overflow-y: scroll;
+  overflow-x: hidden;
+  padding-right: 5px;
+}
+
+.tsmap-control-layers-selector {
+  margin-top: 2px;
+  position: relative;
+  top: 1px;
+}
+
+.tsmap-control-layers label {
+  display: block;
+  font-size: 13px;
+  font-size: 1.08333em;
+}
+
+.tsmap-control-layers-separator {
+  height: 0;
+  border-top: 1px solid #ddd;
+  margin: 5px -10px 5px -6px;
+}
+
+/* Path-detection probe for DefaultIcon (see DefaultIcon._detectIconPath) */
+.tsmap-default-icon-path {
+  background-image: url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2725%27 height=%2741%27%3E%3Cpath fill=%27%232b83f6%27 d=%27M12.5 0C5.6 0 0 5.6 0 12.5c0 9.4 12.5 28.5 12.5 28.5S25 21.9 25 12.5C25 5.6 19.4 0 12.5 0z%27/%3E%3C/svg%3E');
+}
+
+/* attribution and scale controls */
+
+.tsmap-container .tsmap-control-attribution {
+  background: #fff;
+  background: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+
+.tsmap-control-attribution,
+.tsmap-control-scale-line {
+  padding: 0 5px;
+  color: #333;
+  line-height: 1.4;
+}
+
+.tsmap-control-attribution a {
+  text-decoration: none;
+
+  &:hover,
+  &:focus {
+    text-decoration: underline;
+  }
+}
+
+.tsmap-attribution-flag {
+  display: inline !important;
+  vertical-align: baseline !important;
+  width: 1em;
+  height: 0.6669em;
+  margin-right: 0.277em;
+}
+
+.tsmap-left .tsmap-control-scale {
+  margin-left: 5px;
+}
+
+.tsmap-bottom .tsmap-control-scale {
+  margin-bottom: 5px;
+}
+
+.tsmap-control-scale-line {
+  border: 2px solid #777;
+  border-top: none;
+  line-height: 1.1;
+  padding: 2px 5px 1px;
+  white-space: nowrap;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.8);
+  text-shadow: 1px 1px #fff;
+
+  &:not(:first-child) {
+    border-top: 2px solid #777;
+    border-bottom: none;
+    margin-top: -2px;
+
+    &:not(:last-child) {
+      border-bottom: 2px solid #777;
+    }
+  }
+}
+
+/*
+ * Touch controls are the same controls.
+ *
+ * This block used to swap the elevated card for a flat one with a hard
+ * `2px solid rgba(0,0,0,0.2)` border — the Leaflet touch treatment, and the
+ * reason the chrome looked a decade old on exactly the devices most people
+ * open a map on. A shadow is not a pointer affordance; it is how a floating
+ * control reads as floating, on any input. Phones render it fine.
+ *
+ * The touch class still exists and still drives hit-target sizing above; it
+ * just no longer restyles the surface.
+ */
+.tsmap-touch {
+  .tsmap-control-layers,
+  .tsmap-bar {
+    background-clip: padding-box;
+  }
+}
+
+/* popup */
+
+.tsmap-popup {
+  position: absolute;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.tsmap-popup-content-wrapper {
+  padding: 1px;
+  text-align: left;
+  border-radius: 12px;
+}
+
+.tsmap-popup-content {
+  margin: 13px 24px 13px 20px;
+  line-height: 1.3;
+  font-size: 13px;
+  font-size: 1.08333em;
+  min-height: 1px;
+
+  p {
+    margin: 17px 0;
+    margin: 1.3em 0;
+  }
+}
+
+.tsmap-popup-tip-container {
+  width: 40px;
+  height: 20px;
+  position: absolute;
+  left: 50%;
+  margin-top: -1px;
+  margin-left: -20px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tsmap-popup-tip {
+  width: 17px;
+  height: 17px;
+  padding: 1px;
+  margin: -10px auto 0;
+  pointer-events: auto;
+  transform: rotate(45deg);
+}
+
+.tsmap-popup-content-wrapper,
+.tsmap-popup-tip {
+  background: white;
+  color: #333;
+  box-shadow:
+    0 2px 6px rgba(60, 64, 67, 0.28),
+    0 6px 18px 4px rgba(60, 64, 67, 0.15);
+}
+
+.tsmap-container a.tsmap-popup-close-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  border: none;
+  text-align: center;
+  width: 24px;
+  height: 24px;
+  font: 16px/24px Tahoma, Verdana, sans-serif;
+  color: #757575;
+  text-decoration: none;
+  background: transparent;
+
+  &:hover,
+  &:focus {
+    color: #585858;
+  }
+}
+
+.tsmap-popup-scrolled {
+  overflow: auto;
+}
+
+/* div icon */
+
+.tsmap-div-icon {
+  background: #fff;
+  border: 1px solid #666;
+}
+
+/* Tooltip */
+/* Base styles for the element that has a tooltip */
+.tsmap-tooltip {
+  position: absolute;
+  padding: 6px;
+  background-color: #fff;
+  border: 1px solid #fff;
+  border-radius: 3px;
+  color: #222;
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+
+  &.tsmap-interactive {
+    cursor: pointer;
+    pointer-events: auto;
+  }
+}
+
+.tsmap-tooltip-top:before,
+.tsmap-tooltip-bottom:before,
+.tsmap-tooltip-left:before,
+.tsmap-tooltip-right:before {
+  position: absolute;
+  pointer-events: none;
+  border: 6px solid transparent;
+  background: transparent;
+  content: '';
+}
+
+/* Directions */
+
+.tsmap-tooltip-bottom {
+  margin-top: 6px;
+
+  &:before {
+    left: 50%;
+    margin-left: -6px;
+    top: 0;
+    margin-top: -12px;
+    margin-left: -6px;
+    border-bottom-color: #fff;
+  }
+}
+
+.tsmap-tooltip-top {
+  margin-top: -6px;
+
+  &:before {
+    left: 50%;
+    margin-left: -6px;
+    bottom: 0;
+    margin-bottom: -12px;
+    border-top-color: #fff;
+  }
+}
+
+.tsmap-tooltip-left {
+  margin-left: -6px;
+
+  &:before {
+    top: 50%;
+    margin-top: -6px;
+    right: 0;
+    margin-right: -12px;
+    border-left-color: #fff;
+  }
+}
+
+.tsmap-tooltip-right {
+  margin-left: 6px;
+
+  &:before {
+    top: 50%;
+    margin-top: -6px;
+    left: 0;
+    margin-left: -12px;
+    border-right-color: #fff;
+  }
+}
+
+/* Printing */
+
+@media print {
+  /* Prevent printers from removing background-images of controls. */
+  .tsmap-control {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* locate control
+   ==========================================================================
+   The crosshair button. Drawn in CSS rather than shipped as an icon file so it
+   inherits colour from the button's state and stays crisp at any pixel ratio —
+   the control has four states and a bitmap would need four assets.
+   ========================================================================== */
+
+.tsmap-control-locate a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.tsmap-locate-icon {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  color: #5f6368;
+
+  /* The ring. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 2px solid currentcolor;
+    border-radius: 50%;
+  }
+
+  /* The centre dot, and the four ticks via a cross gradient. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(currentcolor, currentcolor) 50% 0 / 2px 4px no-repeat,
+      linear-gradient(currentcolor, currentcolor) 50% 100% / 2px 4px no-repeat,
+      linear-gradient(currentcolor, currentcolor) 0 50% / 4px 2px no-repeat,
+      linear-gradient(currentcolor, currentcolor) 100% 50% / 4px 2px no-repeat,
+      radial-gradient(circle at 50% 50%, currentcolor 0 2px, transparent 2px);
+  }
+}
+
+/* Following the device: the crosshair fills in, the way a "you are here"
+   control does everywhere else. */
+a.tsmap-control-locate-active .tsmap-locate-icon {
+  color: #1a73e8;
+}
+
+/* Acquiring a first fix. The pulse is the only thing telling the user that a
+   press did anything at all — a GPS fix can take several seconds. */
+a.tsmap-control-locate-locating .tsmap-locate-icon {
+  color: #1a73e8;
+  animation: tsmap-locate-pulse 1s ease-in-out infinite;
+}
+
+@keyframes tsmap-locate-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Denied or unavailable. Struck through rather than merely greyed: grey reads
+   as "disabled, try later" when the real state is "this will not work until
+   you change a browser setting". */
+/*
+ * The state class lands on the <a> itself (see LocateControl._setState), so
+ * these select the anchor rather than a parent. Written as `.tsmap-control-
+ * locate-denied .tsmap-locate-icon` first time round, which silently matched
+ * nothing and left a denied control looking merely idle.
+ */
+a.tsmap-control-locate-denied .tsmap-locate-icon {
+  color: #bdc1c6;
+}
+
+a.tsmap-control-locate-denied::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 2px;
+  border-radius: 1px;
+  /* Cut out from the strike so it reads as a line crossing the glyph rather
+     than a line drawn on top of it. */
+  background: #80868b;
+  box-shadow: 0 -2px 0 #fff;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* The accuracy halo around the reported position. */
+.tsmap-locate-accuracy {
+  fill: #1a73e8;
+  fill-opacity: 0.12;
+  stroke: #1a73e8;
+  stroke-opacity: 0.35;
+  stroke-width: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  a.tsmap-control-locate-locating .tsmap-locate-icon {
+    animation: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .tsmap-dark .tsmap-locate-icon {
+    color: #9aa0a6;
+  }
+
+  .tsmap-dark a.tsmap-control-locate-active .tsmap-locate-icon,
+  .tsmap-dark a.tsmap-control-locate-locating .tsmap-locate-icon {
+    color: #8ab4f8;
+  }
+}
