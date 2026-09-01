@@ -1058,6 +1058,19 @@ route.post('/api/sites', async (request: any) => {
   if (!name)
     return json({ error: 'name is required' }, 400)
 
+  // Two sites of the same name in one account render identically in every list,
+  // and each carries its own tracking id, so the snippet you copy out is a coin
+  // flip. Same rule loghq and bughq apply to projects.
+  //
+  // lower(), not ILIKE: ILIKE is Postgres-only and this also runs on SQLite.
+  // Scoped to the owner, since two accounts may both track a site called "Blog".
+  const clash = (await db.unsafe(
+    'SELECT id FROM sites WHERE owner_id = $1 AND lower(name) = lower($2) LIMIT 1',
+    [Number(uid), name],
+  ))?.[0]
+  if (clash)
+    return json({ error: `You already have a site called "${name}".`, site: String(clash.id) }, 409)
+
   // Unguessable, server-minted id — never trust a caller-supplied one (that would
   // reopen the land-grab of a live public site-id).
   const id = createHash('sha256').update(`${uid}|${name}|${randomId()}|${Date.now()}`).digest('hex').slice(0, 24)
