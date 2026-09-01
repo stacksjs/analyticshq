@@ -1,22 +1,16 @@
 import type { CLI } from '@stacksjs/types'
-import process from 'node:process'
 
-export default function (cli: CLI) {
-  // Listen to the `inspire:three` command
-  cli.on('inspire:three', () => {
-    // eslint-disable-next-line no-console
-    console.log('inspiring with three quotes')
-    // Do something
-  })
-
-  // Listen to the default command
-  cli.on('inspire:!', () => {
-    // Do something
-  })
-
-  // Listen to unknown commands
-  cli.on('inspire:*', () => {
-    console.error('Invalid command: %s', cli.args.join(' '))
-    process.exit(1)
-  })
+/**
+ * **CLI Listeners**
+ *
+ * Hook into `buddy` command lifecycle events here, e.g.
+ * `cli.on('my-command:*', () => { ... })`.
+ *
+ * Empty on purpose. This file used to carry three `inspire:*` handlers from the
+ * scaffold; `app/Commands/Inspire.ts` was removed in ee41406, so they listened
+ * for a command that could no longer be run. The seam is kept because it is
+ * where CLI listeners go, not because anything needs one today.
+ */
+export default function (_cli: CLI): void {
+  //
 }

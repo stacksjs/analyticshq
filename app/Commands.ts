@@ -26,6 +26,8 @@ export type CommandRegistry = Record<string, string | CommandConfig>
  *   aliases: ['emails', 'mail'],
  * },
  */
-export default {
-  'inspire': 'Inspire',
-} satisfies CommandRegistry
+// Empty on purpose. This app registers no commands of its own; `buddy` iterates
+// the registry and finds nothing, which is the intended no-op. Do not delete the
+// file to express that — an import that throws sends buddy down its
+// auto-discovery branch over app/Commands/, which is a different behaviour.
+export default {} satisfies CommandRegistry
