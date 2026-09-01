@@ -231,6 +231,19 @@ export default {
     validation: schema.string(),
     default: '',
   },
+  // Reports this app's own errors to bughq. Empty disables capture rather than
+  // failing: the client marks itself disabled on construction, silently.
+  BUGHQ_KEY: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  // Override only to point at a bughq other than the hosted one. Empty means
+  // the SDK's own default host.
+  BUGHQ_HOST: {
+    validation: schema.string(),
+    default: '',
+  },
 
   // Override only to point at a loghq other than the hosted one, e.g. a local
   // dev server. Empty means the SDK's own default host.
