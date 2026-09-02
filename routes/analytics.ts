@@ -24,6 +24,7 @@ import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normal
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
 import { isUnlimited, limitReachedMessage, type PlanLimits } from '../config/plans'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
+import { healthResponse } from '../app/Support/health'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
@@ -33,7 +34,7 @@ import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord }
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
-import { response, route } from '@stacksjs/router'
+import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
 import { getDailySalt } from '../app/Analytics/salt'
 import {
@@ -3230,10 +3231,17 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
  * configuration. It reveals nothing about any site, visitor, or address, and
  * `/api/health` is already public.
  */
-route.get('/api/health', () => response.json({
-  status: 'ok',
-  app: 'analyticshq',
-  // A known-routable address. Resolving it proves the database opened and
-  // answered, which a file-exists check would not.
-  geo: countryFromIp('8.8.8.8') !== null,
+//
+// `geo` rides along as a reported fact rather than a probe, so it never flips
+// the status to 503. A missing country database is a degraded feature, not an
+// outage — the trade the module above describes — and paging someone at 3am
+// because an optional lookup table went stale would be the wrong call. It stays
+// in the body so the answer is one request away when someone asks why country
+// is empty.
+route.get('/api/health', () => healthResponse({
+  extra: {
+    // A known-routable address. Resolving it proves the database opened and
+    // answered, which a file-exists check would not.
+    geo: countryFromIp('8.8.8.8') !== null,
+  },
 }))
