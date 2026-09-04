@@ -21,6 +21,7 @@ import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { countryName } from '../../app/Support/dashboard-format'
 
 const root = join(import.meta.dir, '../..')
 const bundle = join(root, 'public/vendor/ts-maps.js')
@@ -184,6 +185,117 @@ describe('the panel obeys the stx rules this file has been bitten by', () => {
   test('the empty state is server-rendered, not left to the map', () => {
     // A site with no country data must say so, not show an empty grey world.
     expect(panel()).toContain('No country data yet.')
+  })
+})
+
+describe('countries read as names, and the tooltip is visible while doing it', () => {
+  test('countryName spells out a code, and never throws on a bad one', () => {
+    expect(countryName('US')).toBe('United States')
+    expect(countryName('NL')).toBe('Netherlands')
+    // Not in the geojson at 110m, so the LIST is the only place these are
+    // readable at all -- the map cannot draw them.
+    expect(countryName('SG')).toBe('Singapore')
+    expect(countryName('HK')).toBe('Hong Kong')
+  })
+
+  test('an unusable code falls back to itself rather than breaking the page', () => {
+    // 'T1' is well-formed as a string but not a region subtag: Intl throws a
+    // RangeError on it, and page_views predates the writer that normalizes
+    // country codes, so a row like it can still be in the table. A dashboard
+    // that renders a raw code beats one that 500s.
+    expect(countryName('T1')).toBe('T1')
+    // Well-formed and unassigned: Intl returns the input, which is already the
+    // fallback.
+    expect(countryName('XX')).toBe('XX')
+    for (const bad of [null, undefined, '', 'usa'])
+      expect({ bad, out: countryName(bad) }).toEqual({ bad, out: bad ? String(bad) : '' })
+  })
+
+  test("the map loads ts-maps' stylesheet, which is what makes it interactive", () => {
+    // The bug this pins, and it was two bugs wearing one coat.
+    //
+    // Visibly, tooltips were bound and built and invisible: without the vendor
+    // stylesheet every .tsmap-pane is position:static, so the bubble landed in
+    // normal flow under the map, full width and transparent.
+    //
+    // Underneath that, the pane holding the countries is an
+    // <svg pointer-events="none">, and the vendor rule re-enabling
+    // `path.tsmap-interactive` is the only thing that lets a pointer reach a
+    // country. Without it elementFromPoint over the USA returns the pane div,
+    // not the path -- so nothing was hoverable and the click-to-filter never
+    // fired either. Restating a subset of the file by hand restored the looks
+    // and not the hit-testing, which is why the whole thing is linked.
+    expect(dashboard).toContain('<link rel="stylesheet" href="/vendor/ts-maps.css">')
+    expect(existsSync(join(root, 'public/vendor/ts-maps.css'))).toBe(true)
+  })
+
+  test('the stylesheet cannot leak past the map', () => {
+    // It is loaded on a page it does not own, so every rule in it has to be
+    // keyed on a class that exists only inside #country-map.
+    const css = readFileSync(join(root, 'public/vendor/ts-maps.css'), 'utf8')
+    const offenders: string[] = []
+    let depth = 0
+    let buf = ''
+    for (const line of css.split('\n')) {
+      const t = line.trim()
+      if (depth === 0 && t && !t.startsWith('/*') && !t.startsWith('*'))
+        buf += ` ${t}`
+      if (line.includes('{')) {
+        if (depth === 0) {
+          const sel = buf.split('{')[0].replace(/\/\*[\s\S]*?\*\//g, '').trim()
+          if (sel && !sel.startsWith('@') && !sel.includes('tsmap'))
+            offenders.push(sel)
+          buf = ''
+        }
+        depth += (line.match(/\{/g) || []).length
+      }
+      if (line.includes('}')) {
+        depth -= (line.match(/\}/g) || []).length
+        if (depth <= 0) { depth = 0; buf = '' }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  test('the tooltip is restated in this palette', () => {
+    // The vendor bubble is a white box with #222 text and a white arrow, which
+    // is unreadable here. The arrow is a border triangle, so each direction
+    // carries its own colour and each has to be re-pointed.
+    expect(dashboard).toContain('#country-map .tsmap-tooltip {')
+    for (const dir of ['top', 'bottom', 'left', 'right'])
+      expect({ dir, styled: dashboard.includes(`#country-map .tsmap-tooltip-${dir}:before`) })
+        .toEqual({ dir, styled: true })
+  })
+
+  test('the tooltip names a country the same way the list does', () => {
+    // Natural Earth calls US "United States of America"; Intl.DisplayNames calls
+    // it "United States". The Top countries list is built from Intl server-side,
+    // so the map has to take it too or a country's polygon and its row disagree
+    // about its name on the same screen.
+    const s = mapScript()
+    expect(s).toContain('Intl.DisplayNames')
+    // The geojson label stays as the fallback, which is what carries a code Intl
+    // does not recognize.
+    expect(s).toContain('f.properties.name')
+  })
+
+  test('the list filters on the code while showing the name', () => {
+    // BreakdownPanel builds its filter link from labelKey and renders
+    // displayKey. Collapsing them would put "United States" into ?country=,
+    // which matches nothing: page_views.country holds the ISO code.
+    expect(dashboard).toContain('labelKey="country" displayKey="label"')
+
+    const panel = readFileSync(join(root, 'resources/components/BreakdownPanel.stx'), 'utf8')
+    expect(panel).toContain('addFilterUrl(filterKey, row[labelKey])')
+    expect(panel).toContain('row[displayKey || labelKey]')
+  })
+
+  test('displayKey stays optional for the other eight panels', () => {
+    // One component serves nine breakdowns. Only countries pass displayKey; the
+    // rest must keep falling back to labelKey.
+    const uses = [...dashboard.matchAll(/<BreakdownPanel[^>]*>/g)].map(m => m[0])
+    expect(uses.length).toBe(9)
+    expect(uses.filter(u => u.includes('displayKey')).length).toBe(1)
   })
 })
 

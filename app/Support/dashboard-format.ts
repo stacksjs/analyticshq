@@ -88,6 +88,38 @@ export function flag(code: string | null | undefined): string {
   return String.fromCodePoint(...[...String(code).toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65))
 }
 
+/**
+ * ISO 3166-1 alpha-2 -> English country name: 'US' -> 'United States'.
+ *
+ * Intl.DisplayNames rather than a table shipped with the app: it is ICU-backed,
+ * covers every assigned code, and Bun and the browser return the same string for
+ * the same input. That last part is what lets the map's tooltips and the Top
+ * countries list agree without either shipping names to the other -- and the two
+ * disagreeing about what a country is called is exactly the confusion the map
+ * script's own comments already guard against.
+ *
+ * Two failure modes, both falling back to the raw code. A malformed subtag
+ * ('T1', which older writers could still have left in the table) makes `of`
+ * throw a RangeError, and an unthrown dashboard is worth more than a pretty
+ * label. A well-formed but unassigned code ('XX') is returned unchanged, which
+ * is already the fallback, so it needs no special case.
+ *
+ * The formatter is built once: constructing one costs a locale-data lookup, and
+ * the map asks for 177 of these on every render.
+ */
+const REGION_NAMES = new Intl.DisplayNames(['en'], { type: 'region' })
+
+export function countryName(code: string | null | undefined): string {
+  if (!code || String(code).length !== 2)
+    return String(code ?? '')
+  try {
+    return REGION_NAMES.of(String(code).toUpperCase()) ?? String(code)
+  }
+  catch {
+    return String(code)
+  }
+}
+
 /** Signed percent change against the previous period; null when there is no baseline. */
 export function pct(cur: number, prev: number): number | null {
   if (!prev)

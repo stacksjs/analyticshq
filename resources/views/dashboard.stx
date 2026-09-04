@@ -11,7 +11,7 @@
 // app/Support is on the tsconfig include path. Written as a static import: stx
 // rewrites it to `const { ... } = await import(...)` and adds the export line, so
 // the hand-rolled `await import()` form buys nothing and loses that.
-import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
+import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
 import { installTargets } from '../../app/Analytics/install'
@@ -702,6 +702,26 @@ const maxExit = exitPages.reduce((m, e) => Math.max(m, Number(e.exits || 0)), 0)
 const maxRef = referrers.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 const maxReferrerUrl = referrerUrls.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 const maxCountry = countries.reduce((m, c) => Math.max(m, Number(c.views || 0)), 0) || 1
+
+/**
+ * Top countries rows carrying a spelled-out label beside the raw code.
+ *
+ * The code has to survive on the row: it is what addFilterUrl puts in the query
+ * string and what page_views.country is matched against, so this changes only
+ * what is DISPLAYED. BreakdownPanel keeps filtering on `country` and renders
+ * `label`.
+ *
+ * The flag is dropped when countryName hands the code straight back, which is
+ * what it does for anything it does not recognize. flag() maps letter pairs
+ * arithmetically and has no notion of which pairs are assigned, so 'XX' would
+ * otherwise render as a tofu box next to the bare code -- two ways of saying
+ * "unknown" where one reads better.
+ */
+const countryRows = countries.map((c) => {
+  const name = countryName(c.country)
+  const known = name !== String(c.country ?? '')
+  return { ...c, label: known ? `${flag(c.country)} ${name}` : name }
+})
 
 /**
  * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
@@ -1506,6 +1526,11 @@ onMount(() => {
     sweeps every orphan <style> out of the page and appends it AFTER the content, in the
     body, so a loose block would still apply but from the wrong place. --}}
 @push('styles')
+{{-- ts-maps' own stylesheet. Same-origin from /vendor like the engine beside it
+    (tests/unit/no-third-party-assets.test.ts fails the build on a CDN), and
+    loaded from this page rather than the layout because the map is the only
+    thing that uses it. Required, not cosmetic -- see the tooltip rules below. --}}
+<link rel="stylesheet" href="/vendor/ts-maps.css">
 <style>
 .mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
@@ -1533,6 +1558,35 @@ select.panel {
 :root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 :root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 select.panel:hover { border-color: var(--accent); }
+
+/* Map tooltips, themed. ts-maps binds and positions these itself, but only its
+  own stylesheet makes them work, and it is linked above rather than restated
+  here -- a subset is not enough. Two separate things break without it, and only
+  one is visible. Every .tsmap-pane defaults to position:static, so the tooltip
+  rendered in normal flow under the map, full width and transparent: bound,
+  built, unstyled. Less obvious, the pane holding the country polygons is an
+  <svg pointer-events="none">, and it is the vendor rule re-enabling
+  `path.tsmap-interactive` that lets a pointer reach a country at all -- without
+  it nothing on the map is hoverable OR clickable, so the click-to-filter below
+  never fired either.
+  Loading the whole file is safe: all 88 of its top-level rules are keyed on a
+  .tsmap- class, and those exist only inside #country-map.
+  What is overridden here is presentation only. The vendor tooltip is a white
+  box with #222 text and a white arrow, which is unreadable on this palette;
+  these rules restate it in the same chrome as .ga-tip below, so the map and the
+  traffic chart answer a hover the same way. */
+#country-map .tsmap-tooltip {
+  padding: 6px 9px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--border); color: var(--text-2);
+  font-size: 12px; line-height: 1.4;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+}
+/* The arrow is drawn as a border triangle, so its colour is set per direction
+  and each one has to be re-pointed at the panel token separately. */
+#country-map .tsmap-tooltip-top:before { border-top-color: var(--panel); }
+#country-map .tsmap-tooltip-bottom:before { border-bottom-color: var(--panel); }
+#country-map .tsmap-tooltip-left:before { border-left-color: var(--panel); }
+#country-map .tsmap-tooltip-right:before { border-right-color: var(--panel); }
 
 .bar { animation: grow 0.6s cubic-bezier(0.16,1,0.3,1); transform-origin: bottom; }
 @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
@@ -2309,7 +2363,7 @@ select.panel:hover { border-color: var(--accent); }
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Top countries --}}
-      <BreakdownPanel title="Top countries" :rows="countries" labelKey="country" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
+      <BreakdownPanel title="Top countries" :rows="countryRows" labelKey="country" displayKey="label" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
 
       {{-- Devices --}}
       <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />
@@ -2645,8 +2699,28 @@ select.panel:hover { border-color: var(--accent); }
   // Hover and click, matching the bar list exactly: same label, same numbers,
   // same filter URL. A country on the map and its row in the list must not
   // disagree about what clicking does.
+  // Intl.DisplayNames, with the geojson's own name as the fallback: the two do
+  // not agree (Natural Earth says "United States of America" where Intl says
+  // "United States"), and the Top countries list is built from Intl server-side,
+  // so taking it here too is what keeps a country's tooltip and its row saying
+  // the same thing. `of` throws a RangeError on a malformed subtag, hence the
+  // try; it is also absent on browsers older than the feature, hence building it
+  // in one.
+  let region = null
+  try { region = new Intl.DisplayNames(['en'], { type: 'region' }) }
+  catch (_) { region = null }
   const names = {}
-  for (const f of world.features) names[f.id] = f.properties && f.properties.name
+  for (const f of world.features) {
+    const geoName = f.properties && f.properties.name
+    let name = null
+    if (region && typeof f.id === 'string' && f.id.length === 2) {
+      try { name = region.of(f.id.toUpperCase()) }
+      catch (_) { name = null }
+    }
+    // `of` hands back the input unchanged for a well-formed but unassigned code,
+    // which is not a name -- fall through to the geometry's own label there.
+    names[f.id] = (name && name !== f.id) ? name : geoName
+  }
   layer.eachLayer(function (l) {
     const code = l.feature && l.feature.id
     const n = totals[code] || 0

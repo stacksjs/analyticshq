@@ -12,6 +12,12 @@
     `addFilterUrl` is NOT a prop -- it is the parent view's server function, and it
     stays callable inside a component's scope.
 
+    `displayKey` is optional and changes only what is RENDERED. Where a row's stored
+    value and its readable form differ -- country, which is stored as an ISO code and
+    read as a name -- the filter link still has to carry the stored value, so the two
+    stay separate keys rather than one relabelled field. Omitted, the label falls back
+    to `labelKey` and the eight other panels are unaffected.
+
     Panels carrying more than one metric (Top pages, Entry/Exit pages) keep their own
     markup; folding a variable metric list in here would cost more than it saves. --}}
 <div class="p-5 panel reveal">
@@ -19,7 +25,7 @@
   @forelse (rows as row)
     <StxLink to="{{ addFilterUrl(filterKey, row[labelKey]) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
       <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(row[valueKey]) / max) * 100) }}%; background: var(--bar);"></div>
-      <span class="relative pr-2 text-text-2 truncate {{ mono ? 'ga-row-label mono' : 'ga-row-label' }}">{{ row[labelKey] }}</span>
+      <span class="relative pr-2 text-text-2 truncate {{ mono ? 'ga-row-label mono' : 'ga-row-label' }}">{{ row[displayKey || labelKey] }}</span>
       <span class="relative font-medium tabular-nums mono">{{ Number(row[valueKey]).toLocaleString() }}</span>
     </StxLink>
   @empty
