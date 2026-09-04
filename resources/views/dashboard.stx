@@ -738,6 +738,24 @@ const countryTotals = Object.fromEntries(
     .filter(c => c.country)
     .map(c => [String(c.country).toUpperCase(), Number(c.views || 0)]),
 )
+/**
+ * `{ US: 'United States' }` for the map's tooltips, keyed like countryTotals.
+ *
+ * Shipped rather than recomputed in the browser, and that is the whole point.
+ * Intl.DisplayNames is backed by whatever CLDR the runtime carries, and the
+ * runtimes disagree: the same call that returns 'Hong Kong' on one returns
+ * 'Hong Kong SAR China' on another. Deriving the list here and the tooltips
+ * there would let a country's polygon and its own row name it differently on
+ * one screen, which is the confusion this panel already works to avoid. One
+ * source, serialized once.
+ *
+ * Only the countries with traffic: those are the ones shaded, the ones that
+ * appear in the list, and so the only ones whose two labels can be compared.
+ * Everything else falls back to the geometry's own name in the browser.
+ */
+const countryNames = Object.fromEntries(
+  Object.keys(countryTotals).map(code => [code, countryName(code)]),
+)
 const maxDevice = devices.reduce((m, d) => Math.max(m, Number(d.views || 0)), 0) || 1
 const maxBrowser = browsers.reduce((m, b) => Math.max(m, Number(b.views || 0)), 0) || 1
 const maxSystem = systems.reduce((m, s) => Math.max(m, Number(s.views || 0)), 0) || 1
@@ -2345,7 +2363,7 @@ select.panel:hover { border-color: var(--accent); }
         {{-- Counts cross as a data attribute rather than an inline script: a JSON
             blob inside a script body is the shape that has broken this file
             before, and stx forbids @json there for exactly that reason. --}}
-        <div hidden data-country-totals="{{ JSON.stringify(countryTotals) }}"></div>
+        <div hidden data-country-totals="{{ JSON.stringify(countryTotals) }}" data-country-names="{{ JSON.stringify(countryNames) }}"></div>
         {{-- Filled by the map script when a country has traffic but no polygon
             to shade. Natural Earth's 110m boundaries omit city-states — Singapore
             and Hong Kong among them — and those are ordinary traffic sources for
@@ -2699,28 +2717,19 @@ select.panel:hover { border-color: var(--accent); }
   // Hover and click, matching the bar list exactly: same label, same numbers,
   // same filter URL. A country on the map and its row in the list must not
   // disagree about what clicking does.
-  // Intl.DisplayNames, with the geojson's own name as the fallback: the two do
-  // not agree (Natural Earth says "United States of America" where Intl says
-  // "United States"), and the Top countries list is built from Intl server-side,
-  // so taking it here too is what keeps a country's tooltip and its row saying
-  // the same thing. `of` throws a RangeError on a malformed subtag, hence the
-  // try; it is also absent on browsers older than the feature, hence building it
-  // in one.
-  let region = null
-  try { region = new Intl.DisplayNames(['en'], { type: 'region' }) }
-  catch (_) { region = null }
+  // Names come from the server, not from Intl here: Intl.DisplayNames answers
+  // from whatever CLDR the runtime ships, and runtimes disagree ('Hong Kong'
+  // on one, 'Hong Kong SAR China' on another). Asking the browser would let a
+  // country's tooltip and its row in the list below disagree on one screen.
+  // Only countries with traffic are sent, so the geometry's own name is the
+  // fallback for everything else -- those have no row to disagree with.
+  let serverNames = {}
+  try { serverNames = JSON.parse(totalsEl?.getAttribute('data-country-names') || '{}') }
+  catch (_) { serverNames = {} }
   const names = {}
-  for (const f of world.features) {
-    const geoName = f.properties && f.properties.name
-    let name = null
-    if (region && typeof f.id === 'string' && f.id.length === 2) {
-      try { name = region.of(f.id.toUpperCase()) }
-      catch (_) { name = null }
-    }
-    // `of` hands back the input unchanged for a well-formed but unassigned code,
-    // which is not a name -- fall through to the geometry's own label there.
-    names[f.id] = (name && name !== f.id) ? name : geoName
-  }
+  for (const f of world.features)
+    names[f.id] = serverNames[f.id] || (f.properties && f.properties.name) || f.id
+
   layer.eachLayer(function (l) {
     const code = l.feature && l.feature.id
     const n = totals[code] || 0
@@ -2745,7 +2754,7 @@ select.panel:hover { border-color: var(--accent); }
   if (missing.length) {
     const note = document.querySelector('[data-country-missing]')
     if (note) {
-      const label = missing.map(c => names[c] || c).join(', ')
+      const label = missing.map(c => serverNames[c] || names[c] || c).join(', ')
       note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale — see the list below.`
       note.removeAttribute('hidden')
     }

@@ -189,13 +189,38 @@ describe('the panel obeys the stx rules this file has been bitten by', () => {
 })
 
 describe('countries read as names, and the tooltip is visible while doing it', () => {
-  test('countryName spells out a code, and never throws on a bad one', () => {
-    expect(countryName('US')).toBe('United States')
-    expect(countryName('NL')).toBe('Netherlands')
-    // Not in the geojson at 110m, so the LIST is the only place these are
-    // readable at all -- the map cannot draw them.
-    expect(countryName('SG')).toBe('Singapore')
-    expect(countryName('HK')).toBe('Hong Kong')
+  test('countryName spells out a code', () => {
+    // Asserted as "contains", not as equals, for everything but the two most
+    // stable entries. Intl.DisplayNames answers from the runtime's own CLDR and
+    // the runtimes disagree on the exact string: macOS returns 'Hong Kong' where
+    // ubuntu-latest returns 'Hong Kong SAR China'. Pinning the full string here
+    // pinned the test to one machine's locale data, which is a property of the
+    // runner rather than of this code.
+    // SG and HK are absent from the geojson at 110m, so the list is the only
+    // place they are readable at all -- the map cannot draw them.
+    const stems = [['US', 'United States'], ['NL', 'Netherlands'], ['SG', 'Singapore'], ['HK', 'Hong Kong']] as const
+    for (const [code, stem] of stems)
+      expect({ code, ok: countryName(code).includes(stem) }).toEqual({ code, ok: true })
+
+    // The contract that actually matters: a real code never renders as itself.
+    for (const code of ['US', 'NL', 'SG', 'HK', 'DE', 'JP', 'BR'])
+      expect({ code, same: countryName(code) === code }).toEqual({ code, same: false })
+  })
+
+  test('the map is told the names rather than deriving its own', () => {
+    // Same CLDR split, but across the network instead of across CI: the list is
+    // named by the server's ICU and the tooltips would be named by the visitor's
+    // browser. A polygon and its own row disagreeing on one screen is the thing
+    // this panel's comments already work to avoid, so the names are serialized
+    // once and read back.
+    expect(dashboard).toContain('data-country-names')
+    const s = mapScript()
+    expect(s).toContain("getAttribute('data-country-names')")
+    // Comments stripped first. The script explains at length why it does NOT
+    // call Intl here, so matching raw source would fail on a correct script for
+    // the words justifying its own absence -- the same trap panel() documents.
+    const code = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(code, 'the browser must not re-derive names').not.toContain('Intl.DisplayNames')
   })
 
   test('an unusable code falls back to itself rather than breaking the page', () => {
@@ -267,16 +292,12 @@ describe('countries read as names, and the tooltip is visible while doing it', (
         .toEqual({ dir, styled: true })
   })
 
-  test('the tooltip names a country the same way the list does', () => {
-    // Natural Earth calls US "United States of America"; Intl.DisplayNames calls
-    // it "United States". The Top countries list is built from Intl server-side,
-    // so the map has to take it too or a country's polygon and its row disagree
-    // about its name on the same screen.
-    const s = mapScript()
-    expect(s).toContain('Intl.DisplayNames')
-    // The geojson label stays as the fallback, which is what carries a code Intl
-    // does not recognize.
-    expect(s).toContain('f.properties.name')
+  test('the geojson label stays as the fallback', () => {
+    // Only countries with traffic are sent names, because only those have a row
+    // in the list to agree with. Natural Earth's own label carries the other
+    // ~170, which is why it is still read here -- dropping it would leave every
+    // country with no visitors tooltipping a bare two-letter code.
+    expect(mapScript()).toContain('f.properties.name')
   })
 
   test('the list filters on the code while showing the name', () => {
