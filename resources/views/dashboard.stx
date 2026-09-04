@@ -1510,6 +1510,30 @@ onMount(() => {
 .mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
+
+/* Site switcher. The native chevron sat flush against the control's own rounded edge,
+  so the appearance is reset and the chevron redrawn as a background SVG with room
+  reserved for it (padding-right). Surface, border and radius come from .panel, which is
+  why the select is a panel and not a pill here — 999px is what made the native chevron
+  collide. None of this reaches the open dropdown: the list itself is drawn by the OS and
+  is not stylable, which is why the fix for it landing on top of "+ Add site" is the row
+  layout below, not anything here.
+  The chevron is a data URI, so its colour cannot inherit: it is restated per theme,
+  media query first so the explicit [data-theme] toggle wins. */
+select.panel {
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  cursor: pointer; transition: border-color 0.15s ease;
+  padding-right: 2rem; background-repeat: no-repeat;
+  background-position: right 0.7rem center; background-size: 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+}
+:root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+:root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
+select.panel:hover { border-color: var(--accent); }
+
 .bar { animation: grow 0.6s cubic-bezier(0.16,1,0.3,1); transform-origin: bottom; }
 @keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 .reveal { opacity: 0; transform: translateY(10px); animation: reveal 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
@@ -1611,37 +1635,46 @@ onMount(() => {
           Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
         </p>
         {{-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
-            <select> hands off to switchSite, which routes to ?site=; the plain-text
-            line above is the no-owned-sites fallback. "+ Add site" is a link to the
+            <select> hands off to switchSite, which routes to ?site=; the caption line
+            above is the no-owned-sites fallback. "+ Add site" is a link to the
             reactive create page, not an in-page modal. --}}
         {{-- The multi-site <select> is gated by a precomputed `showSiteSelect` flag as
             its own block, and "+ Add site" always shows to the owner. This was
             originally a workaround for stx miscounting @endif on a nested @if; that
             bug is fixed as of 0.2.155 (verified on the installed version), so the flag
             stays only because it reads better than nesting here. --}}
-        @if (showSiteSelect)
-          <div class="mt-3">
+        {{-- One row, like bughq's header: the switcher, "+ Add site" and the live badge
+            were three sibling `mt-3` blocks in a plain <div>, so each got its own line
+            and the three read as a ragged column. They are peers, so they share one
+            flex row and one size scale (px-3 py-1.5, .panel/.pill chrome from classes
+            rather than per-control inline style). The badge keeps its own wrapper: its
+            spans render reactive {{ }} text, and stx cloaks (display:none) the element
+            whose text is reactive until hydration — folding it into the row itself
+            would put the switcher inside that scope. --}}
+        <div class="flex flex-wrap gap-3 items-center mt-3">
+          @if (showSiteSelect)
             <select @change="switchSite"
               aria-label="Switch site"
-              class="px-2.5 py-1.5 text-sm mono pill" style="color: var(--text-2); border: 1px solid var(--border); background: var(--panel); cursor: pointer">
+              class="px-3 py-1.5 text-sm mono panel text-text-2">
               @foreach (ownedSites as s)
                 <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ s.name || s.id }}</option>
               @endforeach
             </select>
+          @endif
+          @if (ownsActive)
+            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm border pill text-text-2 border-border">+ Add site</StxLink>
+          @endif
+          <div class="inline-flex gap-2 items-center px-3 py-2 border border-border pill reveal">
+            <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
+            <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
+            <span class="text-text-3 text-xs">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
           </div>
-        @endif
-        @if (ownsActive)
-          <div class="mt-3">
-            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-xs border pill" style="color: var(--text-2); border-color: var(--border)">+ Add site</StxLink>
-          </div>
-        @endif
-        <div class="inline-flex gap-2 items-center mt-3 px-2.5 py-1 border border-border pill reveal">
-          <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
-          <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
-          <span class="text-text-3 text-xs">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
         </div>
       </div>
-      <nav class="flex gap-1.5 items-center">
+      {{-- Wraps, unlike before: the left column is now one row rather than a stack, so
+          the two header halves compete for the same line and this nav carries eleven
+          controls with long range labels ("24 hours", not "24h"). --}}
+      <nav class="flex flex-wrap gap-1.5 items-center">
         @foreach (ranges as r)
           <StxLink to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
             class="px-3.5 py-1.5 font-medium text-sm border pill"
