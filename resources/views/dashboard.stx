@@ -1727,14 +1727,14 @@ select.panel:hover { border-color: var(--accent); }
           @if (showSiteSelect)
             <select @change="switchSite"
               aria-label="Switch site"
-              class="px-3 py-1.5 text-sm mono panel text-text-2">
+              class="px-3 py-1.5 text-sm text-text-2 mono panel">
               @foreach (ownedSites as s)
                 <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ s.name || s.id }}</option>
               @endforeach
             </select>
           @endif
           @if (ownsActive)
-            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm border pill text-text-2 border-border">+ Add site</StxLink>
+            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm text-text-2 border border-border pill">+ Add site</StxLink>
           @endif
           <div class="inline-flex gap-2 items-center px-3 py-2 border border-border pill reveal">
             <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
