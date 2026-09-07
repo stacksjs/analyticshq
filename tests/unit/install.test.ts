@@ -107,7 +107,7 @@ describe('the install targets', () => {
     expect(stacks.code).toContain(`${PACKAGE_NAME}/stx`)
     expect(stacks.code).toContain('tsAnalyticsStxConfig')
     expect(stacks.code).not.toContain(TAG_TOKEN)
-    expect(stacks.file).toBe('config/ui.ts')
+    expect(stacks.file).toBe('config/stx.ts')
   })
 
   test('the nuxt target names the package that is actually published', () => {

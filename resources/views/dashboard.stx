@@ -1041,7 +1041,7 @@ function logout(): void {
 }
 
 // Theme. The store owns persistence, the prefers-color-scheme listener and the
-// cross-tab sync; config/ui.ts app.colorMode owns the pre-paint boot so the
+// cross-tab sync; config/stx.ts app.colorMode owns the pre-paint boot so the
 // stored preference is applied before first paint rather than after hydration.
 // Nothing here touches the palette — resources/layouts/app.stx has carried both
 // token sets all along, keyed off [data-theme].

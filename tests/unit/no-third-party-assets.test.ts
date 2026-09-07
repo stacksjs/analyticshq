@@ -74,8 +74,8 @@ describe('no third-party hosts are embedded in served pages', () => {
     })
   }
 
-  test('config/ui.ts head links are all same-origin', () => {
-    const ui = code('config/ui.ts')
+  test('config/stx.ts head links are all same-origin', () => {
+    const ui = code('config/stx.ts')
     const block = ui.slice(ui.indexOf('link: ['), ui.indexOf(']', ui.indexOf('link: [')))
     expect(block).not.toMatch(/href:\s*['"]https?:\/\//)
   })
@@ -89,7 +89,7 @@ describe('no third-party hosts are embedded in served pages', () => {
     //
     // resources/data/competitors.ts is excluded on purpose — naming competitors is
     // its entire job, and it ships no script.
-    for (const f of ['config/ui.ts', 'config/analytics.ts']) {
+    for (const f of ['config/stx.ts', 'config/analytics.ts']) {
       const src = code(f)
       for (const host of FORBIDDEN)
         expect({ file: f, host, found: src.includes(host) }).toEqual({ file: f, host, found: false })
@@ -98,7 +98,7 @@ describe('no third-party hosts are embedded in served pages', () => {
 })
 
 describe('we measure this site with the product it sells (#12)', () => {
-  const ui = code('config/ui.ts')
+  const ui = code('config/stx.ts')
 
   test('the tracker is our own artifact, not a third-party or framework beacon', () => {
     // public/script.js is the file the install snippet on the homepage tells
@@ -145,6 +145,6 @@ describe('the fonts that replaced Google are actually present', () => {
   })
 
   test('the stylesheet is linked from the head that reaches all views', () => {
-    expect(read('config/ui.ts')).toContain('/fonts.css')
+    expect(read('config/stx.ts')).toContain('/fonts.css')
   })
 })

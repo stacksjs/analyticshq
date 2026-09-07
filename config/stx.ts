@@ -61,7 +61,7 @@ export default {
   //     in competition with it. Both dirs end up on the resolver's search frontier.
   //
   // loadStxConfig() finds THIS file because it loads with `{ name: 'stx', alias:
-  // 'ui' }` (config.js:445-446) — the alias is what makes config/ui.ts the stx
+  // 'ui' }` (config.js:445-446) — the alias is what makes config/stx.ts the stx
   // config in a Stacks app, and it is why the router block documented at the bottom
   // of this file is the exception rather than the rule.
   //

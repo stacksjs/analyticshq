@@ -1,7 +1,7 @@
 {{-- App chrome. Layout group 'app'.
 
     A FRAGMENT, not a document -- same contract as auth.stx and marketing.stx. stx
-    synthesises the doctype, the html tag, the head and the body from config/ui.ts
+    synthesises the doctype, the html tag, the head and the body from config/stx.ts
     app.head merged with each page's head. Writing a doctype or an html tag here, even
     inside a comment (the test is an unanchored regex over the rendered string), makes
     hasDocumentShell() true and every page's title and description is dropped.

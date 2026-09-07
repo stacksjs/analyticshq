@@ -17,7 +17,7 @@ import type { AnalyticsConfig } from '@stacksjs/types'
  * ## Where the tag actually comes from
  *
  * This is the Stacks-side config and nothing in this app consumes it. The tag is
- * emitted by stx, from the `analytics` block in `config/ui.ts`, which
+ * emitted by stx, from the `analytics` block in `config/stx.ts`, which
  * `process.js` renders through `injectAnalytics()` before `</head>`. That block is
  * the one to edit; this one exists so the framework's own view of the app agrees
  * with it rather than contradicting it.
