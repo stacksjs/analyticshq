@@ -7,7 +7,7 @@ useSeoMeta({
 
 // appName, siteMode, comingSoonBypassEnabled and comingSoonBypassToken used to live
 // here. All four existed only to fill the coming-soon <body> attributes and heading,
-// which are now the marketing layout's and config/stx.ts app.head.bodyAttrs' job.
+// which are now the marketing layout's and config/ui.ts app.head.bodyAttrs' job.
 
 // Feature bento cells link to their dedicated pages.
 const featureCells = [
@@ -70,7 +70,7 @@ const comparison = [
 // that had been renamed seven weeks earlier, so tests/unit/install.test.ts now
 // asserts this file agrees with that module on the package name.
 const framework = state('html')
-const FILE_FOR = { html: 'index.html', stacks: 'config/stx.ts', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
+const FILE_FOR = { html: 'index.html', stacks: 'config/ui.ts', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
 function pickFramework(e: Event): void {
   framework.set(e.target.value)
 }

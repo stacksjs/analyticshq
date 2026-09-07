@@ -1,7 +1,7 @@
 {{-- Auth chrome. Layout group 'auth'.
 
     A FRAGMENT, not a document -- same contract as marketing.stx. stx synthesises
-    <!DOCTYPE>, <html lang>, <head> and <body> from config/stx.ts app.head merged with
+    <!DOCTYPE>, <html lang>, <head> and <body> from config/ui.ts app.head merged with
     each page's head. Writing a doctype or an html tag here, even inside a comment
     (the test is an unanchored regex over the rendered string), makes hasDocumentShell()
     true and every page's title and description is dropped. Never add one.

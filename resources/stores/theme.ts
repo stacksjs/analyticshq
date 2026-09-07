@@ -24,7 +24,7 @@
  * already tracked the OS setting. All that was missing was something to write
  * the attribute, and that is the whole job here.
  *
- * The pre-paint bootstrap either — `config/stx.ts` app.colorMode declares it, and
+ * The pre-paint bootstrap either — `config/ui.ts` app.colorMode declares it, and
  * stx injects a render-blocking snippet above the stylesheet. The options there
  * and the options here must stay identical: if they disagree on the storage key
  * or the attribute, the boot script applies one thing, hydration applies
@@ -59,7 +59,7 @@ defineStore('theme', () => {
   // useColorMode owns persistence, the prefers-color-scheme listener, the
   // cross-tab storage listener and transition suppression.
   //
-  // These options are duplicated in config/stx.ts app.colorMode by necessity —
+  // These options are duplicated in config/ui.ts app.colorMode by necessity —
   // the boot script runs before any of this exists and cannot read from here.
   // Change one, change the other.
   const cm = useColorMode({

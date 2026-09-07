@@ -100,7 +100,7 @@ export function installTargets(siteId: string): InstallTarget[] {
     {
       id: 'stacks',
       label: 'Stacks',
-      file: 'config/stx.ts',
+      file: 'config/ui.ts',
       // Config-driven rather than a tag, because stx already owns tag injection:
       // process.js calls injectAnalytics() on every render and places the script
       // before the closing head. tsAnalyticsStxConfig() just hands it a correct

@@ -27,7 +27,7 @@
  * first-paint behaviour is unchanged: text shows immediately in the fallback and
  * swaps when Geist arrives.
  *
- * Loaded from config/stx.ts `app.head.link` so it reaches all 32 views. It cannot
+ * Loaded from config/ui.ts `app.head.link` so it reaches all 32 views. It cannot
  * live in public/marketing.css, which the 5 app/auth pages do not load.
  *
  * Files are downloaded from Google's own CDN at the version pinned below; Geist
