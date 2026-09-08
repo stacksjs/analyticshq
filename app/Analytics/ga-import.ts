@@ -144,6 +144,9 @@ export function toRecord(raw: {
 
 // --- synthesis -------------------------------------------------------------
 
+export const GA_PAGE_VIEW_PREFIX = 'gap_'
+export const GA_SESSION_PREFIX = 'gas_'
+
 /**
  * Deterministic short hex hash, for stable synthetic ids.
  *
@@ -182,7 +185,20 @@ function isoStamp(d: Date): string {
  * `users` is honoured by reusing visitor ids across sessions (`j % users`), so a
  * day with 10 sessions from 4 users reports 4 unique visitors.
  */
-export function synthesizeRecord(siteId: string, rec: GaRecord, now: Date = new Date()): SynthesizedRows {
+/**
+ * Which id prefixes the synthesized rows carry. Defaults to GA's, so every
+ * existing caller produces byte-identical ids -- changing them would make a
+ * re-import write new rows beside the old ones instead of colliding with them,
+ * and silently double a site's history.
+ */
+export interface SynthesisPrefixes { pageView: string, session: string }
+
+export function synthesizeRecord(
+  siteId: string,
+  rec: GaRecord,
+  now: Date = new Date(),
+  prefixes: SynthesisPrefixes = { pageView: GA_PAGE_VIEW_PREFIX, session: GA_SESSION_PREFIX },
+): SynthesizedRows {
   const out: SynthesizedRows = { sessions: [], pageViews: [] }
   const day = new Date(`${rec.date}T00:00:00Z`)
   const referrerSource = clip(normSource(rec.source), 128)
@@ -202,11 +218,11 @@ export function synthesizeRecord(siteId: string, rec: GaRecord, now: Date = new 
     counts[k % rec.sessions]++
 
   for (let j = 0; j < rec.sessions; j++) {
-    const visitor = `gap_${key}_${j % rec.users}`
+    const visitor = `${prefixes.pageView}${key}_${j % rec.users}`
     const views = counts[j]
     const bounce = views === 1
     const start = new Date(day.getTime() + Math.floor((j / Math.max(rec.sessions, 1)) * DAY_SPAN) * 1000)
-    const sessionId = `gas_${key}_${j}`
+    const sessionId = `${prefixes.session}${key}_${j}`
 
     out.sessions.push({
       id: sessionId,
@@ -232,7 +248,7 @@ export function synthesizeRecord(siteId: string, rec: GaRecord, now: Date = new 
 
     for (let m = 0; m < views; m++) {
       out.pageViews.push({
-        id: `gap_${key}_${j}_${m}`,
+        id: `${prefixes.pageView}${key}_${j}_${m}`,
         site_id: siteId,
         session_id: sessionId,
         visitor_id: visitor,
@@ -313,8 +329,6 @@ export function buildInsert(
 }
 
 /** Ids of rows a GA import created, for `--replace` to remove. */
-export const GA_PAGE_VIEW_PREFIX = 'gap_'
-export const GA_SESSION_PREFIX = 'gas_'
 
 // --- CSV ------------------------------------------------------------------
 

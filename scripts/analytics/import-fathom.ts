@@ -1,243 +1,146 @@
 /**
- * Import historical analytics from Fathom into a analyticshq site.
+ * Import historical analytics from a Fathom dashboard CSV export into a site.
  *
  *   bun scripts/analytics/import-fathom.ts \
- *     --token=<fathom-api-token> --fathom-site=<XXXXX> --site=<analyticshq-site-id> \
- *     [--from=2021-03-01] [--to=2026-07-01] [--replace] [--dry-run] [--with-utm] \
- *     [--mock=aggs.json]
+ *     --site=<analyticshq-site-id> --dir=<Dashboard_Export_folder> \
+ *     [--replace] [--dry-run]
  *
- * Fathom only stores AGGREGATES, so we can't recover individual pageviews. We
- * query /aggregations grouped by ALL dimensions per day, then SYNTHESIZE raw
- * page_views + sessions that reproduce those totals (visitor/session counts are
- * sized from Fathom's uniques/visits and are therefore approximate). The result
- * flows through the normal dashboard exactly like native data.
+ * Point `--dir` at the folder Fathom's "Export" button produces - the one with
+ * Summary.csv, Pages.csv, Browsers.csv and the rest in it, not at a single file.
  *
- * Synthetic rows use `fim_`/`fis_` id prefixes so a re-run with --replace can wipe
- * a prior Fathom import for this site without touching real data. Accurate from
- * March 2021 onwards (Fathom's own limit). API is rate-limited (10/min), so we
- * chunk by month and pace requests.
+ * Fathom exports AGGREGATES with no timestamps and no cross-tabulation, so the
+ * rows written here are synthesized: they reproduce Fathom's totals rather than
+ * recovering its events, which is not possible from this data. What that means
+ * in practice, and the one question it cannot answer, is documented at the top
+ * of app/Analytics/fathom-import.ts - read it before trusting a segmented view
+ * of imported history.
  *
- * --mock=<file> reads a JSON array of aggregation rows instead of calling Fathom
- * (for testing the synthesis + insert path offline).
+ * The synthesis and the insert are shared with the GA importer so the two
+ * cannot drift. Only the reading and the dimension allocation are Fathom's.
+ *
+ * Synthetic rows use `fap_`/`fas_` id prefixes, so `--replace` wipes a prior
+ * Fathom import for this site without touching real traffic or a GA import.
  */
-import { connect, isoStamp, log, parseArgs, requireArg, requireSite, shortHash } from './lib'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  buildInsert,
+  splitCsv,
+  synthesizeRecord,
+  toInt,
+} from '../../app/Analytics/ga-import'
+import {
+  FATHOM_PAGE_VIEW_PREFIX,
+  FATHOM_SESSION_PREFIX,
+  parseBreakdown,
+  parseRange,
+  toRecords,
+  type FathomExport,
+} from '../../app/Analytics/fathom-import'
+import { connect, log, parseArgs, requireArg, requireSite } from './lib'
 
-const FATHOM_API = 'https://api.usefathom.com/v1/aggregations'
-const USAGE = 'usage: import-fathom --token=<t> --fathom-site=<id> --site=<analyticshq-id> [--from=YYYY-MM-DD] [--to=YYYY-MM-DD] [--replace] [--dry-run] [--with-utm] [--mock=file]'
-
+const USAGE = 'usage: import-fathom --site=<analyticshq-id> --dir=<export-folder> [--replace] [--dry-run]'
 const args = parseArgs()
 const siteId = requireArg(args, 'site', USAGE)
-const mockFile = args.mock as string | undefined
-const token = mockFile ? '' : requireArg(args, 'token', USAGE)
-const fathomSite = mockFile ? '' : requireArg(args, 'fathom-site', USAGE)
-const from = new Date(`${(args.from as string) || '2021-03-01'}T00:00:00Z`)
-const to = new Date(`${(args.to as string) || new Date().toISOString().slice(0, 10)}T23:59:59Z`)
+const dir = requireArg(args, 'dir', USAGE)
 const dryRun = args['dry-run'] === true
 const replace = args.replace === true
-const withUtm = args['with-utm'] === true
 
-const DIMS = ['pathname', 'referrer_hostname', 'referrer_source', 'country_code', 'device_type', 'browser', 'operating_system']
-if (withUtm)
-  DIMS.push('utm_source', 'utm_medium', 'utm_campaign')
+/** Missing breakdown files are normal - Fathom omits ones with no data. */
+function readOptional(name: string): string {
+  const p = join(dir, name)
+  return existsSync(p) ? readFileSync(p, 'utf8') : ''
+}
 
+const summary = readOptional('Summary.csv')
+if (!summary) {
+  log(`error: ${join(dir, 'Summary.csv')} not found. Point --dir at the export FOLDER, not a single CSV.`)
+  process.exit(1)
+}
+
+const range = parseRange(summary)
+if (!range) {
+  log('error: could not read the date range from Summary.csv. Expected a cell like "2026-09-02 00:00:00 to 2026-09-08 16:02:04 (UTC)".')
+  process.exit(1)
+}
+
+// Pages.csv carries the visitor AND pageview counts, so it is the spine of the
+// import: every other file only splits those visitors by one dimension.
+const pageLines = readOptional('Pages.csv').split(/\r?\n/).filter(l => l.trim() !== '')
+if (pageLines.length < 2) {
+  log('error: Pages.csv has no data rows. Nothing to import.')
+  process.exit(1)
+}
+const pages = new Map<string, { visitors: number, pageviews: number }>()
+for (const line of pageLines.slice(1)) {
+  const c = splitCsv(line)
+  const path = (c[0] || '').trim()
+  if (!path)
+    continue
+  const prev = pages.get(path)
+  const visitors = toInt(c[1])
+  const pageviews = toInt(c[2]) || visitors
+  pages.set(path, {
+    visitors: (prev?.visitors ?? 0) + visitors,
+    pageviews: (prev?.pageviews ?? 0) + pageviews,
+  })
+}
+
+const exportData: FathomExport = {
+  from: range.from,
+  to: range.to,
+  pages,
+  countries: parseBreakdown(readOptional('Countries.csv')),
+  devices: parseBreakdown(readOptional('Device_Types.csv')),
+  browsers: parseBreakdown(readOptional('Browsers.csv')),
+  systems: parseBreakdown(readOptional('Operating_Systems.csv')),
+  sources: parseBreakdown(readOptional('Sources.csv')),
+}
+
+const records = toRecords(exportData)
 const sql = connect()
 const site = await requireSite(sql, siteId)
-log(`import-fathom → "${site.name}" (${siteId})  range ${from.toISOString().slice(0, 10)}…${to.toISOString().slice(0, 10)}${dryRun ? '  [dry-run]' : ''}`)
+log(`import-fathom → "${site.name}" (${siteId})  ${range.from}..${range.to}  ${records.length} records${dryRun ? '  [dry-run]' : ''}`)
 
 if (replace && !dryRun) {
-  const d1 = await sql`DELETE FROM page_views WHERE site_id = ${siteId} AND id LIKE 'fip_%'`
-  const d2 = await sql`DELETE FROM sessions WHERE site_id = ${siteId} AND id LIKE 'fis_%'`
+  const d1 = await sql`DELETE FROM page_views WHERE site_id = ${siteId} AND id LIKE ${`${FATHOM_PAGE_VIEW_PREFIX}%`}`
+  const d2 = await sql`DELETE FROM sessions WHERE site_id = ${siteId} AND id LIKE ${`${FATHOM_SESSION_PREFIX}%`}`
   log(`--replace: removed ${d1.count ?? 0} prior imported page_views, ${d2.count ?? 0} sessions`)
 }
 
-// --- normalization to match the tracker's stored casing -------------------
-const OS_MAP: Record<string, string> = { 'Mac OS X': 'macOS', 'Mac OS': 'macOS', macOS: 'macOS', 'OS X': 'macOS' }
-const normDevice = (v: string) => (v || '').toLowerCase() || 'unknown'
-const normOs = (v: string) => OS_MAP[v] || v || 'Unknown'
-
-// --- Fathom fetch (month-chunked, rate-limited) ---------------------------
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-function fmtTs(d: Date): string {
-  return d.toISOString().slice(0, 19).replace('T', ' ')
-}
-
-async function fetchMonth(monthStart: Date, monthEnd: Date): Promise<any[]> {
-  const qs = new URLSearchParams({
-    entity: 'pageview',
-    entity_id: fathomSite,
-    aggregates: 'pageviews,visits,uniques',
-    field_grouping: DIMS.join(','),
-    date_grouping: 'day',
-    date_from: fmtTs(monthStart),
-    date_to: fmtTs(monthEnd),
-  })
-  const res = await fetch(`${FATHOM_API}?${qs}`, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`Fathom API ${res.status}: ${body.slice(0, 200)}`)
-  }
-  return await res.json() as any[]
-}
-
-// Yield [monthStart, monthEnd] windows covering [from, to].
-function* months(start: Date, end: Date): Generator<[Date, Date]> {
-  let y = start.getUTCFullYear(); let m = start.getUTCMonth()
-  for (;;) {
-    const ms = new Date(Date.UTC(y, m, 1, 0, 0, 0))
-    const me = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59))
-    if (ms > end)
-      return
-    yield [new Date(Math.max(ms.getTime(), start.getTime())), new Date(Math.min(me.getTime(), end.getTime()))]
-    m++
-    if (m > 11) { m = 0; y++ }
-  }
-}
-
-// --- synthesis ------------------------------------------------------------
 const now = new Date()
-let totalPv = 0; let totalSess = 0; let aggRows = 0
+const prefixes = { pageView: FATHOM_PAGE_VIEW_PREFIX, session: FATHOM_SESSION_PREFIX }
+let totalPv = 0
+let totalSess = 0
+let pvBuf: Record<string, unknown>[] = []
+let sessBuf: Record<string, unknown>[] = []
 
-const pvBuf: any[] = []
-const sessBuf: any[] = []
-
-async function flush() {
-  if (dryRun) { pvBuf.length = 0; sessBuf.length = 0; return }
-  if (sessBuf.length)
-    await sql`INSERT INTO sessions ${sql(sessBuf)}`
-  if (pvBuf.length)
-    await sql`INSERT INTO page_views ${sql(pvBuf)}`
-  sessBuf.length = 0
-  pvBuf.length = 0
+async function flush(): Promise<void> {
+  if (dryRun) { pvBuf = []; sessBuf = []; return }
+  // Sessions first: page_views.session_id has a foreign key to it.
+  const s = buildInsert('sessions', sessBuf)
+  if (s)
+    await sql.unsafe(s.sql, s.params)
+  const p = buildInsert('page_views', pvBuf)
+  if (p)
+    await sql.unsafe(p.sql, p.params)
+  sessBuf = []
+  pvBuf = []
 }
 
-async function synthesize(row: any, fallbackDay: Date): Promise<void> {
-  const P = Number.parseInt(row.pageviews ?? '0', 10)
-  if (!Number.isFinite(P) || P <= 0)
-    return
-  const V = Math.min(Math.max(Number.parseInt(row.visits ?? '1', 10) || 1, 1), P)
-  const U = Math.min(Math.max(Number.parseInt(row.uniques ?? '1', 10) || 1, 1), V)
-
-  const dayStr = typeof row.date === 'string' ? row.date.slice(0, 10) : ''
-  const day = /^\d{4}-\d{2}-\d{2}$/.test(dayStr) ? new Date(`${dayStr}T00:00:00Z`) : fallbackDay
-  const rowKey = await shortHash(`${siteId}|${day.toISOString().slice(0, 10)}|${DIMS.map(d => row[d] ?? '').join('|')}`)
-
-  const path = row.pathname || '/'
-  const refHost = row.referrer_hostname || ''
-  const referrer = refHost ? `https://${refHost}/` : ''
-  const referrerSource = row.referrer_source || (refHost ? refHost : 'Direct')
-  const country = row.country_code || null
-  const device = normDevice(row.device_type)
-  const browser = row.browser || 'Unknown'
-  const os = normOs(row.operating_system)
-  const utm_source = row.utm_source || null
-  const utm_medium = row.utm_medium || null
-  const utm_campaign = row.utm_campaign || null
-
-  const counts = Array.from({ length: V }, () => 0)
-  for (let k = 0; k < P; k++) counts[k % V]++
-
-  const seen = new Set<string>()
-  const daySpan = 86400 * 0.92
-  for (let j = 0; j < V; j++) {
-    const visitor = `fim_${rowKey}_${j % U}`
-    const c = counts[j]
-    const bounce = c === 1
-    const start = new Date(day.getTime() + Math.floor((j / Math.max(V, 1)) * daySpan) * 1000)
-    sessBuf.push({
-      id: `fis_${rowKey}_${j}`,
-      site_id: siteId,
-      visitor_id: visitor,
-      entry_path: path,
-      referrer,
-      referrer_source: referrerSource,
-      utm_source,
-      utm_medium,
-      utm_campaign,
-      country,
-      device_type: device,
-      browser,
-      os,
-      page_view_count: c,
-      is_bounce: bounce,
-      duration: c > 1 ? (c - 1) * 45 : 0,
-      started_at: isoStamp(start),
-      created_at: now,
-      updated_at: now,
-    })
-    totalSess++
-    for (let m = 0; m < c; m++) {
-      const isUnique = m === 0 && !seen.has(visitor)
-      if (isUnique)
-        seen.add(visitor)
-      pvBuf.push({
-        id: `fip_${rowKey}_${j}_${m}`,
-        site_id: siteId,
-        session_id: `fis_${rowKey}_${j}`,
-        visitor_id: visitor,
-        path,
-        hostname: refHost || null,
-        referrer,
-        referrer_source: referrerSource,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        country,
-        device_type: device,
-        browser,
-        os,
-        is_unique: isUnique,
-        is_bounce: bounce,
-        time_on_page: m < c - 1 ? 45 : 0,
-        timestamp: isoStamp(new Date(start.getTime() + m * 45000)),
-        created_at: now,
-        updated_at: now,
-      })
-      totalPv++
-    }
-    if (pvBuf.length >= 2000)
-      await flush()
-  }
-}
-
-// --- run ------------------------------------------------------------------
-if (mockFile) {
-  const rows = await Bun.file(mockFile).json() as any[]
-  log(`[mock] ${rows.length} aggregation rows from ${mockFile}`)
-  for (const row of rows) {
-    aggRows++
-    await synthesize(row, from)
-  }
-  await flush()
-}
-else {
-  const monthList = [...months(from, to)]
-  for (let i = 0; i < monthList.length; i++) {
-    const [ms, me] = monthList[i]
-    const label = ms.toISOString().slice(0, 7)
-    let rows: any[]
-    try {
-      rows = await fetchMonth(ms, me)
-    }
-    catch (e: any) {
-      log(`  ${label}: ${e.message}`)
-      if (String(e.message).includes(' 401'))
-        process.exit(1)
-      continue
-    }
-    log(`  ${label}: ${rows.length} rows`)
-    for (const row of rows) {
-      aggRows++
-      await synthesize(row, ms)
-    }
+for (const record of records) {
+  const rows = synthesizeRecord(siteId, record, now, prefixes)
+  sessBuf.push(...rows.sessions)
+  pvBuf.push(...rows.pageViews)
+  totalSess += rows.sessions.length
+  totalPv += rows.pageViews.length
+  if (pvBuf.length >= 2000)
     await flush()
-    if (i < monthList.length - 1)
-      await sleep(6500) // stay under Fathom's 10 req/min on aggregations
-  }
 }
+await flush()
 
 log(dryRun
-  ? `dry-run: would import ~${totalPv} page_views / ${totalSess} sessions from ${aggRows} Fathom rows (nothing written)`
-  : `done: imported ${totalPv} page_views / ${totalSess} sessions from ${aggRows} Fathom rows`)
+  ? `dry-run: would import ~${totalPv} page_views / ${totalSess} sessions from ${records.length} records (nothing written)`
+  : `done: imported ${totalPv} page_views / ${totalSess} sessions from ${records.length} records`)
 
 await sql.end()
