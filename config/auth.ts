@@ -54,7 +54,16 @@ export default {
    * paired refresh token (`refreshTokenExpiry`) carries the long-lived
    * session and is rotated on use, so UX is unaffected.
    */
-  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 60 * 60 * 1000,
+  // 30 days, matching loghq -- the one HQ app nobody gets logged out of.
+  //
+  // This was 24h (bughq) / 1h (analyticshq) on the reasoning below, and the
+  // reasoning is sound in the abstract: a leaked bearer is usable for the life
+  // of the token. In practice these are single-operator dashboards behind a
+  // login, the sign-out path revokes server-side, and being logged out mid-task
+  // was costing real time every day. If that trade stops being worth it, this
+  // is the one number to change -- and AUTH_TOKEN_EXPIRY overrides it per
+  // environment without a deploy.
+  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 30 * 24 * 60 * 60 * 1000,
 
   /**
    * Refresh-token expiry in milliseconds (default: 30 days). This is the
