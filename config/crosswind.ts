@@ -37,6 +37,26 @@ export default {
   // stay theme-reactive for light/dark) so utilities like `text-text-2`,
   // `bg-panel`, `border-border` exist — replacing repetitive inline
   // `style="color: var(--text-2)"` etc. with crosswind classes.
+  /**
+   * Shared chrome, defined once here rather than per page.
+   *
+   * A `<style>` block in a view is invisible to the Crosswind extractor, which
+   * only reads `class=` attributes, and the SPA router keeps only the generated
+   * Crosswind tag across a fragment swap. A shortcut is the supported home for a
+   * repeated composite, and it is where bughq keeps the same button.
+   *
+   * Sized to sit level with the pill controls beside it: those are px-3 py-1.5 on
+   * a 13px line, which lands at 34px, so this is a 34px square rather than a
+   * padded box that would drift when the row wraps.
+   */
+  shortcuts: {
+    'icon-btn': 'inline-flex items-center justify-center w-[34px] h-[34px] '
+      + 'border border-solid border-border rounded-[9px] text-text-2 bg-panel cursor-pointer '
+      + '[transition:color_0.15s_ease,border-color_0.15s_ease] '
+      + 'hover:text-text hover:border-accent '
+      + '[&_svg]:w-[17px] [&_svg]:h-[17px]',
+  },
+
   theme: {
     extend: {
       colors: {

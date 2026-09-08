@@ -1664,6 +1664,11 @@ select.panel:hover { border-color: var(--accent); }
 .chrome-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); font: 500 13px/1 var(--sans, ui-sans-serif); text-decoration: none; cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 .chrome-btn:hover { color: var(--text); border-color: var(--accent); }
 .chrome-icon { padding: 7px 10px; font-size: 14px; line-height: 1; }
+/* One glyph at a time. `theme.isDark()` writes data-t, and these pick the matching
+  icon -- the same contract bughq's header uses, so the two toggles behave alike. */
+.theme-btn .ic-sun, .theme-btn .ic-moon { display: none; }
+.theme-btn[data-t="light"] .ic-moon { display: block; }
+.theme-btn[data-t="dark"] .ic-sun { display: block; }
 </style>
 @endpush
 
@@ -1690,10 +1695,6 @@ select.panel:hover { border-color: var(--accent); }
       button here did not orphan it. --}}
   @if (ownsActive)
     <div style="position:fixed;top:16px;right:18px;z-index:60;display:flex;gap:6px;align-items:center">
-      <button type="button" @click="toggleTheme" class="chrome-btn chrome-icon" aria-label="Toggle light or dark theme" title="Toggle theme">
-        <span :show="!theme.isDark()" aria-hidden="true">☾</span>
-        <span :show="theme.isDark()" style="display:none" aria-hidden="true">☀</span>
-      </button>
       <StxLink to="/account" class="chrome-btn">Account</StxLink>
       <button type="button" @click="logout" class="chrome-btn">Log out</button>
     </div>
@@ -1736,6 +1737,20 @@ select.panel:hover { border-color: var(--accent); }
           @if (ownsActive)
             <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm text-text-2 border border-border pill">+ Add site</StxLink>
           @endif
+          {{-- The theme toggle sits in this row rather than in a fixed bar over the
+              page. It used to be `position: fixed; top: 16px; right: 18px`, which
+              floated it above whatever was underneath -- on this page that is the
+              map, and the button landed on top of it. In the row it is laid out
+              with its peers and cannot overlap anything.
+
+              SVG rather than the ☾/☀ glyphs it used to draw: those render at
+              whatever the emoji font decides, so the button's height moved between
+              platforms while the pills beside it did not. --}}
+          <button type="button" @click="toggleTheme" :data-t="theme.isDark() ? 'dark' : 'light'"
+            class="icon-btn theme-btn" aria-label="Toggle light or dark theme" title="Toggle theme">
+            <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
           <div class="inline-flex gap-2 items-center px-3 py-2 border border-border pill reveal">
             <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
             <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
