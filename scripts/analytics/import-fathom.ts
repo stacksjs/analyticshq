@@ -34,6 +34,8 @@ import {
   FATHOM_SESSION_PREFIX,
   parseBreakdown,
   parseRange,
+  parseSummaryTotals,
+  reconcileVisitors,
   toRecords,
   type FathomExport,
 } from '../../app/Analytics/fathom-import'
@@ -86,9 +88,13 @@ for (const line of pageLines.slice(1)) {
   })
 }
 
+const totals = parseSummaryTotals(summary)
+
 const exportData: FathomExport = {
   from: range.from,
   to: range.to,
+  people: totals.people,
+  pageviews: totals.pageviews,
   pages,
   countries: parseBreakdown(readOptional('Countries.csv')),
   devices: parseBreakdown(readOptional('Device_Types.csv')),
@@ -96,6 +102,15 @@ const exportData: FathomExport = {
   systems: parseBreakdown(readOptional('Operating_Systems.csv')),
   sources: parseBreakdown(readOptional('Sources.csv')),
 }
+
+// Reported before anything is written, because a scaled import is not a failure
+// but it is a thing the person running it has to know: their per-page visitor
+// numbers will read lower than Fathom's, by design. See reconcileVisitors.
+const recon = reconcileVisitors(pages, totals.people)
+if (recon.rawTotal > recon.total)
+  log(`reconciled: Pages.csv counts ${recon.rawTotal} visitors across pages, Summary.csv says ${totals.people} people. Scaling to ${recon.total} so the country, device, browser and source totals still match Fathom.`)
+else if (totals.people > 0 && recon.total > totals.people)
+  log(`note: ${pages.size} pages but only ${totals.people} people, so every page keeps one visitor and the import totals ${recon.total}.`)
 
 const records = toRecords(exportData)
 const sql = connect()
