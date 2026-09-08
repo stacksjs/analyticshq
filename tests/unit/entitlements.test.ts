@@ -18,10 +18,13 @@ import { join } from 'node:path'
 import {
   billingEnabled,
   DEFAULT_PLAN,
+  featureUnavailableMessage,
   isUnlimited,
   limitReachedMessage,
   PAID_PLAN,
+  PLAN_FEATURES,
   PLAN_LIMITS,
+  SELF_HOSTED_FEATURES,
   SELF_HOSTED_LIMITS,
   SELF_HOSTED_PLAN,
 } from '../../config/plans'
@@ -72,6 +75,49 @@ describe('the plan catalogue', () => {
   test('self-hosted is unlimited', () => {
     expect(isUnlimited(SELF_HOSTED_LIMITS.teammates)).toBe(true)
     expect(SELF_HOSTED_PLAN).not.toBe(DEFAULT_PLAN)
+  })
+
+  test('a capability is a separate catalogue, not a widened limit', () => {
+    // PlanLimits stays numeric. Mixing a boolean into it makes limits[resource]
+    // a `number | boolean` and requirePlanAllows stops compiling in three places.
+    for (const limits of Object.values(PLAN_LIMITS))
+      expect(Object.keys(limits)).toEqual(['teammates'])
+    for (const features of Object.values(PLAN_FEATURES))
+      expect(Object.keys(features)).toEqual(['csvImport'])
+  })
+
+  test('the CSV importer is the paid plan and not the free one', () => {
+    expect(PLAN_FEATURES[DEFAULT_PLAN]!.csvImport).toBe(false)
+    expect(PLAN_FEATURES[PAID_PLAN]!.csvImport).toBe(true)
+  })
+
+  test('every plan declares every capability, as a real boolean', () => {
+    // An omitted key reads as undefined at the gate. There is no Infinity to
+    // inherit here, so absence has to be impossible rather than merely unlikely.
+    for (const [name, features] of Object.entries(PLAN_FEATURES))
+      expect({ name, csvImport: typeof features.csvImport }).toEqual({ name, csvImport: 'boolean' })
+  })
+
+  test('self-hosted declares its capabilities rather than inheriting them', () => {
+    // Omitting the key here would paywall an install with nothing to buy and no
+    // way to fix it from the UI.
+    expect(SELF_HOSTED_FEATURES.csvImport).toBe(true)
+    expect(Object.keys(SELF_HOSTED_FEATURES)).toEqual(['csvImport'])
+  })
+
+  test('the capability refusal names the capability, not teammates', () => {
+    const msg = featureUnavailableMessage('Importing from a CSV file', 'bring your existing history into this site')
+    expect(msg).toBe('Importing from a CSV file is a Pro feature. Upgrade to bring your existing history into this site.')
+    expect(msg).not.toContain('add people to this site')
+    expect(msg).not.toContain('—')
+  })
+
+  test('an undeclared capability fails closed', () => {
+    // `=== true`, not truthiness: the boolean form of isUnlimited's reasoning.
+    const entitlements = code('app/Analytics/entitlements.ts')
+    expect(entitlements).toContain('features: PLAN_FEATURES[plan]!')
+    expect(entitlements).toContain('features: SELF_HOSTED_FEATURES')
+    expect(code('routes/analytics.ts')).toContain('if (features[feature] === true)')
   })
 
   test('isUnlimited is true only for a genuinely unbounded value', () => {

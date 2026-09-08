@@ -16,7 +16,8 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUr
 // .ts module for the same reason the formatters above do.
 import { installTargets } from '../../app/Analytics/install'
 import { listSiteMembers } from '../../app/Analytics/access'
-import { siteIsPro } from '../../app/Analytics/entitlements'
+import { planForSite } from '../../app/Analytics/entitlements'
+import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
 
@@ -233,6 +234,9 @@ let activeRole = null
 let teamMembers = []
 let teamInvites = []
 let teamIsPro = false
+// Does this site's plan include the CSV importer? Server-resolved so the panel is
+// right before any JS runs; the endpoint answers 402 whatever this says.
+let canImportCsv = false
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
@@ -358,10 +362,18 @@ async function loadData() {
       )) ?? []
       // Drives the paywall copy. The endpoints enforce independently — this only
       // decides whether to show an invite form or an upgrade prompt.
-      teamIsPro = await siteIsPro(siteId)
+      //
+      // One resolution, two questions. Both flags come out of a single
+      // planForSite call: a plan helper per flag would be one round trip each
+      // for one answer, and planForSite is the only definition of either.
+      const resolved = await planForSite(siteId)
+      teamIsPro = resolved.plan !== DEFAULT_PLAN
+      canImportCsv = resolved.features.csvImport === true
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
+      // Both plan flags stay false, so a database hiccup shows the upgrade prompt
+      // rather than a control the endpoint would refuse.
       teamMembers = []
       teamInvites = []
     }
@@ -1273,6 +1285,255 @@ async function importFromGa() {
     : 'Google returned no data for that property and period.')
 }
 
+// --- Fathom import (CSV upload) ----------------------------------------------
+// The migration path off Fathom. Fathom's dashboard download is a zip; the
+// browser cannot open one without a library we do not ship, so the customer
+// unzips and picks the CSVs, and this reads their text and posts JSON. That
+// keeps the whole feature on the existing authFetch/jsonBody path: no multipart,
+// no FormData, no boundary.
+//
+// HAND-ROLLED ON PURPOSE. @stacksjs/components ships no file input in any of its
+// families and stx exports no file or drop composable, so there is no primitive
+// to reuse here. Do not "fix" this into a component that does not exist.
+//
+// The file is read with @change and e.target.files, never x-model: stx's model
+// binding has no file branch, so it would hold the browser's fake path string
+// and a programmatic write to a file input throws, inside an effect that
+// re-throws and takes the caller down with it.
+const fathomFiles: StxSignal<Record<string, string>> = state({} as Record<string, string>)
+const fathomPicked: StxSignal<string> = state('')
+const fathomReplace: StxSignal<boolean> = state(false)
+const fathomAcceptFiltered: StxSignal<boolean> = state(false)
+const fathomDragging: StxSignal<boolean> = state(false)
+const fathomBusy: StxSignal<boolean> = state(false)
+const fathomProgress: StxSignal<string> = state('')
+const fathomPreview: StxSignal<string> = state('')
+const fathomResult: StxSignal<string> = state('')
+const fathomWarnings: StxSignal<string[]> = state([] as string[])
+const fathomFileInput = useRef<HTMLInputElement>('fathomFileInput')
+
+/** The files the importer reads. Anything else in the export is left alone. */
+const FATHOM_WANTED = ['Summary.csv', 'Pages.csv', 'Countries.csv', 'Device_Types.csv', 'Browsers.csv', 'Operating_Systems.csv', 'Sources.csv']
+const FATHOM_MAX_BYTES = 5 * 1024 * 1024
+
+/** Whatever path the picker reports, only the name at the end of it is matched. */
+function fathomName(path: string): string {
+  const parts = String(path).split(/[/\\]/).filter(p => p !== '')
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
+async function acceptFathomFiles(list: FileList | null): Promise<void> {
+  fathomDragging.set(false)
+  const all = list ? Array.from(list) : []
+  if (!all.length) {
+    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+    return
+  }
+  if (all.some(f => /\.zip$/i.test(f.name))) {
+    await stxAlert('That is a zip file. Unzip it first, then choose the CSV files inside it.')
+    return
+  }
+
+  const wanted = all.filter(f => FATHOM_WANTED.includes(fathomName(f.name)))
+  if (!wanted.length) {
+    await stxAlert('None of those are Fathom CSV files. Choose the CSV files from the unzipped export.')
+    return
+  }
+  if (wanted.reduce((n, f) => n + f.size, 0) > FATHOM_MAX_BYTES) {
+    await stxAlert('That export is larger than 5 MB of CSV. In Fathom, choose a shorter date range, download again, and import the pieces one after another.')
+    return
+  }
+
+  fathomProgress.set('Reading your files...')
+  const picked: Record<string, string> = {}
+  try {
+    for (const f of wanted)
+      picked[fathomName(f.name)] = await f.text()
+  }
+  catch {
+    fathomProgress.set('')
+    await stxAlert('One of those files could not be read. Try choosing them again.')
+    return
+  }
+  fathomProgress.set('')
+  fathomFiles.set(picked)
+  fathomPicked.set(`Ready to import: ${Object.keys(picked).sort().join(', ')}`)
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+}
+
+async function pickFathomFiles(e: Event): Promise<void> {
+  await acceptFathomFiles((e.target as HTMLInputElement).files)
+}
+
+async function dropFathomFiles(e: DragEvent): Promise<void> {
+  await acceptFathomFiles(e.dataTransfer?.files ?? null)
+}
+
+function dragFathomOver(): void {
+  fathomDragging.set(true)
+}
+
+function dragFathomLeave(): void {
+  fathomDragging.set(false)
+}
+
+/**
+ * Split a range into windows of at most `days` days each.
+ *
+ * An export too big for one request is not re-exported shorter: that would
+ * change the breakdown totals and therefore the synthesized ids. The same file
+ * is posted again with a narrower window instead, which is deterministic, so the
+ * windows add up to exactly the import the whole file would have produced.
+ */
+function fathomWindows(from: string, to: string, days: number): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  const end = new Date(`${to}T00:00:00Z`).getTime()
+  let start = new Date(`${from}T00:00:00Z`).getTime()
+  while (start <= end) {
+    const stop = Math.min(end, start + (days - 1) * 86400000)
+    out.push([new Date(start).toISOString().slice(0, 10), new Date(stop).toISOString().slice(0, 10)])
+    start = stop + 86400000
+  }
+  return out.length ? out : [[from, to]]
+}
+
+/** One request. Returns the parsed body, or null when it could not be reached. */
+async function postFathom(payload: Record<string, unknown>): Promise<any> {
+  const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/fathom`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files: fathomFiles(), acceptFiltered: fathomAcceptFiltered(), ...payload }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, data }
+}
+
+function fathomFailure(status: number, data: any): string {
+  if (status === 429)
+    return 'Several imports have started in the last minute. Wait a minute and try again.'
+  return data?.error || 'The import failed.'
+}
+
+async function checkFathomExport(): Promise<void> {
+  if (fathomBusy())
+    return
+  if (!Object.keys(fathomFiles()).length) {
+    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+    return
+  }
+  fathomBusy.set(true)
+  fathomProgress.set('Checking your export...')
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+  try {
+    const { ok, status, data } = await postFathom({ dryRun: true })
+    if (!ok) {
+      fathomResult.set(fathomFailure(status, data))
+    }
+    else {
+      const p = data.preview ?? {}
+      const prior = p.priorImport ? ' This site already has history imported from Fathom.' : ''
+      fathomPreview.set(
+        `Found ${Number(p.paths ?? 0).toLocaleString()} pages, ${Number(p.visitors ?? 0).toLocaleString()} visitors and `
+        + `${Number(p.pageViews ?? 0).toLocaleString()} page views, covering ${data.range?.from} to ${data.range?.to}. `
+        + `Nothing has been imported yet.${prior}`,
+      )
+      fathomWarnings.set((data.warnings ?? []) as string[])
+    }
+  }
+  catch {
+    fathomResult.set('Could not reach the server.')
+  }
+  fathomBusy.set(false)
+  fathomProgress.set('')
+}
+
+async function importFromFathom(): Promise<void> {
+  if (fathomBusy())
+    return
+  if (!Object.keys(fathomFiles()).length) {
+    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+    return
+  }
+  fathomBusy.set(true)
+  fathomProgress.set('Importing your Fathom history...')
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+
+  let pageViews = 0
+  let sessions = 0
+  let failure = ''
+  const warnings: string[] = []
+
+  try {
+    const first = await postFathom({ replace: fathomReplace() })
+    if (first.ok) {
+      pageViews += Number(first.data.imported?.pageViews ?? 0)
+      sessions += Number(first.data.imported?.sessions ?? 0)
+      warnings.push(...((first.data.warnings ?? []) as string[]))
+    }
+    else if (first.status === 413 && first.data.range?.from) {
+      // Too big for one request. Post the SAME files again in date windows,
+      // sized from the estimate the server just sent back.
+      const range = first.data.range
+      const total = Number(first.data.estimate?.pageViews ?? 0)
+      const max = Number(first.data.maxRows ?? 50000)
+      const span = fathomWindows(range.from, range.to, 3650)[0]
+      const allDays = Math.round((new Date(`${span[1]}T00:00:00Z`).getTime() - new Date(`${span[0]}T00:00:00Z`).getTime()) / 86400000) + 1
+      // Two thirds of the cap per window, so an uneven distribution across the
+      // range does not push one window back over it.
+      const perWindow = Math.max(1, Math.floor(allDays * ((max * 0.66) / Math.max(total, 1))))
+      const windows = fathomWindows(range.from, range.to, perWindow)
+
+      for (let i = 0; i < windows.length; i++) {
+        const [fromDay, toDay] = windows[i]
+        fathomProgress.set(`Importing ${fromDay} to ${toDay}, part ${i + 1} of ${windows.length}...`)
+        // `replace` on the first window only: it clears the whole previous
+        // import, so sending it again would delete the windows just written.
+        const res = await postFathom({ fromDay, toDay, replace: i === 0 && fathomReplace() })
+        if (!res.ok) {
+          failure = fathomFailure(res.status, res.data)
+          break
+        }
+        pageViews += Number(res.data.imported?.pageViews ?? 0)
+        sessions += Number(res.data.imported?.sessions ?? 0)
+        for (const w of (res.data.warnings ?? []) as string[]) {
+          if (!warnings.includes(w))
+            warnings.push(w)
+        }
+      }
+    }
+    else {
+      failure = fathomFailure(first.status, first.data)
+    }
+  }
+  catch {
+    failure = 'Could not reach the server. If the import had already started, some of that export may have been written. Check your dashboard before importing again.'
+  }
+
+  fathomBusy.set(false)
+  fathomProgress.set('')
+  fathomWarnings.set(warnings)
+
+  if (failure) {
+    fathomResult.set(`${failure}${pageViews ? ` ${pageViews.toLocaleString()} page views were imported before it stopped.` : ''}`)
+    return
+  }
+
+  fathomFiles.set({})
+  fathomPicked.set('')
+  const input = fathomFileInput()
+  if (input)
+    input.value = ''
+  fathomResult.set(pageViews
+    ? `Imported ${pageViews.toLocaleString()} page views and ${sessions.toLocaleString()} visits. Reload to see them.`
+    : 'That export held no traffic to import.')
+}
+
 async function createShare() {
   if (shareBusy())
     return
@@ -2025,6 +2286,105 @@ select.panel:hover { border-color: var(--accent); }
             and sessions that reproduce your daily totals, which is why imported days show even traffic through the day.
             Re-importing the same period replaces it rather than doubling it.
           </p>
+        </div>
+      </details>
+    @endif
+
+    {{-- Import from Fathom. Owner-only for the same reason as the GA panel, and
+        Pro-gated on top of it, which the panel above is not: that one asks
+        Google for the data with a credential the customer already holds, and
+        this one is the whole migration in a single upload.
+
+        The plan branch is a SERVER @if inside the server @if. A client @if
+        nested in a server @if breaks stx's @endif matching, which is why the
+        conditional parts below use :show with their SSR state in the static
+        style, exactly as the GA panel does.
+
+        The file control is hand-rolled because there is nothing to reuse:
+        @stacksjs/components ships no file input and stx exports no file or drop
+        composable. Drag events must be @drop / @dragover and never :drop /
+        :dragover, which the runtime does not recognise as events and would
+        quietly turn into DOM attributes that never fire. --}}
+    @if (ownsActive)
+      <details class="mb-8 border-border panel reveal">
+        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+          <span class="font-semibold text-sm">Import from Fathom</span>
+          <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">CSV</span>
+        </summary>
+        <div class="pb-5 px-5">
+          @if (canImportCsv)
+            <p class="mb-3 text-sm text-text-2">
+              In Fathom, set the date range you want and clear any filters, then click the download icon at the top
+              right of your dashboard. That gives you a zip file. Unzip it, then choose every CSV inside.
+            </p>
+
+            <label for="fathom-files"
+              class="flex flex-col gap-1 items-center px-5 py-8 mt-3 text-center border-2 border-dashed rounded-xl"
+              :class="fathomDragging() ? 'border-accent' : 'border-border'"
+              style="cursor: pointer"
+              @dragover.prevent
+              @dragenter.prevent="dragFathomOver"
+              @dragleave.prevent="dragFathomLeave"
+              @drop.prevent="dropFathomFiles">
+              <span class="i-hugeicons-upload-01 text-lg text-text-3" aria-hidden="true"></span>
+              <span class="font-medium text-sm text-text-2">Choose files, or drop them here</span>
+              <span class="text-text-3 text-xs">Summary.csv and Pages.csv are required. Countries, Device_Types, Browsers, Operating_Systems and Sources are used when you include them. Up to 5 MB in one upload.</span>
+              <input id="fathom-files" ref="fathomFileInput" type="file" multiple accept=".csv,text/csv" class="sr-only" @change="pickFathomFiles">
+            </label>
+
+            <p class="mt-2 text-sm text-text-2" :show="fathomPicked()" style="display:none">{{ fathomPicked() }}</p>
+
+            <div class="flex flex-col gap-2 mt-4">
+              <label class="flex gap-2 items-start text-xs text-text-2" style="cursor: pointer">
+                <input type="checkbox" x-model="fathomReplace" style="margin-top:2px">
+                <span>
+                  Replace what I imported from Fathom before
+                  <span class="block text-text-3">Removes the rows an earlier Fathom upload created for this site. Traffic we tracked ourselves, and anything imported from Google Analytics, are left alone.</span>
+                </span>
+              </label>
+              <label class="flex gap-2 items-start text-xs text-text-2" style="cursor: pointer">
+                <input type="checkbox" x-model="fathomAcceptFiltered" style="margin-top:2px">
+                <span>Import this export even though filters were applied in Fathom</span>
+              </label>
+            </div>
+
+            {{-- Both labels are STATIC and busy state rides on :disabled, an
+                attribute binding, which does not cloak. A reactive mustache in a
+                button's own text would hide the control until hydration. --}}
+            <div class="flex flex-wrap gap-3 items-center mt-4">
+              <button type="button" @click="checkFathomExport" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Check this export</button>
+              <button type="button" @click="importFromFathom" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+            </div>
+
+            <p class="mt-2 text-text-3 text-xs" :show="fathomProgress()" style="display:none">{{ fathomProgress() }}</p>
+            <p class="mt-3 text-sm text-text-2" :show="fathomPreview()" style="display:none">{{ fathomPreview() }}</p>
+            <p class="mt-3 text-sm text-text-2" :show="fathomResult()" style="display:none">{{ fathomResult() }}</p>
+
+            {{-- Warnings get their own rows and are never folded into the result
+                line, for the same reason as the GA panel: a partial import that
+                reads as a clean one becomes a mystery traffic drop months later. --}}
+            <div class="mt-3" :show="fathomWarnings().length" style="display:none">
+              <div x-for="w in fathomWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, #f59e0b 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
+            </div>
+
+            <p class="mt-4 text-text-3 text-xs">
+              Fathom exports daily totals, not individual visits, so nobody can recover the visits themselves from this
+              file. We create page views and sessions that add up to your Fathom totals. Day by day the numbers match,
+              but inside a day they are spread evenly, and the columns cannot be combined: asking how many Chrome
+              visitors were in Germany will give you a made up answer, because your export does not contain it.
+              Sub-country location is dropped, because we only ever store country. Referrers, entry and exit pages,
+              events and UTM campaigns are not imported yet.
+            </p>
+          @else
+            {{-- The paywall. Server-rendered from the site owner's plan, so it is
+                correct before any JS runs; the endpoint answers 402 regardless
+                of what this shows. --}}
+            <div class="mt-1 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
+              <p class="mb-1 font-semibold text-sm">Import your Fathom history with Pro</p>
+              <p class="mb-3 text-text-3 text-xs">Upload your Fathom export and keep every number you already have, sitting alongside the traffic we start tracking today. Included in Pro at no extra cost.</p>
+              <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
+            </div>
+          @endif
         </div>
       </details>
     @endif

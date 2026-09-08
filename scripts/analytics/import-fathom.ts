@@ -3,7 +3,7 @@
  *
  *   bun scripts/analytics/import-fathom.ts \
  *     --site=<analyticshq-site-id> --dir=<Dashboard_Export_folder> \
- *     [--replace] [--dry-run]
+ *     [--replace] [--dry-run] [--force-filtered]
  *
  * Point `--dir` at the folder Fathom's "Export" button produces - the one with
  * Summary.csv, Pages.csv, Browsers.csv and the rest in it, not at a single file.
@@ -23,95 +23,58 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { buildInsert, synthesizeRecord } from '../../app/Analytics/ga-import'
 import {
-  buildInsert,
-  splitCsv,
-  synthesizeRecord,
-  toInt,
-} from '../../app/Analytics/ga-import'
-import {
+  FATHOM_FILES,
   FATHOM_PAGE_VIEW_PREFIX,
   FATHOM_SESSION_PREFIX,
-  parseBreakdown,
-  parseRange,
-  parseSummaryTotals,
-  reconcileVisitors,
+  fathomImportWarnings,
+  readFathomExport,
   toRecords,
-  type FathomExport,
 } from '../../app/Analytics/fathom-import'
 import { connect, log, parseArgs, requireArg, requireSite } from './lib'
 
-const USAGE = 'usage: import-fathom --site=<analyticshq-id> --dir=<export-folder> [--replace] [--dry-run]'
+const USAGE = 'usage: import-fathom --site=<analyticshq-id> --dir=<export-folder> [--replace] [--dry-run] [--force-filtered]'
 const args = parseArgs()
 const siteId = requireArg(args, 'site', USAGE)
 const dir = requireArg(args, 'dir', USAGE)
 const dryRun = args['dry-run'] === true
 const replace = args.replace === true
+const forceFiltered = args['force-filtered'] === true
 
-/** Missing breakdown files are normal - Fathom omits ones with no data. */
-function readOptional(name: string): string {
+// Missing breakdown files are normal - Fathom omits ones with no data - so the
+// folder is read permissively here and judged by the shared reader, which is the
+// same one the upload endpoint uses. Neither caller decides on its own what a
+// Fathom export has to contain.
+const files = new Map<string, string>()
+for (const name of FATHOM_FILES) {
   const p = join(dir, name)
-  return existsSync(p) ? readFileSync(p, 'utf8') : ''
+  if (existsSync(p))
+    files.set(name, readFileSync(p, 'utf8'))
 }
-
-const summary = readOptional('Summary.csv')
-if (!summary) {
-  log(`error: ${join(dir, 'Summary.csv')} not found. Point --dir at the export FOLDER, not a single CSV.`)
+if (!files.size) {
+  log(`error: no Fathom CSVs in ${dir}. Point --dir at the export FOLDER, not a single CSV.`)
   process.exit(1)
 }
 
-const range = parseRange(summary)
-if (!range) {
-  log('error: could not read the date range from Summary.csv. Expected a cell like "2026-09-02 00:00:00 to 2026-09-08 16:02:04 (UTC)".')
+const read = readFathomExport(files)
+if ('error' in read) {
+  log(`error: ${read.error}`)
   process.exit(1)
 }
 
-// Pages.csv carries the visitor AND pageview counts, so it is the spine of the
-// import: every other file only splits those visitors by one dimension.
-const pageLines = readOptional('Pages.csv').split(/\r?\n/).filter(l => l.trim() !== '')
-if (pageLines.length < 2) {
-  log('error: Pages.csv has no data rows. Nothing to import.')
+// A filtered export is a subset of the site that looks exactly like a complete
+// one, so it takes a deliberate flag rather than a warning nobody reads.
+if (read.notes.filtersApplied > 0 && !forceFiltered) {
+  log('error: Summary.csv reports filters were applied, so this export is a subset of the site. Re-export with the filters cleared, or pass --force-filtered to import the subset anyway.')
   process.exit(1)
 }
-const pages = new Map<string, { visitors: number, pageviews: number }>()
-for (const line of pageLines.slice(1)) {
-  const c = splitCsv(line)
-  const path = (c[0] || '').trim()
-  if (!path)
-    continue
-  const prev = pages.get(path)
-  const visitors = toInt(c[1])
-  const pageviews = toInt(c[2]) || visitors
-  pages.set(path, {
-    visitors: (prev?.visitors ?? 0) + visitors,
-    pageviews: (prev?.pageviews ?? 0) + pageviews,
-  })
-}
 
-const totals = parseSummaryTotals(summary)
+for (const w of fathomImportWarnings(read.notes))
+  log(`warning: ${w}`)
 
-const exportData: FathomExport = {
-  from: range.from,
-  to: range.to,
-  people: totals.people,
-  pageviews: totals.pageviews,
-  pages,
-  countries: parseBreakdown(readOptional('Countries.csv')),
-  devices: parseBreakdown(readOptional('Device_Types.csv')),
-  browsers: parseBreakdown(readOptional('Browsers.csv')),
-  systems: parseBreakdown(readOptional('Operating_Systems.csv')),
-  sources: parseBreakdown(readOptional('Sources.csv')),
-}
-
-// Reported before anything is written, because a scaled import is not a failure
-// but it is a thing the person running it has to know: their per-page visitor
-// numbers will read lower than Fathom's, by design. See reconcileVisitors.
-const recon = reconcileVisitors(pages, totals.people)
-if (recon.rawTotal > recon.total)
-  log(`reconciled: Pages.csv counts ${recon.rawTotal} visitors across pages, Summary.csv says ${totals.people} people. Scaling to ${recon.total} so the country, device, browser and source totals still match Fathom.`)
-else if (totals.people > 0 && recon.total > totals.people)
-  log(`note: ${pages.size} pages but only ${totals.people} people, so every page keeps one visitor and the import totals ${recon.total}.`)
-
+const exportData = read.export
+const range = { from: exportData.from, to: exportData.to }
 const records = toRecords(exportData)
 const sql = connect()
 const site = await requireSite(sql, siteId)

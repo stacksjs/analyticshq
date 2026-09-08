@@ -47,6 +47,65 @@ import { clip, normDevice, normOs, splitCsv, toInt } from './ga-import'
 export const FATHOM_PAGE_VIEW_PREFIX = 'fap_'
 export const FATHOM_SESSION_PREFIX = 'fas_'
 
+/**
+ * CSV text one upload may carry, measured before JSON escaping.
+ *
+ * 5 MB rather than 10: the files travel as JSON string values, and escaping
+ * inflates them, so a 10 MB selection would arrive as roughly 12 MB of body and
+ * cross the 10,485,760-byte ceiling bun-router's request-size middleware
+ * imposes if it is ever registered on this app. Half of it leaves room for the
+ * escaping and for the ceiling to arrive later without breaking anyone.
+ */
+export const FATHOM_MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+/**
+ * Page views one request will write.
+ *
+ * Checked BEFORE synthesis, never during: a Fathom export covers one fixed
+ * range, so a half-written import cannot be finished by re-exporting a shorter
+ * one. A shorter export has different breakdown totals, so `allocate` and
+ * `reconcileVisitors` land on a different split and mint different ids, and the
+ * second attempt would stack on top of the first rather than collide with it.
+ * Over the cap the whole request is refused and the caller splits the range
+ * instead, which is deterministic and does collide.
+ */
+export const FATHOM_MAX_ROWS_PER_REQUEST = 50_000
+
+/** The files this importer reads. Everything else in a Fathom export is ignored. */
+export const FATHOM_FILES = [
+  'Summary.csv',
+  'Pages.csv',
+  'Countries.csv',
+  'Device_Types.csv',
+  'Browsers.csv',
+  'Operating_Systems.csv',
+  'Sources.csv',
+] as const
+
+/**
+ * Present in a Fathom export and deliberately not read, so the UI can name them
+ * rather than leaving the customer to notice their other files vanished.
+ *
+ * These are not-yet: each has a column waiting for it. The sub-country geo
+ * files a Fathom export also carries are a different case and are absent from
+ * this list on purpose - migration 0000000011 dropped those two columns from
+ * both tables because country-only geolocation is an invariant here (#7), so
+ * there is nothing for them to be imported INTO. The panel says so in prose;
+ * the module does not name the files, because naming them is how a later
+ * "completeness" pass talks itself into reading them.
+ */
+export const FATHOM_IGNORED_FILES = [
+  'Referrers.csv',
+  'Entry_Pages.csv',
+  'Exit_Pages.csv',
+  'Events.csv',
+  'UTM_Campaign.csv',
+  'UTM_Content.csv',
+  'UTM_Medium.csv',
+  'UTM_Source.csv',
+  'UTM_Term.csv',
+] as const
+
 /** One dimension's breakdown: label -> visitor count. */
 export type Breakdown = Map<string, number>
 
@@ -109,7 +168,16 @@ export function parseBreakdown(csv: string, labelCol = 0, countCol = -1): Breakd
   if (lines.length < 2)
     return out
   const header = splitCsv(lines[0])
-  const idx = countCol >= 0 ? countCol : header.length - 1
+  // By header name first, by position only as a fallback.
+  //
+  // The last column is the visitor count in all five files read today, and was
+  // the whole rule. It is also a loaded gun for the next file added: the last
+  // column of `Referrers.csv` is its bounce rate, so reading it positionally
+  // returns 100 as a visitor count, and the last column of the entry and exit
+  // page files is pageviews rather than visitors. Both would import numbers
+  // that look entirely plausible.
+  const named = header.findIndex(h => /^visitors$/i.test(h.trim().replace(/^"|"$/g, '')))
+  const idx = countCol >= 0 ? countCol : (named >= 0 ? named : header.length - 1)
   for (const line of lines.slice(1)) {
     const cells = splitCsv(line)
     const label = (cells[labelCol] || '').trim()
@@ -129,7 +197,13 @@ export function parseBreakdown(csv: string, labelCol = 0, countCol = -1): Breakd
  * it onto the day before.
  */
 export function parseRange(summaryCsv: string): { from: string, to: string } | null {
-  const m = summaryCsv.match(/(\d{4}-\d{2}-\d{2})[^\n]*?to\s+(\d{4}-\d{2}-\d{2})/)
+  // Anchored on the label first. The loose scan below takes the first date pair
+  // joined by "to" ANYWHERE in the file, which is correct only for as long as
+  // that row holds the only dates in it - and Fathom has added rows to this
+  // file before, without a schema version to notice it by. A "Generated on"
+  // line above it would silently move the whole import into the wrong window.
+  const labelled = summaryCsv.match(/"?Export Date Range"?[^\n]*?(\d{4}-\d{2}-\d{2})[^\n]*?to\s+(\d{4}-\d{2}-\d{2})/)
+  const m = labelled ?? summaryCsv.match(/(\d{4}-\d{2}-\d{2})[^\n]*?to\s+(\d{4}-\d{2}-\d{2})/)
   if (!m)
     return null
   return { from: m[1], to: m[2] }
@@ -161,6 +235,36 @@ export function parseSummaryTotals(summaryCsv: string): { people: number, pagevi
     people: toInt(rows.get('people') ?? ''),
     pageviews: toInt(rows.get('pageviews') ?? ''),
   }
+}
+
+/**
+ * How many dashboard filters were on when the export was taken.
+ *
+ * Fathom's export respects whatever filters the dashboard had applied, so a
+ * filtered export is a SUBSET of the site that looks exactly like a complete
+ * one. Imported unchecked it reads as a quiet period that never happened. A
+ * missing or unreadable row counts as zero, which is the reading that lets an
+ * older export through rather than refusing everything it cannot classify.
+ */
+export function parseFiltersApplied(summaryCsv: string): number {
+  for (const line of summaryCsv.split(/\r?\n/)) {
+    const cells = splitCsv(line)
+    if (cells.length >= 2 && cells[0].trim().toLowerCase() === 'filters applied')
+      return toInt(cells[1])
+  }
+  return 0
+}
+
+/**
+ * The name a file was given, without whatever path it arrived under.
+ *
+ * A folder picker hands over `Dashboard_Export_2026-09-08/Pages.csv` and a
+ * zip listing can be worse. Only the basename is ever matched, so nothing
+ * about the path a customer's browser reports can steer which file is read.
+ */
+export function fathomBasename(name: string): string {
+  const parts = String(name).split(/[/\\]/).filter(p => p !== '')
+  return parts.length ? parts[parts.length - 1] : ''
 }
 
 /** Every YYYY-MM-DD from `from` to `to`, inclusive. */
@@ -382,4 +486,167 @@ export function toRecords(exp: FathomExport): GaRecord[] {
     records.set(key, rec)
   }
   return [...records.values()]
+}
+
+// --- assembling an upload ---------------------------------------------------
+//
+// The CLI reads a folder and a route reads a JSON body, but neither should own
+// what a Fathom export MEANS. Both hand their files to `readFathomExport` and
+// get back either an export or a sentence to show the person, so the two cannot
+// drift on which files are required, what a bad one is called, or what the
+// customer is told about it.
+
+/** Everything about an upload that a clean-looking import would otherwise hide. */
+export interface FathomImportNotes {
+  /** Names from `FATHOM_FILES` that were not in the upload. */
+  missing: string[]
+  /** Names from `FATHOM_IGNORED_FILES` that were present and not read. */
+  ignored: string[]
+  /** `Summary.csv`'s filter count. Non-zero means the export is a subset. */
+  filtersApplied: number
+  /** `Summary.csv` People: the deduplicated figure every breakdown is written in. */
+  people: number
+  /** Sum of `Pages.csv` visitors, counting a reader of three pages three times. */
+  rawVisitors: number
+  /** What `reconcileVisitors` settled on. See it for why the two differ. */
+  reconciledVisitors: number
+}
+
+/**
+ * Assemble an export from its files.
+ *
+ * Keys may carry a leading folder; only the basename is matched. Returns an
+ * error rather than throwing or exiting, because one of the two callers is an
+ * HTTP handler and the other is a CLI, and a shared reader that calls
+ * `process.exit` is a reader only one of them can use.
+ */
+export function readFathomExport(
+  files: ReadonlyMap<string, string>,
+): { export: FathomExport, notes: FathomImportNotes } | { error: string } {
+  const byName = new Map<string, string>()
+  for (const [name, text] of files) {
+    const base = fathomBasename(name)
+    if (base)
+      byName.set(base, text)
+  }
+
+  const summary = byName.get('Summary.csv') ?? ''
+  if (!summary)
+    return { error: 'Summary.csv was not in the upload. Select every CSV from the unzipped Fathom export, not just one of them.' }
+
+  const range = parseRange(summary)
+  if (!range)
+    return { error: 'Could not read the date range from Summary.csv. It should contain a cell like "2026-09-02 00:00:00 to 2026-09-08 16:02:04 (UTC)".' }
+
+  const pagesCsv = byName.get('Pages.csv') ?? ''
+  if (!pagesCsv)
+    return { error: 'Pages.csv was not in the upload. It carries the visitor and page view counts every other file is a breakdown of, so there is nothing to import without it.' }
+
+  // Pages.csv is the spine: every other file only splits its visitors by one
+  // dimension, so an export without it has nothing to be a breakdown OF.
+  const pageLines = pagesCsv.split(/\r?\n/).filter(l => l.trim() !== '')
+  const pages = new Map<string, { visitors: number, pageviews: number }>()
+  for (const line of pageLines.slice(1)) {
+    const c = splitCsv(line)
+    const path = (c[0] || '').trim()
+    if (!path)
+      continue
+    const prev = pages.get(path)
+    const visitors = toInt(c[1])
+    const pageviews = toInt(c[2]) || visitors
+    pages.set(path, {
+      visitors: (prev?.visitors ?? 0) + visitors,
+      pageviews: (prev?.pageviews ?? 0) + pageviews,
+    })
+  }
+  if (!pages.size)
+    return { error: 'Pages.csv has no data rows, so there is nothing to import.' }
+
+  const totals = parseSummaryTotals(summary)
+  const exported: FathomExport = {
+    from: range.from,
+    to: range.to,
+    people: totals.people,
+    pageviews: totals.pageviews,
+    pages,
+    countries: parseBreakdown(byName.get('Countries.csv') ?? ''),
+    devices: parseBreakdown(byName.get('Device_Types.csv') ?? ''),
+    browsers: parseBreakdown(byName.get('Browsers.csv') ?? ''),
+    systems: parseBreakdown(byName.get('Operating_Systems.csv') ?? ''),
+    sources: parseBreakdown(byName.get('Sources.csv') ?? ''),
+  }
+
+  const recon = reconcileVisitors(pages, totals.people)
+  return {
+    export: exported,
+    notes: {
+      missing: FATHOM_FILES.filter(name => !byName.has(name)),
+      ignored: FATHOM_IGNORED_FILES.filter(name => byName.has(name)),
+      filtersApplied: parseFiltersApplied(summary),
+      people: totals.people,
+      rawVisitors: recon.rawTotal,
+      reconciledVisitors: recon.total,
+    },
+  }
+}
+
+/**
+ * The rows an import will write, counted before any of them are.
+ *
+ * Derived from `reconcileVisitors` and not from the raw `Pages.csv` column, so
+ * it agrees exactly with what `toRecords` goes on to produce. An estimate that
+ * disagreed with the write would be worse than none: it would refuse imports
+ * that fit and admit ones that do not.
+ */
+export function estimateRows(exp: FathomExport): { pageViews: number, sessions: number } {
+  const { counts, total } = reconcileVisitors(exp.pages, exp.people)
+  let pageViews = 0
+  for (const [path, { pageviews }] of exp.pages) {
+    const visitors = counts.get(path) ?? 0
+    if (visitors > 0)
+      pageViews += Math.max(pageviews, visitors)
+  }
+  return { pageViews, sessions: total }
+}
+
+/**
+ * Every way this import is incomplete or approximate, named.
+ *
+ * A sibling of the GA importer's `importWarnings`, never an extension of it:
+ * that one's copy is about paging through an open-ended API, and a Fathom
+ * export is one fixed range in a file, so "import it in shorter periods" would
+ * be advice the customer cannot act on. What they share is the rule, which is
+ * that a partial import must never render as a clean one.
+ */
+export function fathomImportWarnings(notes: FathomImportNotes): string[] {
+  const out: string[] = []
+  const n = (v: number) => v.toLocaleString()
+
+  if (notes.rawVisitors > notes.reconciledVisitors) {
+    out.push(
+      `Fathom counted ${n(notes.people)} people over this period, but its per page visitor counts add up to ${n(notes.rawVisitors)}, because someone who reads three pages is counted on each one. `
+      + `We scaled the page counts back to ${n(notes.reconciledVisitors)} so your country, device, browser and source totals still match Fathom.`,
+    )
+  }
+  if (notes.people > 0 && notes.reconciledVisitors > notes.people) {
+    out.push(
+      `This export lists more pages than people, so every page keeps one visitor and the import totals ${n(notes.reconciledVisitors)} visitors rather than ${n(notes.people)}.`,
+    )
+  }
+  if (notes.missing.length) {
+    out.push(
+      `Missing from the upload, so imported traffic carries no value for those breakdowns: ${notes.missing.join(', ')}.`,
+    )
+  }
+  if (notes.filtersApplied > 0) {
+    out.push(
+      'This export was taken with Fathom filters on, so the imported period holds a subset of your real traffic rather than all of it.',
+    )
+  }
+  if (notes.ignored.length) {
+    out.push(
+      'Referrers, entry and exit pages, events and UTM campaigns are in a Fathom export but are not imported yet. Sub-country location is never imported, because this app only ever stores country.',
+    )
+  }
+  return out
 }

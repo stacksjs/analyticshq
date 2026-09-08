@@ -15,29 +15,39 @@
  * multi-page cases below are here as well.
  */
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   allocate,
   daysBetween,
   dealEvenly,
+  estimateRows,
   FATHOM_PAGE_VIEW_PREFIX,
   FATHOM_SESSION_PREFIX,
+  fathomBasename,
+  fathomImportWarnings,
   normFathomDevice,
   normFathomSource,
   parseBreakdown,
+  parseFiltersApplied,
   parseRange,
   parseSummaryTotals,
+  readFathomExport,
   reconcileVisitors,
   spreadIndex,
   toRecords,
   type FathomExport,
+  type FathomImportNotes,
 } from '../../app/Analytics/fathom-import'
 import { GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../../app/Analytics/ga-import'
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 const fixture = (name: string) => read(join('tests/fixtures/fathom-export', name))
+/** Source with comments stripped, so a guard cannot be satisfied by prose. */
+const code = (p: string) => read(p)
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '')
 
 /** A minimal export whose breakdowns all sum to `people`, as Fathom's do. */
 function exportOf(people: number, pages: Array<[string, number, number]>): FathomExport {
@@ -361,5 +371,365 @@ describe('what the export cannot say', () => {
 
   test('the joint distribution is documented as absent, not quietly claimed', () => {
     expect(read('app/Analytics/fathom-import.ts')).toContain('not cross-tabulated')
+  })
+})
+
+describe('assembling an upload', () => {
+  /** The 18 real CSVs, keyed the way a folder picker reports them. */
+  const uploaded = (prefix = '') => new Map(
+    readdirSync(join(ROOT, 'tests/fixtures/fathom-export'))
+      .filter(n => n.endsWith('.csv'))
+      .map(n => [`${prefix}${n}`, fixture(n)]),
+  )
+
+  test('the real export reads back the numbers Fathom printed', () => {
+    const read = readFathomExport(uploaded())
+    expect('error' in read).toBe(false)
+    if ('error' in read)
+      return
+    expect(read.export.from).toBe('2026-09-02')
+    expect(read.export.to).toBe('2026-09-08')
+    expect(read.export.people).toBe(5)
+    expect(read.export.pageviews).toBe(5)
+    expect(read.export.pages.get('/')).toEqual({ visitors: 5, pageviews: 5 })
+  })
+
+  test('a leading folder on every key changes nothing', () => {
+    // A folder picker reports "Dashboard_Export_2026-09-08/Pages.csv"; a zip
+    // listing can be worse. Only the basename is ever matched.
+    const flat = readFathomExport(uploaded())
+    const nested = readFathomExport(uploaded('dummy_Dashboard_Export_2026-09-08/'))
+    expect('error' in nested).toBe(false)
+    if ('error' in flat || 'error' in nested)
+      return
+    expect(nested.export.people).toBe(flat.export.people)
+    expect([...nested.export.pages]).toEqual([...flat.export.pages])
+  })
+
+  test('files we do not read are noted, never treated as an error', () => {
+    const read = readFathomExport(uploaded())
+    if ('error' in read)
+      throw new Error(read.error)
+    expect(read.notes.missing).toEqual([])
+    expect(read.notes.ignored).toContain('Referrers.csv')
+    expect(read.notes.ignored).toContain('UTM_Term.csv')
+  })
+
+  test('a filename Fathom adds later is ignored rather than fatal', () => {
+    // Entry_Pages.csv and Exit_Pages.csv arrived in the March 2026 rebuild with
+    // no schema version to notice them by, so an unknown name cannot be a refusal.
+    const files = uploaded()
+    files.set('Something_New.csv', 'Header,Visitors\nx,1\n')
+    expect('error' in readFathomExport(files)).toBe(false)
+  })
+
+  test('every refusal is a sentence, and nothing throws', () => {
+    const cases: Array<[string, Map<string, string>, string]> = [
+      ['nothing at all', new Map(), 'Summary.csv was not in the upload'],
+      ['no Summary.csv', new Map([['Pages.csv', fixture('Pages.csv')]]), 'Summary.csv was not in the upload'],
+      ['a Summary with no range', new Map([['Summary.csv', 'Metric,Value\nPeople,5\n']]), 'Could not read the date range'],
+      ['no Pages.csv', new Map([['Summary.csv', fixture('Summary.csv')]]), 'Pages.csv was not in the upload'],
+      ['a header-only Pages.csv', new Map([
+        ['Summary.csv', fixture('Summary.csv')],
+        ['Pages.csv', 'Page,Visitors,Pageviews\n'],
+      ]), 'Pages.csv has no data rows'],
+    ]
+    for (const [label, files, expected] of cases) {
+      const read = readFathomExport(files)
+      expect(`${label}: ${'error' in read}`).toBe(`${label}: true`)
+      if ('error' in read)
+        expect(read.error).toContain(expected)
+    }
+  })
+
+  test('only the basename of a path is ever matched', () => {
+    expect(fathomBasename('Export/Pages.csv')).toBe('Pages.csv')
+    expect(fathomBasename('Export\\Pages.csv')).toBe('Pages.csv')
+    expect(fathomBasename('Pages.csv')).toBe('Pages.csv')
+    expect(fathomBasename('../../etc/passwd')).toBe('passwd')
+    expect(fathomBasename('')).toBe('')
+  })
+
+  test('a filtered export is detected, because it looks exactly like a whole one', () => {
+    expect(parseFiltersApplied(fixture('Summary.csv'))).toBe(0)
+    expect(parseFiltersApplied('Metric,Value\n"Filters Applied",2\n')).toBe(2)
+    expect(parseFiltersApplied('Metric,Value\nPeople,5\n')).toBe(0)
+    const files = new Map([
+      ['Summary.csv', fixture('Summary.csv').replace('"Filters Applied",0', '"Filters Applied",3')],
+      ['Pages.csv', fixture('Pages.csv')],
+    ])
+    const read = readFathomExport(files)
+    if ('error' in read)
+      throw new Error(read.error)
+    expect(read.notes.filtersApplied).toBe(3)
+  })
+
+  test('the estimate matches what the import actually writes', () => {
+    // The 413 refusal is computed from this, so an estimate that disagreed with
+    // the write would refuse imports that fit and admit ones that do not.
+    for (const [people, pages] of [
+      [5, [['/', 5, 5]]],
+      [3, [['/', 3, 4]]],
+      [120, [['/', 100, 140], ['/about', 40, 45], ['/blog', 25, 30]]],
+      [9, [['/a', 7, 11], ['/b', 3, 4], ['/c', 1, 1], ['/d', 1, 2]]],
+    ] as Array<[number, Array<[string, number, number]>]>) {
+      const exp = exportOf(people, pages)
+      const recs = toRecords(exp)
+      expect(estimateRows(exp)).toEqual({
+        pageViews: sum(recs.map(r => r.pageviews)),
+        sessions: sum(recs.map(r => r.users)),
+      })
+    }
+  })
+})
+
+describe('warnings name what the numbers hide', () => {
+  const notes = (over: Partial<FathomImportNotes> = {}): FathomImportNotes => ({
+    missing: [],
+    ignored: [],
+    filtersApplied: 0,
+    people: 100,
+    rawVisitors: 100,
+    reconciledVisitors: 100,
+    ...over,
+  })
+
+  test('a clean import says nothing rather than reassuring', () => {
+    expect(fathomImportWarnings(notes())).toEqual([])
+  })
+
+  test('the scaled-down warning quotes both numbers', () => {
+    const [w] = fathomImportWarnings(notes({ people: 1204, rawVisitors: 3880, reconciledVisitors: 1204 }))
+    expect(w).toContain('1,204')
+    expect(w).toContain('3,880')
+  })
+
+  test('visitors are never described as reading higher, because they do not', () => {
+    // reconcileVisitors scales the page column DOWN to Summary.People. Copy
+    // claiming imported visitors read higher than Fathom would be a lie, and it
+    // is the mistake this feature was designed around three separate times.
+    const every = [
+      notes({ people: 1204, rawVisitors: 3880, reconciledVisitors: 1204 }),
+      notes({ people: 500, rawVisitors: 640, reconciledVisitors: 640 }),
+      notes({ missing: ['Countries.csv'], ignored: ['Referrers.csv'], filtersApplied: 1 }),
+    ].flatMap(fathomImportWarnings).join(' ')
+    expect(every).not.toContain('higher')
+  })
+
+  test('more pages than people is its own sentence', () => {
+    const out = fathomImportWarnings(notes({ people: 500, rawVisitors: 640, reconciledVisitors: 640 }))
+    expect(out.some(w => w.includes('more pages than people'))).toBe(true)
+  })
+
+  test('missing and unread files each get named', () => {
+    const out = fathomImportWarnings(notes({ missing: ['Countries.csv', 'Sources.csv'], ignored: ['Referrers.csv'] }))
+    expect(out.some(w => w.includes('Countries.csv, Sources.csv'))).toBe(true)
+    expect(out.some(w => w.includes('not imported yet'))).toBe(true)
+  })
+
+  test('a filtered export is called a subset', () => {
+    expect(fathomImportWarnings(notes({ filtersApplied: 2 })).some(w => w.includes('subset'))).toBe(true)
+  })
+})
+
+describe('the upload endpoint', () => {
+  const routes = code('routes/analytics.ts')
+  const decl = "route.post('/api/sites/{siteId}/import/fathom'"
+  const block = routes.slice(routes.indexOf(decl), routes.indexOf(decl) + 6000)
+
+  test('the route exists at column 0, where the authorization sweep can see it', () => {
+    // api-authz.test.ts collects site-scoped routes with a `^`-anchored regex, so
+    // an indented registration does not fail that sweep, it escapes it.
+    expect(routes).toContain(`\n${decl}`)
+    expect(routes).toContain("route.options('/api/sites/{siteId}/import/fathom'")
+  })
+
+  test('ownership is checked before billing, so an outsider learns nothing', () => {
+    expect(block.slice(0, 400)).toContain('requireSiteOwner(request, siteId)')
+    expect(block.indexOf('requireSiteOwner')).toBeLessThan(block.indexOf('requirePlanIncludes'))
+    expect(block).toContain("requirePlanIncludes(\n    String(siteId),\n    'csvImport'")
+  })
+
+  test('the endpoint is authenticated and rate limited', () => {
+    const chain = block.slice(block.indexOf('.middleware('), block.indexOf('.middleware(') + 80)
+    expect(chain).toContain(".middleware('auth')")
+    expect(chain).toContain('.skipCsrf()')
+    expect(chain).toContain('.rateLimit(')
+  })
+
+  test('the size and row ceilings are checked before anything is written', () => {
+    expect(block.indexOf('FATHOM_MAX_UPLOAD_BYTES')).toBeLessThan(block.indexOf('DELETE FROM page_views'))
+    expect(block.indexOf('estimateRows(')).toBeLessThan(block.indexOf('DELETE FROM page_views'))
+    expect(block.indexOf('FATHOM_MAX_ROWS_PER_REQUEST')).toBeLessThan(block.indexOf('buildInsert('))
+  })
+
+  test('replace deletes this importer rows and no other importer rows', () => {
+    const replace = block.slice(block.indexOf('DELETE FROM page_views'), block.indexOf('const now = new Date()'))
+    expect(replace).toContain('FATHOM_PAGE_VIEW_PREFIX')
+    expect(replace).toContain('FATHOM_SESSION_PREFIX')
+    expect(replace).not.toContain('GA_PAGE_VIEW_PREFIX')
+    expect(replace).not.toContain('GA_SESSION_PREFIX')
+  })
+
+  test('sessions are inserted before page views, which hold the foreign key', () => {
+    const flush = block.slice(block.indexOf('const flush ='), block.indexOf('for (const record of records)'))
+    expect(flush.indexOf("buildInsert('sessions'")).toBeLessThan(flush.indexOf("buildInsert('page_views'"))
+  })
+
+  test('the uploaded CSV is never stored, logged or echoed back', () => {
+    expect(block).not.toContain('INSERT INTO sites')
+    expect(block).not.toContain('UPDATE sites')
+    expect(block).not.toContain('console.log')
+    expect(block).not.toMatch(/\bsettings\s*=/)
+  })
+
+  test('nothing in the new route widens the fingerprint surface', () => {
+    // fingerprint-surface.test.ts fails on `title:` anywhere in this file, and
+    // Fathom's Pages export does carry page titles.
+    expect(block).not.toMatch(/\btitle:\s/)
+  })
+
+  test('no browser storage is named, in the code or in the comments', () => {
+    // privacy-guardrails.test.ts reads routes/analytics.ts RAW, so a comment
+    // saying "nothing is kept in localStorage" would turn the suite red.
+    const rawBlock = read('routes/analytics.ts')
+    const start = rawBlock.indexOf('// Fathom import (CSV upload)')
+    const region = rawBlock.slice(start, rawBlock.indexOf('// Search Console (#25)', start))
+    expect(region.length).toBeGreaterThan(1000)
+    for (const token of ['localStorage', 'sessionStorage', 'indexedDB', 'document.cookie'])
+      expect(region).not.toContain(token)
+  })
+
+  test('the warnings the module produces are the ones the route returns', () => {
+    expect(block).toContain('fathomImportWarnings(')
+    expect(block).toContain('warnings,')
+  })
+})
+
+describe('the dashboard panel', () => {
+  const view = read('resources/views/dashboard.stx')
+  const panel = view.slice(view.indexOf('{{-- Import from Fathom.'), view.indexOf('@if (shareMode)'))
+
+  test('the panel is there and is a real region, not an empty slice', () => {
+    expect(panel.length).toBeGreaterThan(2000)
+    expect(panel).toContain('type="file"')
+  })
+
+  test('the file input is never bound with x-model, which cannot hold a file', () => {
+    // stx's model binding has no file branch: it would hold the browser's fake
+    // path string, and a programmatic write throws inside an effect that
+    // re-throws and takes the writing caller with it.
+    const input = panel.slice(panel.indexOf('<input id="fathom-files"'), panel.indexOf('</label>', panel.indexOf('<input id="fathom-files"')))
+    expect(input).toContain('@change="pickFathomFiles"')
+    expect(input).not.toContain('x-model')
+    expect(input).toContain('class="sr-only"')
+  })
+
+  test('drag events use the @ form, which is the only one that binds', () => {
+    // dragover/drop are absent from the runtime event list, so `:drop` is not an
+    // event at all: it silently becomes a DOM attribute that never fires.
+    expect(panel).toContain('@drop.prevent=')
+    expect(panel).toContain('@dragover.prevent')
+    expect(panel).not.toContain(':drop=')
+    expect(panel).not.toContain(':dragover=')
+  })
+
+  test('everything that starts hidden says so statically as well', () => {
+    // :show reads the inline display at bind time; without the static
+    // counterpart the element flashes before hydration hides it.
+    const lines = panel.split('\n').filter(l => l.includes(':show='))
+    expect(lines.length).toBeGreaterThan(3)
+    for (const line of lines)
+      expect(`${line.trim().slice(0, 60)} -> ${line.includes('style="display:none"')}`).toContain('-> true')
+  })
+
+  test('both buttons keep static labels, so neither is cloaked before hydration', () => {
+    for (const btn of panel.match(/<button[\s\S]*?<\/button>/g) ?? [])
+      expect(btn).not.toContain('{{')
+  })
+
+  test('the panel promises nothing the importer does not do', () => {
+    expect(panel).toContain('Fathom exports daily totals, not individual visits')
+    expect(panel).toContain('not imported yet')
+    expect(panel).not.toContain('—')
+    expect(panel).not.toContain('–')
+  })
+
+  test('the paywall is server-rendered, not a client conditional', () => {
+    // A client @if nested inside a server @if breaks stx's @endif matching.
+    expect(panel).toContain('@if (canImportCsv)')
+    expect(panel).toContain('Upgrade to Pro')
+    expect(panel).not.toContain(':if=')
+  })
+})
+
+describe('splitting an export too big for one request', () => {
+  /**
+   * The real `fathomWindows`, lifted out of the view and run.
+   *
+   * It lives in the dashboard's client script because no client block in this
+   * app imports anything, and moving it out to be testable would be the first
+   * one to try. Reading the shipped source instead means this cannot drift from
+   * what actually runs in the browser.
+   */
+  const fathomWindows: (from: string, to: string, days: number) => Array<[string, string]> = (() => {
+    const view = read('resources/views/dashboard.stx')
+    const start = view.indexOf('function fathomWindows(')
+    expect(start).toBeGreaterThan(0)
+    const body = view.slice(start, view.indexOf('\n}', start) + 2)
+      .replace(/: Array<\[string, string\]>/g, '')
+      .replace(/: string|: number/g, '')
+    // eslint-disable-next-line no-new-func
+    return new Function(`${body}; return fathomWindows`)() as any
+  })()
+
+  test('windows tile the range with no gap and no overlap', () => {
+    for (const [from, to, size] of [
+      ['2023-01-01', '2025-12-31', 104],
+      ['2026-09-02', '2026-09-08', 3],
+      ['2026-09-02', '2026-09-02', 7],
+      ['2024-01-01', '2024-12-31', 1],
+    ] as Array<[string, string, number]>) {
+      const windows = fathomWindows(from, to, size)
+      const days = daysBetween(from, to)
+      const covered: string[] = []
+      for (const [f, t] of windows)
+        covered.push(...days.filter(d => d >= f && d <= t))
+      expect(`${from}..${to}/${size}: ${covered.length}`).toBe(`${from}..${to}/${size}: ${days.length}`)
+      expect(new Set(covered).size).toBe(days.length)
+      expect(windows[0][0]).toBe(from)
+      expect(windows[windows.length - 1][1]).toBe(to)
+    }
+  })
+
+  test('no window is longer than asked for', () => {
+    for (const [f, t] of fathomWindows('2023-01-01', '2025-12-31', 104))
+      expect(daysBetween(f, t).length).toBeLessThanOrEqual(104)
+  })
+
+  test('a windowed import adds up to the whole one, record for record', () => {
+    // This is what makes refusing an oversized export safe rather than a dead
+    // end: the SAME file is posted again in windows, and because the synthesis
+    // is deterministic the pieces are exactly the rows the whole file produces.
+    const pages: Array<[string, number, number]> = Array.from(
+      { length: 40 },
+      (_, i) => [`/p${i}`, 300 + i, 700 + i * 3],
+    )
+    const exp = exportOf(9000, pages)
+    exp.from = '2024-01-01'
+    exp.to = '2024-12-31'
+    const all = toRecords(exp)
+
+    const seen = new Set<string>()
+    let pageViews = 0
+    for (const [f, t] of fathomWindows(exp.from, exp.to, 37)) {
+      for (const r of all.filter(x => x.date >= f && x.date <= t)) {
+        seen.add(`${r.date}|${r.path}|${r.source}|${r.country}|${r.device}|${r.browser}|${r.os}`)
+        pageViews += r.pageviews
+      }
+    }
+    expect(seen.size).toBe(all.length)
+    expect(pageViews).toBe(sum(all.map(r => r.pageviews)))
+    expect(pageViews).toBe(estimateRows(exp).pageViews)
   })
 })

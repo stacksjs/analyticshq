@@ -22,7 +22,7 @@ import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRel
 import { planForSite } from '../app/Analytics/entitlements'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
-import { isUnlimited, limitReachedMessage, type PlanLimits } from '../config/plans'
+import { featureUnavailableMessage, isUnlimited, limitReachedMessage, type PlanFeatures, type PlanLimits } from '../config/plans'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { healthResponse } from '../app/Support/health'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
@@ -33,6 +33,7 @@ import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVita
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
+import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -676,6 +677,27 @@ async function requirePlanAllows(siteId: string, resource: keyof PlanLimits, cou
     return null
 
   return json({ error: limitReachedMessage(resource, limit, plan), plan, upgradeUrl: '/pricing' }, 402)
+}
+
+/**
+ * Gate an action on the plan INCLUDING a capability, rather than on having room
+ * left under a cap.
+ *
+ * Same 402 envelope as `requirePlanAllows`, so the dashboard's existing error
+ * path needs nothing new, and the same composition rule: call the role check
+ * first, so an outsider gets 403/404 and learns nothing about the owner's
+ * billing.
+ *
+ * `=== true` rather than truthiness. A capability nobody declared reads as
+ * `undefined`, and an entitlement that arrived malformed has to fail closed -
+ * the boolean form of the reasoning in `isUnlimited`.
+ */
+async function requirePlanIncludes(siteId: string, feature: keyof PlanFeatures, error: string): Promise<Response | null> {
+  const { plan, features } = await planForSite(siteId)
+  if (features[feature] === true)
+    return null
+
+  return json({ error, plan, upgradeUrl: '/pricing' }, 402)
 }
 
 // ---------------------------------------------------------------------------
@@ -2468,6 +2490,196 @@ route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
     warnings,
   })
 }).middleware('auth').skipCsrf()
+
+// ---------------------------------------------------------------------------
+// Fathom import (CSV upload)
+// ---------------------------------------------------------------------------
+// The migration path off Fathom, and the one import a customer can do without
+// holding a credential for anything. Fathom's dashboard download is a zip of
+// about eighteen CSVs; the browser reads the ones we use and posts them as JSON
+// text, which is why there is no multipart handling here. The files are held for
+// the length of the request and never written anywhere but the synthesized rows.
+//
+// PAID, unlike the GA4 and Search Console imports above. Those two ask Google
+// for the data with a credential the customer already has; this one is the whole
+// migration in a single upload.
+//
+// TWO SHAPES OF REQUEST, one handler. `dryRun` reads the export, reports what it
+// found, and writes nothing - the only guard against importing one site's
+// history into another, because nothing in the eighteen files names the site.
+// The real run does the same reading and then writes.
+//
+// DATE WINDOWING rather than a partial write. An export covers one fixed range,
+// so an import that stopped halfway could not be finished by re-exporting a
+// shorter one: a shorter export has different breakdown totals, so the synthesis
+// lands on a different split and mints different ids, and the second attempt
+// would stack on the first instead of colliding with it. `fromDay`/`toDay`
+// filter the SAME export instead, and because the synthesis is deterministic the
+// windows compose into exactly the import the whole file would have produced.
+
+route.options('/api/sites/{siteId}/import/fathom', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/import/fathom', async (request: any) => {
+  const siteId = request.params.siteId
+  // Owner, not admin: this writes history into the site's own tables, and
+  // `replace` deletes a previous import. Role first, plan second, so an
+  // outsider learns nothing about the owner's billing.
+  const denied = await requireSiteOwner(request, siteId)
+  if (denied)
+    return denied
+
+  const blocked = await requirePlanIncludes(
+    String(siteId),
+    'csvImport',
+    featureUnavailableMessage('Importing from a CSV file', 'bring your existing history into this site'),
+  )
+  if (blocked)
+    return blocked
+
+  const body = request.jsonBody ?? {}
+  const raw = body.files
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+    return json({ error: 'Send the export as a "files" object of filename to CSV text.' }, 400)
+
+  const entries = Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string')
+  if (!entries.length)
+    return json({ error: 'Send the export as a "files" object of filename to CSV text.' }, 400)
+
+  // byteLength, not String.length: a path or a page title outside ASCII costs
+  // more bytes than characters, and the cap is about what crosses the wire.
+  const bytes = entries.reduce((n, [, v]) => n + Buffer.byteLength(String(v), 'utf8'), 0)
+  if (bytes > FATHOM_MAX_UPLOAD_BYTES) {
+    return json({
+      error: 'That export is larger than 5 MB of CSV, which is more than one request can take. In Fathom, choose a shorter date range, download again, and import the pieces one after another. Each import adds to the last.',
+    }, 413)
+  }
+
+  const files = new Map(entries.map(([k, v]) => [String(k), String(v)]))
+
+  // Fathom has a second export route - Exports, then Custom Export - which is
+  // queued, emailed, and shaped nothing like the dashboard zip. Saying so beats
+  // "Summary.csv was not in the upload" for someone holding the wrong download.
+  const names = [...files.keys()].map(fathomBasename)
+  if (!names.includes('Summary.csv') && names.filter(n => n.startsWith('pageviews-')).length >= 2) {
+    return json({
+      error: 'These files come from Fathom\'s Custom Export, which we cannot read yet. Use the download button on the Fathom dashboard instead: it produces a zip with Summary.csv and Pages.csv in it.',
+    }, 400)
+  }
+
+  const read = readFathomExport(files)
+  if ('error' in read)
+    return json({ error: read.error }, 400)
+
+  // A filtered export is a subset of the site that looks exactly like a whole
+  // one, and imports as a quiet period that never happened. Confirmed, not
+  // warned about afterwards.
+  if (read.notes.filtersApplied > 0 && body.acceptFiltered !== true) {
+    return json({
+      error: 'This export was taken with filters applied in Fathom, so it holds part of your traffic and not all of it. Importing it will look like a quiet period on your dashboard. Clear the filters in Fathom and download again, or confirm that you want the filtered subset.',
+    }, 400)
+  }
+
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  if (body.fromDay !== undefined && !isDay(body.fromDay))
+    return json({ error: 'fromDay must be YYYY-MM-DD.' }, 400)
+  if (body.toDay !== undefined && !isDay(body.toDay))
+    return json({ error: 'toDay must be YYYY-MM-DD.' }, 400)
+
+  const all = fathomRecords(read.export)
+  const records = all.filter(r =>
+    (!isDay(body.fromDay) || r.date >= body.fromDay)
+    && (!isDay(body.toDay) || r.date <= body.toDay))
+
+  // Counted from the whole export, never from the window, so the answer does not
+  // change depending on which slice is being asked about.
+  const estimate = estimateRows(read.export)
+  const windowed = isDay(body.fromDay) || isDay(body.toDay)
+  if (!windowed && estimate.pageViews > FATHOM_MAX_ROWS_PER_REQUEST) {
+    return json({
+      error: `This export would create about ${estimate.pageViews.toLocaleString()} page views, and one import can write ${FATHOM_MAX_ROWS_PER_REQUEST.toLocaleString()}. Nothing was imported. Import it a few days at a time instead.`,
+      estimate,
+      maxRows: FATHOM_MAX_ROWS_PER_REQUEST,
+      range: { from: read.export.from, to: read.export.to },
+    }, 413)
+  }
+
+  const warnings = fathomImportWarnings(read.notes)
+
+  if (body.dryRun === true) {
+    // Whether this site has been imported into before, so "Replace" is a choice
+    // the customer makes knowing there is something to replace.
+    const prior = await pgq(
+      `SELECT 1 FROM page_views WHERE site_id = ? AND id LIKE ? LIMIT 1`,
+      [String(siteId), `${FATHOM_PAGE_VIEW_PREFIX}%`],
+    ).catch(() => []) as unknown[]
+
+    return json({
+      ok: true,
+      dryRun: true,
+      range: { from: read.export.from, to: read.export.to },
+      preview: {
+        paths: read.export.pages.size,
+        people: read.notes.people,
+        visitors: read.notes.reconciledVisitors,
+        pageViews: estimate.pageViews,
+        sessions: estimate.sessions,
+        priorImport: (prior?.length ?? 0) > 0,
+      },
+      maxRows: FATHOM_MAX_ROWS_PER_REQUEST,
+      warnings,
+    })
+  }
+
+  // Only the Fathom prefixes. A previous GA import belongs to a different
+  // importer and is not this one's to delete.
+  if (body.replace === true) {
+    await pgq(`DELETE FROM page_views WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${FATHOM_PAGE_VIEW_PREFIX}%`]).catch(() => {})
+    await pgq(`DELETE FROM sessions WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${FATHOM_SESSION_PREFIX}%`]).catch(() => {})
+  }
+
+  const now = new Date()
+  let pageViews = 0
+  let sessions = 0
+  let sessBuf: Record<string, unknown>[] = []
+  let pvBuf: Record<string, unknown>[] = []
+
+  const flush = async (): Promise<void> => {
+    // Sessions first: page_views.session_id has a foreign key to it.
+    const s = buildInsert('sessions', sessBuf)
+    if (s)
+      await db.unsafe(s.sql, s.params)
+    const p = buildInsert('page_views', pvBuf)
+    if (p)
+      await db.unsafe(p.sql, p.params)
+    sessBuf = []
+    pvBuf = []
+  }
+
+  for (const record of records) {
+    const rows = synthesizeRecord(String(siteId), record, now, {
+      pageView: FATHOM_PAGE_VIEW_PREFIX,
+      session: FATHOM_SESSION_PREFIX,
+    })
+    sessBuf.push(...rows.sessions)
+    pvBuf.push(...rows.pageViews)
+    sessions += rows.sessions.length
+    pageViews += rows.pageViews.length
+    if (pvBuf.length >= 2000)
+      await flush()
+  }
+  await flush()
+
+  return json({
+    ok: true,
+    dryRun: false,
+    imported: { pageViews, sessions, records: records.length },
+    range: {
+      from: isDay(body.fromDay) ? body.fromDay : read.export.from,
+      to: isDay(body.toDay) ? body.toDay : read.export.to,
+    },
+    warnings,
+  })
+}).middleware('auth').skipCsrf().rateLimit(12, 'minute')
 
 // ---------------------------------------------------------------------------
 // Search Console (#25)

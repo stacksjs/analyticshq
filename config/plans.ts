@@ -33,6 +33,50 @@ export const PLAN_LIMITS: Record<string, PlanLimits> = {
   pro: { teammates: Number.POSITIVE_INFINITY },
 }
 
+/**
+ * Capabilities a plan includes, as opposed to caps it imposes.
+ *
+ * Kept separate from `PlanLimits` rather than widened into it, because the two
+ * are different questions with different failure modes. A limit is a number
+ * compared against a count, with `Infinity` as its unlimited sentinel; a
+ * capability is a boolean and has no sentinel at all. Putting one in the other
+ * makes `limits[resource]` a `number | boolean`, and `requirePlanAllows` then
+ * stops compiling in three places: `isUnlimited(limit)`, `count < limit`, and
+ * the `limitReachedMessage(..., limit, ...)` call. Encoding the boolean as
+ * 0/Infinity compiles but routes the refusal through `limitReachedMessage`,
+ * whose free-plan branch below is hardcoded teammate copy, so the customer
+ * would be told to upgrade "to add people to this site" when they tried to
+ * import a CSV.
+ *
+ * Same rule as the limits above: only capabilities something actually enforces.
+ */
+export interface PlanFeatures {
+  /** Uploading a CSV export from another analytics product to backfill history. */
+  csvImport: boolean
+}
+
+export const PLAN_FEATURES: Record<string, PlanFeatures> = {
+  free: { csvImport: false },
+  pro: { csvImport: true },
+}
+
+/**
+ * Declared, not inherited. A boolean has no `Infinity` to fall back on, so an
+ * omitted key here reads as `undefined` at the gate and paywalls a self-hosted
+ * install that has nothing to buy and no way to fix it from the UI.
+ */
+export const SELF_HOSTED_FEATURES: PlanFeatures = { csvImport: true }
+
+/**
+ * What to tell someone whose plan does not include a capability at all.
+ *
+ * No `plan` argument and no paid branch, unlike `limitReachedMessage`: the top
+ * plan includes every capability, so a Pro branch here would be unreachable.
+ */
+export function featureUnavailableMessage(feature: string, action: string): string {
+  return `${feature} is a Pro feature. Upgrade to ${action}.`
+}
+
 /** A user with no active subscription is on this. */
 export const DEFAULT_PLAN = 'free'
 
