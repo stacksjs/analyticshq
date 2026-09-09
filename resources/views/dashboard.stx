@@ -17,6 +17,7 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUr
 import { installTargets } from '../../app/Analytics/install'
 import { listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
+import { foldRegions, splitRegion } from '../../app/Analytics/regions'
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
@@ -182,6 +183,7 @@ let referrers = []
 let referrerUrls = []
 let countries = []
 let countryMap = []
+let regions = []
 let devices = []
 let browsers = []
 let systems = []
@@ -237,6 +239,16 @@ let teamIsPro = false
 // Does this site's plan include the CSV importer? Server-resolved so the panel is
 // right before any JS runs; the endpoint answers 402 whatever this says.
 let canImportCsv = false
+/** Whether THIS site opted into region geo. Drives the panel and the toggle. */
+let regionGeo = false
+/**
+ * Whether this INSTALL permits it at all.
+ *
+ * Read from config rather than from the API, so the settings row can say "your
+ * server does not allow this" instead of offering a switch the endpoint answers
+ * 409 to. `privacy` is already imported for the retention copy below.
+ */
+const regionGeoAllowed = privacy.geo.granularity === 'region'
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
@@ -369,6 +381,12 @@ async function loadData() {
       const resolved = await planForSite(siteId)
       teamIsPro = resolved.plan !== DEFAULT_PLAN
       canImportCsv = resolved.features.csvImport === true
+      // Region opt-in. Its own tiny query rather than a join onto the plan
+      // resolution: this is one boolean on `sites` and planForSite answers a
+      // different question about a different table.
+      const geoRow = (await pgq(`SELECT region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
+      const rawGeo = geoRow[0]?.region_geo
+      regionGeo = rawGeo === true || rawGeo === 't' || rawGeo === 1
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
@@ -539,6 +557,18 @@ async function loadData() {
   // same `filter` clause.
   countryMap = (await pgq(
     `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country`, p)) ?? []
+  // Regions, and unlike every other breakdown here this one is NOT limited in
+  // SQL. The rows below the disclosure floor have to be summed into "Other", and
+  // a LIMIT applied first would compute that total from the top eight instead of
+  // from everything. Bounded anyway: there are about four thousand ISO
+  // subdivisions, and a site only ever has rows for the ones it saw.
+  //
+  // Empty on every site that has not opted in, because the column is null there.
+  // The panel is hidden in that case rather than rendering an empty state, so a
+  // dashboard does not grow a permanently blank card for a feature nobody asked
+  // for.
+  regions = (await pgq(
+    `SELECT region, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY views DESC`, p)) ?? []
   devices = (await pgq(
     `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p)) ?? []
   browsers = (await pgq(
@@ -734,6 +764,51 @@ const countryRows = countries.map((c) => {
   const known = name !== String(c.country ?? '')
   return { ...c, label: known ? `${flag(c.country)} ${name}` : name }
 })
+
+/**
+ * Top regions, with every state under the disclosure floor folded into "Other".
+ *
+ * ## The floor is applied HERE, not in the query
+ *
+ * It is the same rule and the same number the `/api/sites/{id}/regions`
+ * endpoint applies, and it is deliberately duplicated rather than shared,
+ * because there is nothing to share: the endpoint filters rows it fetched and so
+ * does this. What matters is that they agree, and `region-geo.test.ts` asserts
+ * both read `privacy.minSegmentSize`.
+ *
+ * A subdivision is a much smaller haystack than a country — a country with four
+ * thousand visitors can hold a state with three — which is why regions get a
+ * per-row floor when no other breakdown on this page does. The traffic still
+ * counts in the total; what is withheld is which state it came from.
+ *
+ * ## Why the label is a code and not a name
+ *
+ * `US-CA` is what the column holds, what addFilterUrl puts in the query string,
+ * and what the filter matches, so the code has to survive on the row. Spelling
+ * it out would mean shipping a table of every ISO 3166-2 subdivision name — some
+ * four thousand of them — to render a panel that is off by default. The flag
+ * carries the country and the code carries the state, which is how most of these
+ * are written down anyway.
+ */
+const REGION_FLOOR = privacy.minSegmentSize
+const foldedRegions = foldRegions(regions, REGION_FLOOR, 8)
+const regionRows = foldedRegions.rows.map((r) => {
+  const parts = splitRegion(r.region)
+  // A row whose value is not `CC-SUB` renders as itself rather than as a flag
+  // built out of the wrong two letters.
+  return { ...r, label: parts ? `${flag(parts.country)} ${parts.subdivision}` : r.region }
+})
+if (foldedRegions.other) {
+  regionRows.push({
+    // Empty, so clicking this row filters to nothing rather than to a state —
+    // which is the point of the bucket.
+    region: '',
+    label: `Other (under ${REGION_FLOOR} visitors)`,
+    views: foldedRegions.other.views,
+    visitors: foldedRegions.other.visitors,
+  })
+}
+const maxRegion = regionRows.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 
 /**
  * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
@@ -1283,6 +1358,46 @@ async function importFromGa() {
   gaResult.set(pageViews
     ? `Imported ${pageViews.toLocaleString()} page views and ${sessions.toLocaleString()} sessions. Reload to see them.`
     : 'Google returned no data for that property and period.')
+}
+
+// --- Region geolocation opt-in -----------------------------------------------
+// Seeded from the server's `regionGeo`, which the data bridge inlines here as a
+// literal. The signal follows the SERVER's answer and never leads it: the box
+// moves when a request comes back ok, so a refusal or a dropped connection
+// leaves it saying exactly what the site is actually recording.
+const regionGeoOn: StxSignal<boolean> = state(typeof regionGeo === 'boolean' ? regionGeo : false)
+const regionGeoBusy: StxSignal<boolean> = state(false)
+const regionGeoMsg: StxSignal<string> = state('')
+
+async function toggleRegionGeo(): Promise<void> {
+  if (regionGeoBusy())
+    return
+  const next = !regionGeoOn()
+  regionGeoBusy.set(true)
+  regionGeoMsg.set('')
+  try {
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ regionGeo: next }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      regionGeoOn.set(next)
+      // Says what happens NEXT, not what happened: no historical row grows a
+      // region, and turning it off leaves the ones already recorded in place.
+      regionGeoMsg.set(next
+        ? 'Regions will be recorded from the next page view. Visits already recorded keep the country they have.'
+        : 'Regions are no longer recorded. The ones already recorded are still in your reports — delete this site\'s data to remove them.')
+    }
+    else {
+      regionGeoMsg.set(data?.error || 'That change could not be saved.')
+    }
+  }
+  catch {
+    regionGeoMsg.set('Could not reach the server.')
+  }
+  regionGeoBusy.set(false)
 }
 
 // --- Fathom import (CSV upload) ----------------------------------------------
@@ -2481,6 +2596,49 @@ select.panel:hover { border-color: var(--accent); }
       </div>
     @endif
 
+    {{-- Region geolocation (owner-only, off by default).
+
+        Two server @ifs and no client @if, for the usual reason: a client @if
+        nested inside a server one breaks stx's @endif matching. The instance
+        branch is server-side because config/privacy.ts is a server value — an
+        install that does not permit regions shows the reason rather than a
+        switch the endpoint would answer 409 to.
+
+        The checkbox is :checked + @change and NOT x-model. x-model would own the
+        value, and the value here is the server's until a request succeeds: an
+        optimistic tick that then failed would leave the box saying yes about a
+        site recording nothing. --}}
+    @if (ownsActive)
+      <div class="mb-8 p-5 panel reveal">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div style="max-width:60ch">
+            <div class="font-semibold text-sm">Record state and province</div>
+            <div class="mt-0.5 text-text-3 text-xs">
+              Off by default. With it on, this site records the state or province a visit came from — never a city, and
+              never coordinates. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
+              quiet region cannot be narrowed down to a person.
+            </div>
+          </div>
+          @if (regionGeoAllowed)
+            <label class="flex gap-2 items-center text-xs text-text-2" style="cursor: pointer">
+              <input type="checkbox" :checked="regionGeoOn()" :disabled="regionGeoBusy()" @change="toggleRegionGeo">
+              <span>Record regions</span>
+            </label>
+          @else
+            <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Not enabled on this server</span>
+          @endif
+        </div>
+        @if (!regionGeoAllowed)
+          <p class="mt-3 text-text-3 text-xs">
+            This server records country only. Whoever runs it can allow regions by setting <span class="mono">geo.granularity</span>
+            to <span class="mono">'region'</span> in <span class="mono">config/privacy.ts</span> and installing a geolocation database that
+            carries subdivisions — the default one does not.
+          </p>
+        @endif
+        <p class="mt-3 text-sm text-text-2" :show="regionGeoMsg()" style="display:none">{{ regionGeoMsg() }}</p>
+      </div>
+    @endif
+
     {{-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
         Signals live in the <script client> block; shareUrl is seeded from the
         server-bridged existing token so the current link shows on load. --}}
@@ -2842,6 +3000,20 @@ select.panel:hover { border-color: var(--accent); }
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Top countries --}}
       <BreakdownPanel title="Top countries" :rows="countryRows" labelKey="country" displayKey="label" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
+
+      {{-- Top regions. Server-side @if, not a :show, because a site that never
+          opted in has no region column values at all and should not grow a
+          permanently empty card for a feature it does not use. The panel appears
+          when the setting is on, which is also when the first rows start
+          arriving.
+
+          `filterKey="region"` matches the FILTER_COLUMNS entry, so clicking a
+          row filters the whole dashboard by it exactly as a country does. The
+          "Other" row carries an empty `region`, so it filters to nothing rather
+          than to a state — which is the point of it. --}}
+      @if (regionGeo)
+        <BreakdownPanel title="Top regions" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
+      @endif
 
       {{-- Devices --}}
       <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />

@@ -35,6 +35,7 @@ import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccou
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
 import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
 import { readFathomZip } from '../app/Analytics/fathom-zip'
+import { foldRegions } from '../app/Analytics/regions'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -3500,25 +3501,22 @@ function topDimension(path: string, column: string, key: string, opts: { floorRo
     if (!opts.floorRows)
       return json({ [key]: result.rows })
 
-    const minimum = privacy.minSegmentSize
-    const kept: Array<Record<string, unknown>> = []
-    let otherViews = 0
-    let otherVisitors = 0
-    for (const row of result.rows as Array<Record<string, unknown>>) {
-      if (minimum > 0 && Number(row.visitors) < minimum) {
-        otherViews += Number(row.views)
-        // Summed, so this counts a visitor once per region they appeared in —
-        // the same overcount every breakdown column already carries, and the
-        // reason a breakdown's visitors never add up to the site's total.
-        otherVisitors += Number(row.visitors)
-        continue
-      }
-      kept.push(row)
-    }
-    const rows = kept.slice(0, 20)
+    // The fold is shared with the dashboard panel rather than written twice —
+    // see app/Analytics/regions.ts. Two spellings of one threshold would show
+    // one figure in the panel and another through the API for the same day.
+    const folded = foldRegions(
+      (result.rows as Array<Record<string, unknown>>).map(r => ({
+        region: r.name == null ? null : String(r.name),
+        views: Number(r.views),
+        visitors: Number(r.visitors),
+      })),
+      privacy.minSegmentSize,
+      20,
+    )
+    const rows: Array<Record<string, unknown>> = folded.rows.map(r => ({ name: r.region, views: r.views, visitors: r.visitors }))
     // Cannot collide with a real value: regions are ISO codes like "US-CA".
-    if (otherViews > 0)
-      rows.push({ name: 'Other', views: otherViews, visitors: otherVisitors })
+    if (folded.other)
+      rows.push({ name: 'Other', views: folded.other.views, visitors: folded.other.visitors })
     return json({ [key]: rows })
   }).middleware('auth')
 }

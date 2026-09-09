@@ -64,7 +64,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # IP-to-country database (DB-IP Lite, CC BY 4.0). Fetched here rather than
+      # IP geolocation database (DB-IP Lite, CC BY 4.0). Fetched here rather than
       # committed: an ~8MB binary on a monthly cadence does not belong in git
       # history. It ships to the box with the rest of the working tree.
       #
@@ -75,14 +75,37 @@ jobs:
       #
       # Two months are tried because the file is published on the 1st: a deploy
       # in the first hours of a month can 404 on the current one.
-      - name: Fetch the IP-to-country database
+      #
+      # WHICH DATABASE IS FETCHED IS WHAT DECIDES WHETHER REGIONS CAN BE
+      # RECORDED AT ALL. The country file carries no subdivisions, so with it in
+      # place a site that opted into region geo records nothing, whatever its
+      # setting says — that is the third gate described in app/Analytics/geo.ts,
+      # and it is the one no flag can flip by accident.
+      #
+      # Set the ANALYTICSHQ_GEO_CITY repository variable to "true" to fetch
+      # DB-IP's City Lite instead. Only do that alongside geo.granularity:
+      # 'region' in config/privacy.ts — on its own it changes nothing, since a
+      # site still has to opt in and the install still has to permit it.
+      #
+      # The City file is a much larger download on a monthly cadence, which is
+      # why it is opt-in rather than always fetched: every deploy would pay for
+      # it, and the default product does not use it.
+      - name: Fetch the IP geolocation database
         continue-on-error: true
         run: |
           set -uo pipefail
           mkdir -p storage/geo
+          if [ "${{ vars.ANALYTICSHQ_GEO_CITY }}" = "true" ]; then
+            slug=dbip-city-lite
+            # Same path the app reads by default, so nothing has to know which
+            # of the two is on disk. ANALYTICSHQ_GEO_DB can still override it.
+            echo "Fetching the CITY database — regions can be recorded on this install."
+          else
+            slug=dbip-country-lite
+          fi
           dest=storage/geo/dbip-country-lite.mmdb
           for month in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
-            url="https://download.db-ip.com/free/dbip-country-lite-${month}.mmdb.gz"
+            url="https://download.db-ip.com/free/${slug}-${month}.mmdb.gz"
             echo "Trying ${url}"
             # Staged through a temp file so a mid-stream failure cannot leave a
             # truncated database in place looking like a successful fetch. The
@@ -96,7 +119,7 @@ jobs:
             fi
             rm -f /tmp/dbip.mmdb /tmp/dbip.mmdb.gz
           done
-          echo "::warning::Could not fetch the DB-IP country database; country will be empty for new pageviews."
+          echo "::warning::Could not fetch the DB-IP ${slug} database; country will be empty for new pageviews."
           rm -f "$dest"
 
       # Attach deploys over SSH to the shared box (same DEPLOY_SSH_KEY authorized

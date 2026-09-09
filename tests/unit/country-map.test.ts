@@ -311,12 +311,24 @@ describe('countries read as names, and the tooltip is visible while doing it', (
     expect(panel).toContain('row[displayKey || labelKey]')
   })
 
-  test('displayKey stays optional for the other eight panels', () => {
-    // One component serves nine breakdowns. Only countries pass displayKey; the
-    // rest must keep falling back to labelKey.
+  test('displayKey stays optional, and never replaces labelKey where it is used', () => {
+    // One component serves every breakdown on the page. The counts used to be
+    // pinned here — nine panels, one displayKey — which made adding a tenth
+    // panel fail a test about a fallback that still worked. What matters is the
+    // property, so this asserts that instead:
+    //
+    //  - some panels pass no displayKey, so the fallback is really exercised
+    //  - every panel that DOES pass one also passes labelKey, because the filter
+    //    link is built from labelKey and only the text comes from displayKey.
+    //    Collapsing them puts "United States" into ?country= and matches nothing.
     const uses = [...dashboard.matchAll(/<BreakdownPanel[^>]*>/g)].map(m => m[0])
-    expect(uses.length).toBe(9)
-    expect(uses.filter(u => u.includes('displayKey')).length).toBe(1)
+    expect(uses.length).toBeGreaterThan(1)
+
+    const withDisplay = uses.filter(u => u.includes('displayKey'))
+    expect(withDisplay.length).toBeGreaterThan(0)
+    expect(uses.length - withDisplay.length).toBeGreaterThan(0)
+    for (const use of withDisplay)
+      expect(use).toContain('labelKey=')
   })
 })
 
