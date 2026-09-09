@@ -1297,7 +1297,7 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
       return notOwner
     if (body.regionGeo === true && privacy.geo.granularity !== 'region') {
       return json({
-        error: 'This install records country only. Region geolocation has to be permitted for the whole install before a site can turn it on — set geo.granularity to "region" in config/privacy.ts.',
+        error: 'This install records country only. Region geolocation has to be permitted for the whole install before a site can turn it on. Set geo.granularity to "region" in config/privacy.ts.',
       }, 409)
     }
     sets.push('region_geo = ?')

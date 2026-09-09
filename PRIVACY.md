@@ -26,7 +26,7 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   that machine, and the IP is discarded in the same breath it is hashed into the
   visitor id. Nothing is sent to a third party to ask where a visitor is. (If
   something upstream of you already resolved a country and passed it along, that
-  is used instead and no lookup happens — but nothing depends on it, which is
+  is used instead and no lookup happens, but nothing depends on it, which is
   the bug this sentence used to have: it named that as the only mechanism, on a
   product whose own production host has nothing upstream of it.)
 
@@ -62,7 +62,7 @@ changed first.
 - **Heatmaps**
 - **Individual visitor profiles / per-person session timelines**
 - **`identify()` / distinct-user IDs / cross-session identity stitching**
-- **City / precise geolocation / coordinates** — the geo line stops at region
+- **City / precise geolocation / coordinates**: the geo line stops at region
   (state or province), and region itself is off unless a site owner opts in
 - **Any cookie, `localStorage`, or device-persistent identifier**
 - **Retargeting, ad-network, or cross-site tracking**

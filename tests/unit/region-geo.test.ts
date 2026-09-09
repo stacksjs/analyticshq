@@ -149,7 +149,30 @@ describe('the dashboard panel is off until a site turns it on', () => {
     // Not a :show. A site that never opted in has no region values at all and
     // should not grow a permanently empty card.
     expect(view).toContain('@if (regionGeo)')
-    expect(view).toMatch(/@if \(regionGeo\)[\s\S]{0,400}BreakdownPanel title="Top regions"/)
+    expect(view).toMatch(/@if \(regionGeo\)[\s\S]{0,400}<BreakdownPanel :title="regionTitle"/)
+  })
+
+  test('clicking a country on the map narrows the regions panel to it', () => {
+    // The drill-down is not a feature with its own code path: the map click
+    // navigates to ?country=US, and the regions query is built from the same
+    // `filter` clause every other panel uses, so it narrows on its own. What
+    // this pins is that it STAYS that way -- a regions query that stopped using
+    // `filter` would silently keep showing every country's states while the rest
+    // of the page was filtered to one.
+    const q = view.slice(view.indexOf('regions = (await pgq('), view.indexOf('regions = (await pgq(') + 400)
+    expect(q).toContain('WHERE ${filter}')
+    // And the map click is what sets that filter.
+    expect(view).toContain("q.set('country', code)")
+    // `region` has to be a filter the view itself knows, or the panel's own rows
+    // link to a query param that is parsed by nothing and silently does nothing.
+    expect(view).toContain("region: { col: 'region', label: 'Region' }")
+    // Session-constant, like country: safe inside the entry/exit window subqueries.
+    expect(view).toMatch(/SESSION_DIMENSIONS = new Set\(\[[^\]]*'region'/)
+  })
+
+  test('inside one country the flag is dropped, since every row would repeat it', () => {
+    expect(view).toContain('regionCountry ? parts.subdivision : `${flag(parts.country)} ${parts.subdivision}`')
+    expect(view).toContain('`Regions in ${countryName(regionCountry)}`')
   })
 
   test('the toggle is :checked + @change, never x-model', () => {

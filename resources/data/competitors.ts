@@ -130,7 +130,7 @@ export const competitors: Record<string, Competitor> = {
     },
     kicker: 'analyticshq vs Fathom',
     h1: 'Two cookieless tools. One you can host yourself.',
-    intro: 'Fathom is a respected, privacy-first analytics product — cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and geo you set yourself: country by default, state and province only if you ask, and never a city.',
+    intro: 'Fathom is a respected, privacy-first analytics product: cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and geo you set yourself: country by default, state and province only if you ask, and never a city.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Fathom vs analyticshq',
     whyHeading: 'Where analyticshq goes further.',
@@ -194,11 +194,11 @@ export const competitors: Record<string, Competitor> = {
     ],
     reasons: [
       { n: '01', h: 'Your data, in your own database', b: 'Plausible is a great cookieless tool, but on Plausible Cloud your analytics live on their servers. analyticshq writes every event to a PostgreSQL table you own and can query directly — no separate store to trust.' },
-      { n: '02', h: 'You decide how precise, and city is not on the menu', b: 'Plausible now resolves visitor location to city level, for everyone. analyticshq resolves country by default and lets a site owner opt in to state and province if they need it — a decision you make per site, off until you make it. Neither setting reaches a city.' },
+      { n: '02', h: 'You decide how precise, and city is not on the menu', b: 'Plausible now resolves visitor location to city level, for everyone. analyticshq resolves country by default and lets a site owner opt in to state and province if they need it, a decision you make per site and one that stays off until you make it. Neither setting reaches a city.' },
       { n: '03', h: 'Part of your stack, not another service', b: 'analyticshq runs inside the Stacks toolchain, on the same Postgres, queue, and deploy you already operate. There is no extra analytics service to run alongside your app.' },
     ],
     metrics: [
-      { v: 'Country', l: 'Country by default, regions opt-in per site. No city or coordinates — ever.' },
+      { v: 'Country', l: 'Country by default, regions opt-in per site. No city or coordinates, ever.' },
       { v: 'Your Postgres', l: 'Every event lands in a database you own, not a managed store.' },
       { v: '24h', l: 'Rotating per-site hash: no cross-day and no cross-site identity.' },
     ],

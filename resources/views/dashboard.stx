@@ -93,6 +93,11 @@ const FILTERS = {
   referrer: { col: 'referrer', label: 'Referrer' },
   channel: { col: null, label: 'Channel' },
   country: { col: 'country', label: 'Country' },
+  // ISO 3166-2, `US-CA`. The Top regions panel links its rows here, and
+  // without this entry those links were parsed by nothing and silently did
+  // not filter -- app/Analytics/filters.ts has its own FILTER_COLUMNS map for
+  // the API endpoints, and adding it there did not add it here.
+  region: { col: 'region', label: 'Region' },
   device: { col: 'device_type', label: 'Device' },
   browser: { col: 'browser', label: 'Browser' },
   os: { col: 'os', label: 'OS' },
@@ -116,7 +121,10 @@ const filterParams = []
 // utm*) would strip mid-session rows before ROW_NUMBER/COUNT(*) OVER run and corrupt
 // first/last-page identity + the session-length bounce count. The window queries use
 // sessionFilterSql (this subset) instead of the full filterSql.
-const SESSION_DIMENSIONS = new Set(['country', 'device', 'browser', 'os'])
+// `region` belongs here for the same reason `country` does: it is resolved once
+// per visit from one address, so it is identical on every page_view of a
+// session and safe inside the entry/exit-page window subqueries.
+const SESSION_DIMENSIONS = new Set(['country', 'region', 'device', 'browser', 'os'])
 let sessionFilterSql = ''
 const sessionFilterParams = []
 for (const key of Object.keys(FILTERS)) {
@@ -792,11 +800,26 @@ const countryRows = countries.map((c) => {
  */
 const REGION_FLOOR = privacy.minSegmentSize
 const foldedRegions = foldRegions(regions, REGION_FLOOR, 8)
+/**
+ * The country the reader has drilled into, or ''.
+ *
+ * Clicking a country on the map navigates to `?country=US`, and every query on
+ * this page — the regions one included — is built from the same `filter`, so the
+ * panel is already narrowed to that country's states without asking for it. This
+ * only changes how the result is LABELLED: inside one country the flag is on
+ * every row saying the same thing, so the subdivision code carries it alone.
+ */
+const regionCountry = String(queryParams.country ?? '').trim().toUpperCase()
+const regionTitle = regionCountry
+  ? `Regions in ${countryName(regionCountry)}`
+  : 'Top regions'
 const regionRows = foldedRegions.rows.map((r) => {
   const parts = splitRegion(r.region)
   // A row whose value is not `CC-SUB` renders as itself rather than as a flag
   // built out of the wrong two letters.
-  return { ...r, label: parts ? `${flag(parts.country)} ${parts.subdivision}` : r.region }
+  if (!parts)
+    return { ...r, label: r.region }
+  return { ...r, label: regionCountry ? parts.subdivision : `${flag(parts.country)} ${parts.subdivision}` }
 })
 if (foldedRegions.other) {
   regionRows.push({
@@ -1388,7 +1411,7 @@ async function toggleRegionGeo(): Promise<void> {
       // region, and turning it off leaves the ones already recorded in place.
       regionGeoMsg.set(next
         ? 'Regions will be recorded from the next page view. Visits already recorded keep the country they have.'
-        : 'Regions are no longer recorded. The ones already recorded are still in your reports — delete this site\'s data to remove them.')
+        : 'Regions are no longer recorded. The ones already recorded are still in your reports; delete this site\'s data to remove them.')
     }
     else {
       regionGeoMsg.set(data?.error || 'That change could not be saved.')
@@ -2519,14 +2542,14 @@ select.panel:hover { border-color: var(--accent); }
             </p>
 
             <label for="fathom-files"
-              class="flex flex-col gap-1 items-center px-5 py-8 mt-3 text-center border-2 border-dashed rounded-xl"
+              class="flex flex-col gap-1 items-center mt-3 px-5 py-8 text-center border-2 border-dashed rounded-xl"
               :class="fathomDragging() ? 'border-accent' : 'border-border'"
               style="cursor: pointer"
               @dragover.prevent
               @dragenter.prevent="dragFathomOver"
               @dragleave.prevent="dragFathomLeave"
               @drop.prevent="dropFathomFiles">
-              <span class="i-hugeicons-upload-01 text-lg text-text-3" aria-hidden="true"></span>
+              <span class="text-lg text-text-3 i-hugeicons-upload-01" aria-hidden="true"></span>
               <span class="font-medium text-sm text-text-2">Choose your export, or drop it here</span>
               <span class="text-text-3 text-xs">The zip from your Fathom dashboard, up to 5 MB. Already unzipped it? Choose the CSVs instead: Summary.csv and Pages.csv are required, and Countries, Device_Types, Browsers, Operating_Systems and Sources are used when you include them.</span>
               <input id="fathom-files" ref="fathomFileInput" type="file" multiple accept=".zip,application/zip,.csv,text/csv" class="sr-only" @change="pickFathomFiles">
@@ -2535,14 +2558,14 @@ select.panel:hover { border-color: var(--accent); }
             <p class="mt-2 text-sm text-text-2" :show="fathomPicked()" style="display:none">{{ fathomPicked() }}</p>
 
             <div class="flex flex-col gap-2 mt-4">
-              <label class="flex gap-2 items-start text-xs text-text-2" style="cursor: pointer">
+              <label class="flex gap-2 items-start text-text-2 text-xs" style="cursor: pointer">
                 <input type="checkbox" x-model="fathomReplace" style="margin-top:2px">
                 <span>
                   Replace what I imported from Fathom before
                   <span class="block text-text-3">Removes the rows an earlier Fathom upload created for this site. Traffic we tracked ourselves, and anything imported from Google Analytics, are left alone.</span>
                 </span>
               </label>
-              <label class="flex gap-2 items-start text-xs text-text-2" style="cursor: pointer">
+              <label class="flex gap-2 items-start text-text-2 text-xs" style="cursor: pointer">
                 <input type="checkbox" x-model="fathomAcceptFiltered" style="margin-top:2px">
                 <span>Import this export even though filters were applied in Fathom</span>
               </label>
@@ -2614,13 +2637,13 @@ select.panel:hover { border-color: var(--accent); }
           <div style="max-width:60ch">
             <div class="font-semibold text-sm">Record state and province</div>
             <div class="mt-0.5 text-text-3 text-xs">
-              Off by default. With it on, this site records the state or province a visit came from — never a city, and
+              Off by default. With it on, this site records the state or province a visit came from, never a city and
               never coordinates. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
               quiet region cannot be narrowed down to a person.
             </div>
           </div>
           @if (regionGeoAllowed)
-            <label class="flex gap-2 items-center text-xs text-text-2" style="cursor: pointer">
+            <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
               <input type="checkbox" :checked="regionGeoOn()" :disabled="regionGeoBusy()" @change="toggleRegionGeo">
               <span>Record regions</span>
             </label>
@@ -2632,7 +2655,7 @@ select.panel:hover { border-color: var(--accent); }
           <p class="mt-3 text-text-3 text-xs">
             This server records country only. Whoever runs it can allow regions by setting <span class="mono">geo.granularity</span>
             to <span class="mono">'region'</span> in <span class="mono">config/privacy.ts</span> and installing a geolocation database that
-            carries subdivisions — the default one does not.
+            carries subdivisions. The default one does not.
           </p>
         @endif
         <p class="mt-3 text-sm text-text-2" :show="regionGeoMsg()" style="display:none">{{ regionGeoMsg() }}</p>
@@ -3012,7 +3035,7 @@ select.panel:hover { border-color: var(--accent); }
           "Other" row carries an empty `region`, so it filters to nothing rather
           than to a state — which is the point of it. --}}
       @if (regionGeo)
-        <BreakdownPanel title="Top regions" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
+        <BreakdownPanel :title="regionTitle" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
       @endif
 
       {{-- Devices --}}
