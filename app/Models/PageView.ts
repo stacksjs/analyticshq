@@ -54,6 +54,12 @@ export default defineModel({
     utm_content: { fillable: true, validation: { rule: schema.string().optional().max(255) } },
     utm_term: { fillable: true, validation: { rule: schema.string().optional().max(255) } },
     country: { fillable: true, validation: { rule: schema.string().optional().max(2) } },
+    // ISO 3166-2, `US-CA`. Null unless the site opted into region geo AND the
+    // install permits it AND the installed database carries subdivisions — see
+    // app/Analytics/geo.ts. Declared here because the schema differ compares the
+    // live tables against these attributes: a column the models do not name is a
+    // column it proposes dropping on every deploy.
+    region: { fillable: true, validation: { rule: schema.string().optional().max(6) } },
     device_type: { fillable: true, validation: { rule: schema.string().optional().max(16) } },
     browser: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     browser_version: { fillable: true, validation: { rule: schema.string().optional().max(32) } },

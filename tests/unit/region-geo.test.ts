@@ -197,6 +197,27 @@ describe('the default posture is unchanged for everyone who does nothing', () =>
       expect(stmt).toMatch(/IF NOT EXISTS/)
   })
 
+  test('the models declare the columns, so the schema differ leaves them alone', () => {
+    // buddy migrate runs a differ that compares the live tables against these
+    // attributes. A column present in the database and absent from the models is
+    // one it proposes DROPPING on every deploy -- that is what refused three
+    // deploys in a row on 2026-08-23, per the note in config/cloud.ts.
+    //
+    // The raw migration creates the columns; these declarations are what stop
+    // the next deploy asking to take them away again.
+    for (const [file, column, width] of [
+      ['app/Models/PageView.ts', 'region', 6],
+      ['app/Models/Session.ts', 'region', 6],
+    ] as const) {
+      const src = read(file)
+      expect({ file, declared: src.includes(`${column}: { fillable: true`) }).toEqual({ file, declared: true })
+      // The width has to match the migration, or the differ proposes an ALTER
+      // on every deploy instead of a drop.
+      expect({ file, width: src.includes(`.max(${width})`) }).toEqual({ file, width: true })
+    }
+    expect(read('app/Models/Site.ts')).toContain('region_geo: {')
+  })
+
   test('the column is sized for the compound code and nothing longer', () => {
     const sql = read('database/migrations/0000000051-add-opt-in-region-geo.sql')
     expect(sql).toContain('"region" varchar(6)')
