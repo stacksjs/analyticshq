@@ -21,10 +21,30 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   date, the id **rotates every 24h** — activity cannot be linked across days.
   Because `siteId` is in the hash, the id is **per-site** — the same person on
   two sites gets two unrelated ids, so there is **no cross-site identity**.
-- **Country-only geolocation.** Country is derived from CDN edge headers, then
-  the IP is discarded. We do **not** collect city, region, or precise
-  coordinates — this is intentionally *stricter* than Plausible/Fathom (which
-  moved to city-level).
+- **Country geolocation by default, region only if you turn it on, city never.**
+  Country is resolved on your own server, by an IP-to-country database held on
+  that machine, and the IP is discarded in the same breath it is hashed into the
+  visitor id. Nothing is sent to a third party to ask where a visitor is. (If
+  something upstream of you already resolved a country and passed it along, that
+  is used instead and no lookup happens — but nothing depends on it, which is
+  the bug this sentence used to have: it named that as the only mechanism, on a
+  product whose own production host has nothing upstream of it.)
+
+  A site owner may opt that site into **region** (state or province, ISO 3166-2)
+  and nothing finer. It is off for every site until someone turns it on, and it
+  additionally requires the operator to permit it for the whole install
+  (`geo.granularity: 'region'` in `config/privacy.ts`) and to have installed a
+  geolocation database that carries subdivisions. The default database does not,
+  so a default install records no regions whatever a site's setting says.
+
+  Region rows are subject to the disclosure floor: any state with fewer than
+  `minSegmentSize` visitors (5 by default) is reported as "Other" rather than
+  named.
+
+  **City and precise coordinates are never collected, at any setting.** There is
+  no configuration value, database read, or code path that reaches one. This is
+  still *stricter* than Plausible/Fathom, which resolve every visitor to city
+  level with no way to turn it down.
 - **No URL query strings or fragments** are collected from tracked pages.
 
 ## What we will never build
@@ -38,7 +58,8 @@ changed first.
 - **Heatmaps**
 - **Individual visitor profiles / per-person session timelines**
 - **`identify()` / distinct-user IDs / cross-session identity stitching**
-- **City / precise geolocation** — country-only is an invariant
+- **City / precise geolocation / coordinates** — the geo line stops at region
+  (state or province), and region itself is off unless a site owner opts in
 - **Any cookie, `localStorage`, or device-persistent identifier**
 - **Retargeting, ad-network, or cross-site tracking**
 

@@ -49,7 +49,7 @@ import {
   randomId,
   referrerSource,
 } from '../app/Analytics/tracking'
-import { countryFromIp } from '../app/Analytics/geo'
+import { countryFromIp, geoHasRegions, regionFromIp } from '../app/Analytics/geo'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -241,6 +241,69 @@ function clip255(v: unknown): string | null {
 }
 
 /**
+ * Sites that opted into region geo, cached for a minute.
+ *
+ * ## Why there is a cache at all
+ *
+ * This is read on every single beacon, and it is the only thing on that path
+ * that would need the `sites` row. An uncached `SELECT` here would add a round
+ * trip to every page view on the internet's behalf to answer a question whose
+ * answer changes when somebody ticks a checkbox.
+ *
+ * A minute of staleness is the cost, and it is the right direction: a site
+ * owner who turns regions OFF keeps recording them for up to a minute, which is
+ * visible and self-correcting, while `pgq` failing means recording none.
+ */
+const REGION_SITE_TTL_MS = 60_000
+const regionSites = new Map<string, { on: boolean, at: number }>()
+
+/**
+ * Has this site asked for region, on an install that permits it?
+ *
+ * Both halves, in that order, and the instance half first because it is free:
+ * on a default install `granularity` is `'country'` and this returns before
+ * touching the database, so the hot path costs nothing at all for the operators
+ * who never opted in — which is all of them until they edit `config/privacy.ts`.
+ *
+ * FAILS CLOSED. Every path that is not an explicit `true` from the database
+ * returns false: no row, an unreadable column, a query that threw. The worst
+ * case of getting this wrong in one direction is a gap in a breakdown, and in
+ * the other it is recording sub-country location for a site that did not ask.
+ */
+async function siteWantsRegion(siteId: string): Promise<boolean> {
+  if (privacy.geo.granularity !== 'region')
+    return false
+
+  const now = Date.now()
+  const hit = regionSites.get(siteId)
+  if (hit && now - hit.at < REGION_SITE_TTL_MS)
+    return hit.on
+
+  const rows = await pgq(
+    `SELECT region_geo FROM sites WHERE id = ? LIMIT 1`,
+    [siteId],
+  ).catch(() => null) as Array<{ region_geo?: unknown }> | null
+
+  if (rows === null)
+    return false
+
+  // Drivers spell a Postgres boolean as `true`, `'t'` or `1` depending on which
+  // one is in front of us. Anything else, including undefined, is not a yes.
+  const raw = rows[0]?.region_geo
+  const on = raw === true || raw === 't' || raw === 1
+  regionSites.set(siteId, { on, at: now })
+  return on
+}
+
+/** Forget the cached opt-ins. Called when a site's setting changes, and by tests. */
+export function resetRegionSiteCache(siteId?: string): void {
+  if (siteId)
+    regionSites.delete(siteId)
+  else
+    regionSites.clear()
+}
+
+/**
  * Goal-matching contract. A goal targets either a `pageview` (matched against
  * the page path) or an `event` (matched against the custom event name), using
  * one of three `match_type`s. Returns whether the current hit fires this goal.
@@ -395,14 +458,20 @@ route.post('/collect', async (request: any) => {
     ? String(recentSession[0].session_id)
     : createHash('sha256').update(`${siteId}|${visitorId}|${Math.floor(Date.now() / SESSION_WINDOW_MS)}`).digest('hex').slice(0, 32)
   const info = parseUserAgent(ua)
-  // 'none' records no location at all; there is deliberately no city/region
-  // option, since adding one would be a product decision, not config (#11).
+  // 'none' records no location at all. 'country' and 'region' both resolve the
+  // country here; the difference between them is only whether a site is ALLOWED
+  // to ask for more, which `siteWantsRegion` decides below.
   //
   // `ip` is the one already read above for the visitor hash — geo resolves from
   // the same value, in the same request, and it is discarded with it. Passing it
   // here is what makes country work at all on a host with no CDN in front of it,
   // which is every self-hosted install and our own production box.
-  const country = privacy.geo.granularity === 'country' ? geoCountry(request.headers, ip) : undefined
+  const country = privacy.geo.granularity !== 'none' ? geoCountry(request.headers, ip) : undefined
+  // IP only, with no CDN-header equivalent: the edge headers carry a country and
+  // nothing finer, so there is no header path to read a subdivision out of. A
+  // site behind Cloudflare that opts in gets regions from the local database or
+  // not at all.
+  const region = (await siteWantsRegion(String(siteId))) ? regionFromIp(ip) : undefined
   const now = new Date().toISOString()
 
   let url: URL | null = null
@@ -432,6 +501,7 @@ route.post('/collect', async (request: any) => {
     referrer: cleanReferrer(body.r),
     referrer_source: source,
     country: country ?? null,
+    region: region ?? null,
     device_type: info.deviceType,
     browser: info.browser,
     os: info.os,
@@ -459,6 +529,7 @@ route.post('/collect', async (request: any) => {
       utm_content: utmParam(body.utm_content),
       utm_term: utmParam(body.utm_term),
       country: country ?? null,
+      region: region ?? null,
       device_type: info.deviceType,
       browser: info.browser,
       browser_version: null,
@@ -1201,6 +1272,32 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     params.push(JSON.stringify(settings))
   }
 
+  // Region (state/province) geo, off by default (#7 revisited).
+  //
+  // OWNER, not admin, unlike everything above it. The rest of this route is
+  // configuration — a name, a timezone, a currency — and this one changes what
+  // the product records about the people who visit. That is the site owner's
+  // call to make and not a delegated one, the same line the Fathom import draws.
+  //
+  // REFUSED RATHER THAN STORED when the install does not permit it. A setting
+  // that saves, reads back as on, and records nothing is worse than an error: it
+  // sends the owner looking at their snippet, their DNS and their ad blocker for
+  // a reason that was in config/privacy.ts the whole time.
+  if (body.regionGeo !== undefined) {
+    if (typeof body.regionGeo !== 'boolean')
+      return json({ error: 'regionGeo must be true or false' }, 400)
+    const notOwner = await requireSiteOwner(request, siteId)
+    if (notOwner)
+      return notOwner
+    if (body.regionGeo === true && privacy.geo.granularity !== 'region') {
+      return json({
+        error: 'This install records country only. Region geolocation has to be permitted for the whole install before a site can turn it on — set geo.granularity to "region" in config/privacy.ts.',
+      }, 409)
+    }
+    sets.push('region_geo = ?')
+    params.push(body.regionGeo)
+  }
+
   if (!sets.length)
     return json({ error: 'nothing to update' }, 400)
 
@@ -1208,7 +1305,11 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
   params.push(new Date().toISOString())
   params.push(String(siteId))
   await pgq(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`, params)
-  const rows = await pgq(`SELECT id, name, domains, timezone, is_active FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
+  // The ingest caches this site's region opt-in for a minute. Dropping the entry
+  // here makes turning it OFF take effect on the next beacon rather than at the
+  // end of a TTL the owner cannot see.
+  resetRegionSiteCache(String(siteId))
+  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
   return json({ site: rows?.[0] ?? null })
 }).middleware('auth').skipCsrf()
 
@@ -3355,7 +3456,23 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
 // breakdown has a documented JSON endpoint too (issue #15). `column` is always a
 // fixed literal from the registrations below (never user input), so
 // interpolating it into the query is safe.
-function topDimension(path: string, column: string, key: string): void {
+/**
+ * `floorRows` applies the disclosure minimum to each ROW, not to the report.
+ *
+ * `suppressedResponse` below withholds a whole report when FILTERS narrowed the
+ * population past the floor — "the disclosure comes from narrowing, not from
+ * smallness", which is right for country: a list saying three people visited
+ * from Iceland identifies nobody, because Iceland is four hundred thousand
+ * people and three of them came.
+ *
+ * A subdivision is not that. It is already a narrowing, applied by the visitor's
+ * own location rather than by a filter, and a state with two visitors on a site
+ * with two thousand is a much smaller haystack than any country. So the regions
+ * breakdown holds every row under the minimum back and reports them together as
+ * "Other" — the traffic still counts, and nobody can point at where it came
+ * from.
+ */
+function topDimension(path: string, column: string, key: string, opts: { floorRows?: boolean } = {}): void {
   route.get(path, async (request: any) => {
     const siteId = request.params.siteId
     const denied = await requireSiteRole(request, siteId, 'viewer')
@@ -3368,19 +3485,51 @@ function topDimension(path: string, column: string, key: string): void {
     const withheld = await suppressedResponse(siteId, from, to, flt)
     if (withheld)
       return withheld
+    // Floored dimensions are grouped in full and cut below, because the rows
+    // that fall under the minimum have to be SUMMED, and a LIMIT applied first
+    // would compute "Other" from the top twenty instead of from everything.
+    // Bounded either way: there are about four thousand ISO subdivisions.
     const result = await filteredQuery(
       `SELECT ${column} AS name, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
       FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND ${column} IS NOT NULL AND ${column} <> ''${flt.sql}
-      GROUP BY ${column} ORDER BY views DESC LIMIT 20`,
+      GROUP BY ${column} ORDER BY views DESC${opts.floorRows ? '' : ' LIMIT 20'}`,
       [siteId, from, to, ...flt.params],
     )
     if ('response' in result)
       return result.response
-    return json({ [key]: result.rows })
+    if (!opts.floorRows)
+      return json({ [key]: result.rows })
+
+    const minimum = privacy.minSegmentSize
+    const kept: Array<Record<string, unknown>> = []
+    let otherViews = 0
+    let otherVisitors = 0
+    for (const row of result.rows as Array<Record<string, unknown>>) {
+      if (minimum > 0 && Number(row.visitors) < minimum) {
+        otherViews += Number(row.views)
+        // Summed, so this counts a visitor once per region they appeared in —
+        // the same overcount every breakdown column already carries, and the
+        // reason a breakdown's visitors never add up to the site's total.
+        otherVisitors += Number(row.visitors)
+        continue
+      }
+      kept.push(row)
+    }
+    const rows = kept.slice(0, 20)
+    // Cannot collide with a real value: regions are ISO codes like "US-CA".
+    if (otherViews > 0)
+      rows.push({ name: 'Other', views: otherViews, visitors: otherVisitors })
+    return json({ [key]: rows })
   }).middleware('auth')
 }
 
 topDimension('/api/sites/{siteId}/countries', 'country', 'countries')
+// Empty for every site that has not opted in, which is the honest answer rather
+// than a 404: the dimension exists, this site has no rows for it. The disclosure
+// floor matters more here than anywhere else — a country with four thousand
+// visitors can hold a state with three — and it applies unchanged, because
+// `topDimension` runs every dimension through the same `suppressedResponse`.
+topDimension('/api/sites/{siteId}/regions', 'region', 'regions', { floorRows: true })
 topDimension('/api/sites/{siteId}/devices', 'device_type', 'devices')
 topDimension('/api/sites/{siteId}/browsers', 'browser', 'browsers')
 topDimension('/api/sites/{siteId}/operating-systems', 'os', 'operating_systems')
@@ -3490,5 +3639,11 @@ route.get('/api/health', () => healthResponse({
     // A known-routable address. Resolving it proves the database opened and
     // answered, which a file-exists check would not.
     geo: countryFromIp('8.8.8.8') !== null,
+    // Whether the installed database can answer at subdivision level at all.
+    // False on a default install, and that is not a fault: the country database
+    // carries no subdivisions. It is here because "I ticked region on and see no
+    // regions" is otherwise unanswerable without shell access — almost always
+    // this, rather than anything wrong with the site's setting.
+    geoRegion: geoHasRegions(),
   },
 }))

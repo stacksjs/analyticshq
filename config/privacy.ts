@@ -17,9 +17,11 @@
  * These are not neutral knobs. The defaults here are the privacy posture the
  * comparison pages claim, so changing one is a change to what we tell visitors:
  *
- * - `geo.granularity: 'country'` — `/compare/umami` says "Country only, resolved
- *   locally. IP discarded." and `/compare/plausible` contrasts with their
- *   city-level resolution.
+ * - `geo.granularity: 'country'` — `/compare/umami` and `/compare/plausible`
+ *   both say country by default, region only if a site turns it on, and never
+ *   city. Raising this to `'region'` does not make those false — it lets site
+ *   owners opt in, which is what they already describe — but lowering the
+ *   DEFAULT, or reaching city, would.
  * - `respectDnt: true` — `/compare/simple-analytics` credits them for honoring
  *   DNT and now claims parity.
  * - `collect.pageTitle` / `collect.screenSize` — both false, and both were
@@ -74,19 +76,38 @@ export interface PrivacyConfig {
 
   geo: {
     /**
-     * `'country'` resolves the country and discards the IP. `'none'` records no
-     * location at all.
+     * The FINEST location this install will record. Not what it does record.
+     *
+     * - `'none'` — no location at all.
+     * - `'country'` — country, and the IP is discarded. The default.
+     * - `'region'` — country, plus state or province for the sites that ask.
      *
      * Resolution is local: a CDN edge header when one is present, otherwise a
-     * country database on this machine (`app/Analytics/geo.ts`). It used to be
-     * CDN headers *only*, which meant it silently resolved nothing at all on any
+     * database on this machine (`app/Analytics/geo.ts`). It used to be CDN
+     * headers *only*, which meant it silently resolved nothing at all on any
      * host without a CDN in front of it — including this one, for the entire
      * life of the product.
      *
-     * There is deliberately no city or region option. Adding one would be a
-     * product decision, not a configuration change.
+     * ## `'region'` is a ceiling, not a switch
+     *
+     * Setting this to `'region'` turns nothing on by itself. It permits site
+     * owners to opt in (`sites.region_geo`, default false), and each of them has
+     * to. An operator hosting analyticshq for other people holds the whole
+     * instance at `'country'` by leaving this alone, which is a decision a
+     * per-site setting could not express on its own.
+     *
+     * It also does nothing without a database that carries subdivisions — the
+     * default DB-IP country file does not. Both halves are deliberate: a flag
+     * flipped by accident, on either side, records no regions.
+     *
+     * ## There is still no city
+     *
+     * Not as a value here and not anywhere below it. City was removed in #10/#7
+     * along with page titles and screen sizes, and `regionFromIp` reads the
+     * first subdivision and has no path to a city name. `/compare/plausible`
+     * and `/compare/umami` still say so.
      */
-    granularity: 'country' | 'none'
+    granularity: 'none' | 'country' | 'region'
   }
 
   /**

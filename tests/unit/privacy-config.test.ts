@@ -46,13 +46,26 @@ describe('the defaults are the posture the comparison pages claim (#11)', () => 
     expect(privacy.retentionDays).toBe(0)
   })
 
-  test('there is no city or region option, by construction', () => {
-    // Widening geo should require a product decision and a copy change, not a
-    // config edit — /compare/plausible contrasts us with their city-level data.
+  test('there is no city option, by construction', () => {
+    // City is the line that does not move. Region became reachable — opt-in per
+    // site, off by default — but /compare/plausible and /compare/umami still
+    // contrast us with their city-level data, and nothing may make that false.
+    //
+    // Comments are stripped FIRST, and that is the whole point of this test
+    // rather than a detail of it: the previous version sliced from the raw
+    // source at `indexOf('granularity:')`, which landed on the mention inside
+    // the docblock at the top of the file instead of on the type. It read sixty
+    // characters of prose and asserted they were not the word "region", so it
+    // passed no matter what the type said.
     const src = read('config/privacy.ts')
-    const type = src.slice(src.indexOf('granularity:'), src.indexOf('granularity:') + 60)
-    expect(type).not.toContain('city')
-    expect(type).not.toContain('region')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+    const decl = src.slice(src.indexOf('granularity:'), src.indexOf('granularity:') + 60)
+    expect(decl).toContain('granularity:')
+    expect(decl).not.toContain('city')
+    // Proves the slice is the type and not prose, so the assertion above is
+    // looking at something that could have failed.
+    expect(decl).toContain('region')
   })
 })
 
@@ -70,7 +83,25 @@ describe('the call sites read the config, not a literal (#11)', () => {
   })
 
   test('geo resolution is gated on granularity', () => {
-    expect(routes).toContain("privacy.geo.granularity === 'country'")
+    // 'none' is the only value that records nothing, so the country gate reads
+    // as "not none" rather than naming the two values that do resolve — a list
+    // that would have to be edited again to add a third.
+    expect(routes).toContain("privacy.geo.granularity !== 'none'")
+  })
+
+  test('region needs the install to permit it AND the site to ask', () => {
+    // Either half alone must record nothing. The instance check comes first and
+    // returns before any query, so a default install pays nothing for a feature
+    // it has not enabled.
+    expect(routes).toContain("privacy.geo.granularity !== 'region'")
+    expect(routes).toMatch(/siteWantsRegion\([\s\S]{0,40}\?\s*regionFromIp/)
+  })
+
+  test('the default install is still country, not region', () => {
+    // The whole opt-in story rests on this: raising the default here would turn
+    // sub-country collection on for every site that ticked the box on a
+    // different install, and would falsify the comparison pages.
+    expect(privacy.geo.granularity).toBe('country')
   })
 
   test('salt purging uses the configured window', () => {
