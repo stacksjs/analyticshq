@@ -34,6 +34,7 @@ import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord }
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
 import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
+import { readFathomZip } from '../app/Analytics/fathom-zip'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -2496,9 +2497,10 @@ route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
 // ---------------------------------------------------------------------------
 // The migration path off Fathom, and the one import a customer can do without
 // holding a credential for anything. Fathom's dashboard download is a zip of
-// about eighteen CSVs; the browser reads the ones we use and posts them as JSON
-// text, which is why there is no multipart handling here. The files are held for
-// the length of the request and never written anywhere but the synthesized rows.
+// about eighteen CSVs, and it is posted as base64 in the JSON body and unzipped
+// here, which is why there is no multipart handling despite this being a file
+// upload. The zip is held for the length of the request, and neither it nor the
+// CSVs inside it are written anywhere but into the synthesized rows.
 //
 // PAID, unlike the GA4 and Search Console imports above. Those two ask Google
 // for the data with a credential the customer already has; this one is the whole
@@ -2537,36 +2539,65 @@ route.post('/api/sites/{siteId}/import/fathom', async (request: any) => {
     return blocked
 
   const body = request.jsonBody ?? {}
-  const raw = body.files
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-    return json({ error: 'Send the export as a "files" object of filename to CSV text.' }, 400)
 
-  const entries = Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string')
-  if (!entries.length)
-    return json({ error: 'Send the export as a "files" object of filename to CSV text.' }, 400)
+  // TWO UPLOAD SHAPES, and `names` is what makes them one handler from here on:
+  // every filename the upload carried, whether or not its text came with it.
+  //
+  // `zip` is what the dashboard sends - Fathom's own download, base64 in the
+  // same JSON body, unzipped on this side because a browser can inflate a
+  // deflate stream but cannot read the zip container around it. `files`, the
+  // filename-to-CSV-text object, is still accepted: it is what the CLI importer
+  // and anyone who unzipped the export themselves send, and the zip path
+  // reduces to exactly it after one call.
+  let files: Map<string, string>
+  let names: string[]
 
-  // byteLength, not String.length: a path or a page title outside ASCII costs
-  // more bytes than characters, and the cap is about what crosses the wire.
-  const bytes = entries.reduce((n, [, v]) => n + Buffer.byteLength(String(v), 'utf8'), 0)
-  if (bytes > FATHOM_MAX_UPLOAD_BYTES) {
-    return json({
-      error: 'That export is larger than 5 MB of CSV, which is more than one request can take. In Fathom, choose a shorter date range, download again, and import the pieces one after another. Each import adds to the last.',
-    }, 413)
+  if (typeof body.zip === 'string') {
+    // Not pre-measured before decoding, for the same reason the branch below
+    // measures after parsing: by the time either runs the whole body is already
+    // a string in memory, and how big a request may be is the server's question
+    // rather than this handler's.
+    const unzipped = readFathomZip(new Uint8Array(Buffer.from(body.zip, 'base64')))
+    if ('error' in unzipped)
+      return json({ error: unzipped.error }, unzipped.tooLarge ? 413 : 400)
+    files = unzipped.files
+    names = unzipped.names
   }
+  else {
+    const raw = body.files
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+      return json({ error: 'Send the export as a "zip" of base64 zip bytes, or as a "files" object of filename to CSV text.' }, 400)
 
-  const files = new Map(entries.map(([k, v]) => [String(k), String(v)]))
+    const entries = Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string')
+    if (!entries.length)
+      return json({ error: 'Send the export as a "zip" of base64 zip bytes, or as a "files" object of filename to CSV text.' }, 400)
+
+    // byteLength, not String.length: a path or a page title outside ASCII costs
+    // more bytes than characters, and the cap is about what crosses the wire.
+    const bytes = entries.reduce((n, [, v]) => n + Buffer.byteLength(String(v), 'utf8'), 0)
+    if (bytes > FATHOM_MAX_UPLOAD_BYTES) {
+      return json({
+        error: 'That export is larger than 5 MB of CSV, which is more than one request can take. In Fathom, choose a shorter date range, download again, and import the pieces one after another. Each import adds to the last.',
+      }, 413)
+    }
+
+    files = new Map(entries.map(([k, v]) => [String(k), String(v)]))
+    names = [...files.keys()].map(fathomBasename)
+  }
 
   // Fathom has a second export route - Exports, then Custom Export - which is
   // queued, emailed, and shaped nothing like the dashboard zip. Saying so beats
   // "Summary.csv was not in the upload" for someone holding the wrong download.
-  const names = [...files.keys()].map(fathomBasename)
   if (!names.includes('Summary.csv') && names.filter(n => n.startsWith('pageviews-')).length >= 2) {
     return json({
       error: 'These files come from Fathom\'s Custom Export, which we cannot read yet. Use the download button on the Fathom dashboard instead: it produces a zip with Summary.csv and Pages.csv in it.',
     }, 400)
   }
 
-  const read = readFathomExport(files)
+  // `names` as the second argument, so a zip still gets its "not imported yet"
+  // warning: the referrers, entry/exit page, events and UTM files were in the
+  // upload but were never inflated, so the map cannot show they were there.
+  const read = readFathomExport(files, names)
   if ('error' in read)
     return json({ error: read.error }, 400)
 
@@ -2618,6 +2649,10 @@ route.post('/api/sites/{siteId}/import/fathom', async (request: any) => {
       dryRun: true,
       range: { from: read.export.from, to: read.export.to },
       preview: {
+        // Which files were actually read. Named because a zip upload is opaque
+        // to the person who sent it: they chose one file, not seven, so this is
+        // the only place they can see that Countries.csv was in there.
+        read: [...files.keys()].map(fathomBasename).sort(),
         paths: read.export.pages.size,
         people: read.notes.people,
         visitors: read.notes.reconciledVisitors,

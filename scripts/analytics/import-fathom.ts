@@ -2,11 +2,12 @@
  * Import historical analytics from a Fathom dashboard CSV export into a site.
  *
  *   bun scripts/analytics/import-fathom.ts \
- *     --site=<analyticshq-site-id> --dir=<Dashboard_Export_folder> \
+ *     --site=<analyticshq-site-id> --dir=<export.zip or Dashboard_Export_folder> \
  *     [--replace] [--dry-run] [--force-filtered]
  *
- * Point `--dir` at the folder Fathom's "Export" button produces - the one with
- * Summary.csv, Pages.csv, Browsers.csv and the rest in it, not at a single file.
+ * Point `--dir` at the zip Fathom's "Export" button downloads, or at the folder
+ * you unzipped it into - the one with Summary.csv, Pages.csv, Browsers.csv and
+ * the rest in it. Never at a single CSV.
  *
  * Fathom exports AGGREGATES with no timestamps and no cross-tabulation, so the
  * rows written here are synthesized: they reproduce Fathom's totals rather than
@@ -21,7 +22,7 @@
  * Synthetic rows use `fap_`/`fas_` id prefixes, so `--replace` wipes a prior
  * Fathom import for this site without touching real traffic or a GA import.
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildInsert, synthesizeRecord } from '../../app/Analytics/ga-import'
 import {
@@ -32,9 +33,10 @@ import {
   readFathomExport,
   toRecords,
 } from '../../app/Analytics/fathom-import'
+import { readFathomZip } from '../../app/Analytics/fathom-zip'
 import { connect, log, parseArgs, requireArg, requireSite } from './lib'
 
-const USAGE = 'usage: import-fathom --site=<analyticshq-id> --dir=<export-folder> [--replace] [--dry-run] [--force-filtered]'
+const USAGE = 'usage: import-fathom --site=<analyticshq-id> --dir=<export.zip or export folder> [--replace] [--dry-run] [--force-filtered]'
 const args = parseArgs()
 const siteId = requireArg(args, 'site', USAGE)
 const dir = requireArg(args, 'dir', USAGE)
@@ -42,22 +44,42 @@ const dryRun = args['dry-run'] === true
 const replace = args.replace === true
 const forceFiltered = args['force-filtered'] === true
 
-// Missing breakdown files are normal - Fathom omits ones with no data - so the
-// folder is read permissively here and judged by the shared reader, which is the
-// same one the upload endpoint uses. Neither caller decides on its own what a
-// Fathom export has to contain.
+// A zip or a folder, unzipped by the same reader the upload endpoint uses, so
+// the two cannot disagree about what a Fathom export is. Missing breakdown files
+// are normal - Fathom omits ones with no data - so both shapes are read
+// permissively here and judged by the shared reader afterwards. Neither caller
+// decides on its own what a Fathom export has to contain.
 const files = new Map<string, string>()
-for (const name of FATHOM_FILES) {
-  const p = join(dir, name)
-  if (existsSync(p))
-    files.set(name, readFileSync(p, 'utf8'))
+let present: string[] = []
+
+if (existsSync(dir) && statSync(dir).isFile()) {
+  const unzipped = readFathomZip(new Uint8Array(readFileSync(dir)))
+  if ('error' in unzipped) {
+    log(`error: ${unzipped.error}`)
+    process.exit(1)
+  }
+  for (const [name, text] of unzipped.files)
+    files.set(name, text)
+  present = unzipped.names
 }
+else {
+  for (const name of FATHOM_FILES) {
+    const p = join(dir, name)
+    if (existsSync(p))
+      files.set(name, readFileSync(p, 'utf8'))
+  }
+  // Read separately from the files themselves: this is what tells the shared
+  // reader that Referrers.csv and the UTM files were in the export, so the CLI
+  // says they are not imported yet in the same words the dashboard does.
+  present = existsSync(dir) ? readdirSync(dir) : []
+}
+
 if (!files.size) {
-  log(`error: no Fathom CSVs in ${dir}. Point --dir at the export FOLDER, not a single CSV.`)
+  log(`error: no Fathom CSVs in ${dir}. Point --dir at the export zip or the export FOLDER, not a single CSV.`)
   process.exit(1)
 }
 
-const read = readFathomExport(files)
+const read = readFathomExport(files, present)
 if ('error' in read) {
   log(`error: ${read.error}`)
   process.exit(1)

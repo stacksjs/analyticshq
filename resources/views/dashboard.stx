@@ -1286,11 +1286,17 @@ async function importFromGa() {
 }
 
 // --- Fathom import (CSV upload) ----------------------------------------------
-// The migration path off Fathom. Fathom's dashboard download is a zip; the
-// browser cannot open one without a library we do not ship, so the customer
-// unzips and picks the CSVs, and this reads their text and posts JSON. That
-// keeps the whole feature on the existing authFetch/jsonBody path: no multipart,
-// no FormData, no boundary.
+// The migration path off Fathom. Fathom's dashboard download is a zip, and it is
+// posted whole, base64 in the JSON body, and opened on the server: the browser
+// can inflate a deflate stream but cannot read the zip container around it, and
+// the code that can belongs in a real module where tsc and the test suite can
+// see it. That keeps the whole feature on the existing authFetch/jsonBody path -
+// no multipart, no FormData, no boundary - while removing the one step the
+// customer used to perform on our behalf rather than for a reason: unzip this,
+// now pick these seven files out of the eighteen inside.
+//
+// The CSV path is still here for an export somebody unzipped themselves, and
+// because the CLI importer speaks it.
 //
 // HAND-ROLLED ON PURPOSE. @stacksjs/components ships no file input in any of its
 // families and stx exports no file or drop composable, so there is no primitive
@@ -1301,6 +1307,10 @@ async function importFromGa() {
 // and a programmatic write to a file input throws, inside an effect that
 // re-throws and takes the caller down with it.
 const fathomFiles: StxSignal<Record<string, string>> = state({} as Record<string, string>)
+// The zip, base64, ready to be a JSON string value. Exclusive with fathomFiles:
+// whichever the customer handed over, the other is emptied, so there is never a
+// question of which one the request carries.
+const fathomZip: StxSignal<string> = state('')
 const fathomPicked: StxSignal<string> = state('')
 const fathomReplace: StxSignal<boolean> = state(false)
 const fathomAcceptFiltered: StxSignal<boolean> = state(false)
@@ -1322,25 +1332,93 @@ function fathomName(path: string): string {
   return parts.length ? parts[parts.length - 1] : ''
 }
 
+/** Whether anything has been chosen yet, in either of the two shapes. */
+function fathomHasUpload(): boolean {
+  return fathomZip() !== '' || Object.keys(fathomFiles()).length > 0
+}
+
+/**
+ * A file as base64, via a data URL.
+ *
+ * readAsDataURL rather than btoa over the bytes: btoa takes a string of
+ * charcodes, so feeding it a 5 MB file means chunking it under the argument
+ * limit and building the string by hand. The browser already does exactly that
+ * conversion here, natively, in one call.
+ */
+function fathomBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    // "data:application/zip;base64,AAA..." - everything after the first comma.
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(',') + 1))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Take whatever was dropped or picked: the zip Fathom hands over, or the CSVs
+ * from one somebody already unzipped.
+ *
+ * The zip is NOT opened here. A browser can inflate a deflate stream but cannot
+ * read the zip container around it, and the hundred lines that do are typed and
+ * tested in `app/Analytics/fathom-zip.ts` rather than untypeable inline in this
+ * file. So the zip travels whole, and it travels smaller than the CSV text it
+ * replaces.
+ */
 async function acceptFathomFiles(list: FileList | null): Promise<void> {
   fathomDragging.set(false)
   const all = list ? Array.from(list) : []
   if (!all.length) {
-    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+    await stxAlert('Choose your Fathom export first.')
     return
   }
-  if (all.some(f => /\.zip$/i.test(f.name))) {
-    await stxAlert('That is a zip file. Unzip it first, then choose the CSV files inside it.')
+
+  const zips = all.filter(f => /\.zip$/i.test(f.name))
+  if (zips.length > 1) {
+    await stxAlert('Choose one zip at a time. Each Fathom export covers one date range, and they import one after another.')
+    return
+  }
+  if (zips.length && all.length > 1) {
+    await stxAlert('That is a zip and some loose files together. Choose either the zip on its own, or the CSV files from an export you unzipped yourself.')
+    return
+  }
+
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+
+  if (zips.length === 1) {
+    const zip = zips[0]
+    if (zip.size > FATHOM_MAX_BYTES) {
+      await stxAlert('That zip is larger than 5 MB. In Fathom, choose a shorter date range, download again, and import the pieces one after another.')
+      return
+    }
+    fathomProgress.set('Reading your export...')
+    let encoded = ''
+    try {
+      encoded = await fathomBase64(zip)
+    }
+    catch {
+      fathomProgress.set('')
+      await stxAlert('That zip could not be read. Try choosing it again.')
+      return
+    }
+    fathomProgress.set('')
+    fathomFiles.set({})
+    fathomZip.set(encoded)
+    // The names inside are not known until the server opens it, so the check
+    // step is what reports them. Naming the zip is all this line can honestly do.
+    fathomPicked.set(`Ready to import: ${zip.name}`)
     return
   }
 
   const wanted = all.filter(f => FATHOM_WANTED.includes(fathomName(f.name)))
   if (!wanted.length) {
-    await stxAlert('None of those are Fathom CSV files. Choose the CSV files from the unzipped export.')
+    await stxAlert('None of those are Fathom files. Choose the zip your Fathom dashboard downloaded, or the CSV files from inside it.')
     return
   }
   if (wanted.reduce((n, f) => n + f.size, 0) > FATHOM_MAX_BYTES) {
-    await stxAlert('That export is larger than 5 MB of CSV. In Fathom, choose a shorter date range, download again, and import the pieces one after another.')
+    await stxAlert('That export is larger than 5 MB of CSV. Choose the zip instead, which is smaller, or in Fathom choose a shorter date range and import the pieces one after another.')
     return
   }
 
@@ -1356,11 +1434,9 @@ async function acceptFathomFiles(list: FileList | null): Promise<void> {
     return
   }
   fathomProgress.set('')
+  fathomZip.set('')
   fathomFiles.set(picked)
   fathomPicked.set(`Ready to import: ${Object.keys(picked).sort().join(', ')}`)
-  fathomPreview.set('')
-  fathomResult.set('')
-  fathomWarnings.set([])
 }
 
 async function pickFathomFiles(e: Event): Promise<void> {
@@ -1401,10 +1477,13 @@ function fathomWindows(from: string, to: string, days: number): Array<[string, s
 
 /** One request. Returns the parsed body, or null when it could not be reached. */
 async function postFathom(payload: Record<string, unknown>): Promise<any> {
+  // Whichever shape was chosen, sent every time - the check, the import and each
+  // window all re-post it. A zip is the cheaper of the two to send repeatedly.
+  const upload = fathomZip() ? { zip: fathomZip() } : { files: fathomFiles() }
   const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/fathom`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files: fathomFiles(), acceptFiltered: fathomAcceptFiltered(), ...payload }),
+    body: JSON.stringify({ ...upload, acceptFiltered: fathomAcceptFiltered(), ...payload }),
   })
   const data = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, data }
@@ -1419,8 +1498,8 @@ function fathomFailure(status: number, data: any): string {
 async function checkFathomExport(): Promise<void> {
   if (fathomBusy())
     return
-  if (!Object.keys(fathomFiles()).length) {
-    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+  if (!fathomHasUpload()) {
+    await stxAlert('Choose your Fathom export first.')
     return
   }
   fathomBusy.set(true)
@@ -1436,8 +1515,13 @@ async function checkFathomExport(): Promise<void> {
     else {
       const p = data.preview ?? {}
       const prior = p.priorImport ? ' This site already has history imported from Fathom.' : ''
+      // Which files were read, because a zip upload is opaque to the person who
+      // sent it: they chose one file, and this is where they find out that the
+      // country and browser breakdowns were inside it.
+      const read = ((p.read ?? []) as string[]).join(', ')
       fathomPreview.set(
-        `Found ${Number(p.paths ?? 0).toLocaleString()} pages, ${Number(p.visitors ?? 0).toLocaleString()} visitors and `
+        `${read ? `Read ${read}. ` : ''}`
+        + `Found ${Number(p.paths ?? 0).toLocaleString()} pages, ${Number(p.visitors ?? 0).toLocaleString()} visitors and `
         + `${Number(p.pageViews ?? 0).toLocaleString()} page views, covering ${data.range?.from} to ${data.range?.to}. `
         + `Nothing has been imported yet.${prior}`,
       )
@@ -1454,8 +1538,8 @@ async function checkFathomExport(): Promise<void> {
 async function importFromFathom(): Promise<void> {
   if (fathomBusy())
     return
-  if (!Object.keys(fathomFiles()).length) {
-    await stxAlert('Choose the CSV files from your unzipped Fathom export first.')
+  if (!fathomHasUpload()) {
+    await stxAlert('Choose your Fathom export first.')
     return
   }
   fathomBusy.set(true)
@@ -1525,6 +1609,7 @@ async function importFromFathom(): Promise<void> {
   }
 
   fathomFiles.set({})
+  fathomZip.set('')
   fathomPicked.set('')
   const input = fathomFileInput()
   if (input)
@@ -2315,7 +2400,7 @@ select.panel:hover { border-color: var(--accent); }
           @if (canImportCsv)
             <p class="mb-3 text-sm text-text-2">
               In Fathom, set the date range you want and clear any filters, then click the download icon at the top
-              right of your dashboard. That gives you a zip file. Unzip it, then choose every CSV inside.
+              right of your dashboard. Drop the zip it gives you here, exactly as it downloaded.
             </p>
 
             <label for="fathom-files"
@@ -2327,9 +2412,9 @@ select.panel:hover { border-color: var(--accent); }
               @dragleave.prevent="dragFathomLeave"
               @drop.prevent="dropFathomFiles">
               <span class="i-hugeicons-upload-01 text-lg text-text-3" aria-hidden="true"></span>
-              <span class="font-medium text-sm text-text-2">Choose files, or drop them here</span>
-              <span class="text-text-3 text-xs">Summary.csv and Pages.csv are required. Countries, Device_Types, Browsers, Operating_Systems and Sources are used when you include them. Up to 5 MB in one upload.</span>
-              <input id="fathom-files" ref="fathomFileInput" type="file" multiple accept=".csv,text/csv" class="sr-only" @change="pickFathomFiles">
+              <span class="font-medium text-sm text-text-2">Choose your export, or drop it here</span>
+              <span class="text-text-3 text-xs">The zip from your Fathom dashboard, up to 5 MB. Already unzipped it? Choose the CSVs instead: Summary.csv and Pages.csv are required, and Countries, Device_Types, Browsers, Operating_Systems and Sources are used when you include them.</span>
+              <input id="fathom-files" ref="fathomFileInput" type="file" multiple accept=".zip,application/zip,.csv,text/csv" class="sr-only" @change="pickFathomFiles">
             </label>
 
             <p class="mt-2 text-sm text-text-2" :show="fathomPicked()" style="display:none">{{ fathomPicked() }}</p>

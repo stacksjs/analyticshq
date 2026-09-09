@@ -519,9 +519,18 @@ export interface FathomImportNotes {
  * error rather than throwing or exiting, because one of the two callers is an
  * HTTP handler and the other is a CLI, and a shared reader that calls
  * `process.exit` is a reader only one of them can use.
+ *
+ * `alsoPresent` names files the upload CONTAINED but did not hand over the text
+ * of, which is what a zip upload does: `readFathomZip` inflates the seven files
+ * this reads and lists the rest by name. It feeds `notes.ignored` and nothing
+ * else - a file that was never read cannot go missing, and one whose text is
+ * absent cannot be parsed - so the "not imported yet" warning still names the
+ * referrers and UTM files a zip carried. Empty from the CLI and from a CSV
+ * selection, where the map already holds everything the upload had.
  */
 export function readFathomExport(
   files: ReadonlyMap<string, string>,
+  alsoPresent: readonly string[] = [],
 ): { export: FathomExport, notes: FathomImportNotes } | { error: string } {
   const byName = new Map<string, string>()
   for (const [name, text] of files) {
@@ -529,6 +538,7 @@ export function readFathomExport(
     if (base)
       byName.set(base, text)
   }
+  const present = new Set([...byName.keys(), ...alsoPresent.map(fathomBasename)])
 
   const summary = byName.get('Summary.csv') ?? ''
   if (!summary)
@@ -581,7 +591,7 @@ export function readFathomExport(
     export: exported,
     notes: {
       missing: FATHOM_FILES.filter(name => !byName.has(name)),
-      ignored: FATHOM_IGNORED_FILES.filter(name => byName.has(name)),
+      ignored: FATHOM_IGNORED_FILES.filter(name => present.has(name)),
       filtersApplied: parseFiltersApplied(summary),
       people: totals.people,
       rawVisitors: recon.rawTotal,

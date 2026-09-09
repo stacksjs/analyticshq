@@ -535,7 +535,10 @@ describe('warnings name what the numbers hide', () => {
 describe('the upload endpoint', () => {
   const routes = code('routes/analytics.ts')
   const decl = "route.post('/api/sites/{siteId}/import/fathom'"
-  const block = routes.slice(routes.indexOf(decl), routes.indexOf(decl) + 6000)
+  // Bounded by the next registration rather than by a character count: every
+  // assertion below is an indexOf into this slice, and a handler that outgrew a
+  // fixed window would not fail them, it would silently start comparing -1s.
+  const block = routes.slice(routes.indexOf(decl), routes.indexOf('\nroute.', routes.indexOf(decl) + 1))
 
   test('the route exists at column 0, where the authorization sweep can see it', () => {
     // api-authz.test.ts collects site-scoped routes with a `^`-anchored regex, so
@@ -604,6 +607,29 @@ describe('the upload endpoint', () => {
     expect(block).toContain('fathomImportWarnings(')
     expect(block).toContain('warnings,')
   })
+
+  test('a zip is unzipped before either ceiling is applied, and both shapes converge', () => {
+    // The two upload shapes have to become one pair of values before the reading
+    // starts, or the ceilings, the Custom Export check and the windowing each
+    // grow a second version that is free to disagree with the first.
+    expect(block).toContain('readFathomZip(')
+    expect(block.indexOf('readFathomZip(')).toBeLessThan(block.indexOf('readFathomExport('))
+    expect(block.indexOf('readFathomZip(')).toBeLessThan(block.indexOf('estimateRows('))
+    expect(block).toContain('files = unzipped.files')
+    expect(block).toContain('names = unzipped.names')
+  })
+
+  test('the names a zip carried are passed on, so the skipped files are still named', () => {
+    // readFathomZip inflates seven of the eighteen, so `files` alone cannot show
+    // that Referrers.csv and the UTM files were in the upload.
+    expect(block).toContain('readFathomExport(files, names)')
+  })
+
+  test('the zip is never stored or echoed back, only read', () => {
+    expect(block).not.toMatch(/\bwriteFile|\bBun\.write|\bmkdir/)
+    // The base64 goes straight into the reader and is not put in a response.
+    expect(block).not.toMatch(/zip:\s*body\.zip/)
+  })
 })
 
 describe('the dashboard panel', () => {
@@ -653,6 +679,34 @@ describe('the dashboard panel', () => {
     expect(panel).toContain('not imported yet')
     expect(panel).not.toContain('—')
     expect(panel).not.toContain('–')
+  })
+
+  test('the zip is what the panel asks for, and nobody is told to unzip it', () => {
+    expect(panel).toContain('.zip')
+    expect(panel.toLowerCase()).not.toContain('unzip it')
+    // Still accepts loose CSVs, for an export somebody already unpacked.
+    expect(panel).toContain('.csv')
+  })
+
+  test('the zip is posted whole and never opened in the browser', () => {
+    // A client block cannot import, so an unzipper here would be a hundred lines
+    // of offsets that tsc cannot see inside and no test can reach.
+    const script = view.slice(view.indexOf('// --- Fathom import'), view.indexOf('async function createShare'))
+    expect(script).toContain('readAsDataURL')
+    expect(script).toContain('{ zip: fathomZip() }')
+    // Names, not the word "inflate": the comment above the panel explains why a
+    // browser cannot open a zip, and a guard that forbade saying so would be a
+    // guard against the explanation rather than against the code.
+    for (const token of ['DecompressionStream', 'inflateRaw', 'JSZip', 'fflate', '0x06054B50'])
+      expect(script).not.toContain(token)
+  })
+
+  test('the two upload shapes are exclusive, so a request cannot carry both', () => {
+    const script = view.slice(view.indexOf('// --- Fathom import'), view.indexOf('async function createShare'))
+    // Each setter clears the other, and the reset after an import clears both.
+    expect(script).toContain('fathomFiles.set({})\n    fathomZip.set(encoded)')
+    expect(script).toContain('fathomZip.set(\'\')\n  fathomFiles.set(picked)')
+    expect(script).toContain('fathomFiles.set({})\n  fathomZip.set(\'\')')
   })
 
   test('the paywall is server-rendered, not a client conditional', () => {
