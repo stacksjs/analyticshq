@@ -261,10 +261,15 @@ const regionSites = new Map<string, { on: boolean, at: number }>()
 /**
  * Has this site asked for region, on an install that permits it?
  *
- * Both halves, in that order, and the instance half first because it is free:
- * on a default install `granularity` is `'country'` and this returns before
- * touching the database, so the hot path costs nothing at all for the operators
- * who never opted in — which is all of them until they edit `config/privacy.ts`.
+ * Both halves, in that order, and the instance half first because it is free.
+ *
+ * THAT ORDERING STOPPED BEING FREE WHEN THE CEILING WAS RAISED. It used to
+ * return here on every default install, because `granularity` defaulted to
+ * `'country'`; the default is now `'region'`, so the common path reaches the
+ * cache instead. What that costs is one `SELECT region_geo` per site per minute
+ * — not per beacon — and every hit after the first inside that minute is a Map
+ * lookup. An operator who wants the old zero-cost behaviour sets `granularity`
+ * back to `'country'`, which also takes the option away from site owners.
  *
  * FAILS CLOSED. Every path that is not an explicit `true` from the database
  * returns false: no row, an unreadable column, a query that threw. The worst

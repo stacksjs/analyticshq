@@ -31,11 +31,15 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   product whose own production host has nothing upstream of it.)
 
   A site owner may opt that site into **region** (state or province, ISO 3166-2)
-  and nothing finer. It is off for every site until someone turns it on, and it
-  additionally requires the operator to permit it for the whole install
-  (`geo.granularity: 'region'` in `config/privacy.ts`) and to have installed a
-  geolocation database that carries subdivisions. The default database does not,
-  so a default install records no regions whatever a site's setting says.
+  and nothing finer. **It is off for every site until that site's owner turns it
+  on**, which is what makes country the location this product records by default.
+
+  The install has to permit it as well (`geo.granularity` in
+  `config/privacy.ts`, which allows region by default and can be set to
+  `'country'` to take the choice away from site owners, or `'none'` to record no
+  location at all), and the server has to be running a geolocation database that
+  carries subdivisions. The default database does not, so a default install
+  records no regions whatever a site's setting says.
 
   Region rows are subject to the disclosure floor: any state with fewer than
   `minSegmentSize` visitors (5 by default) is reported as "Other" rather than

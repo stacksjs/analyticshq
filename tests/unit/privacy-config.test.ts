@@ -21,8 +21,15 @@ const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
 describe('the defaults are the posture the comparison pages claim (#11)', () => {
-  test('geo stops at country', () => {
-    expect(privacy.geo.granularity).toBe('country')
+  test('no site records anything finer than country without its owner acting', () => {
+    // The claim on the comparison pages is about what is RECORDED, and that is
+    // still country. What enforces it moved: `granularity` is the ceiling and
+    // now permits region, so the guarantee rests entirely on sites.region_geo
+    // defaulting to false. If that default ever flips, this test is the one that
+    // should stop the commit, not the config value above it.
+    expect(privacy.geo.granularity).not.toBe('none')
+    const migration = read('database/migrations/0000000051-add-opt-in-region-geo.sql')
+    expect(migration).toContain('"region_geo" boolean NOT NULL DEFAULT false')
   })
 
   test('DNT and GPC are respected by default', () => {
@@ -97,11 +104,14 @@ describe('the call sites read the config, not a literal (#11)', () => {
     expect(routes).toMatch(/siteWantsRegion\([\s\S]{0,40}\?\s*regionFromIp/)
   })
 
-  test('the default install is still country, not region', () => {
-    // The whole opt-in story rests on this: raising the default here would turn
-    // sub-country collection on for every site that ticked the box on a
-    // different install, and would falsify the comparison pages.
-    expect(privacy.geo.granularity).toBe('country')
+  test('the ceiling permits region and the per-site default withholds it', () => {
+    // Raising the ceiling was deliberate: it lets a site owner turn regions on
+    // without an operator editing config first. It changes nothing on its own,
+    // and the two things that still have to be true are asserted elsewhere —
+    // the site's own flag (privacy-guardrails.test.ts) and a geolocation
+    // database that carries subdivisions (geo.test.ts).
+    expect(privacy.geo.granularity).toBe('region')
+    expect(routes).toContain("privacy.geo.granularity !== 'region'")
   })
 
   test('salt purging uses the configured window', () => {

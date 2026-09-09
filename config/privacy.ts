@@ -183,7 +183,15 @@ export default {
   sessionWindowMinutes: 30,
 
   geo: {
-    granularity: 'country',
+    // 'region' is a CEILING, not a switch: it permits site owners to opt in, and
+    // every site is off until its owner does (sites.region_geo defaults to
+    // false). So the location this product actually records by default is still
+    // the country, which is what the comparison pages and PRIVACY.md claim.
+    //
+    // Set to 'country' to take the option away from site owners entirely, or to
+    // 'none' to record no location at all. Neither is needed to keep a site at
+    // country — that is already where every site starts.
+    granularity: 'region',
   },
 
   respectDnt: true,

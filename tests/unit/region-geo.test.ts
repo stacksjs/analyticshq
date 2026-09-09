@@ -185,8 +185,16 @@ describe('the dashboard panel is off until a site turns it on', () => {
 })
 
 describe('the default posture is unchanged for everyone who does nothing', () => {
-  test('the install default is country', () => {
-    expect(privacy.geo.granularity).toBe('country')
+  test('the ceiling permits region, and a site still has to ask', () => {
+    // "Default" is two settings here and only one of them moved. The install
+    // permits region so a site owner can switch it on unaided; the site itself
+    // is off until they do, which is why the recorded default is still country
+    // and why the comparison pages did not have to change again.
+    expect(privacy.geo.granularity).toBe('region')
+    const sql = read('database/migrations/0000000051-add-opt-in-region-geo.sql')
+    expect(sql).toContain('"region_geo" boolean NOT NULL DEFAULT false')
+    // Nothing backfills the flag onto sites that already exist.
+    expect(sql).not.toMatch(/UPDATE\s+"?sites"?\s+SET/i)
   })
 
   test('the migration defaults the site column to false and is idempotent', () => {
