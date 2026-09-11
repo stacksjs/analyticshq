@@ -80,14 +80,14 @@
   "dependencies": {
     "@bughq/stacks": "^0.2.2",
     "@loghq/stacks": "^0.2.6",
-    "@stacksjs/buddy": "^0.74.0",
-    "@stacksjs/logging": "^0.74.0",
-    "@stacksjs/stx": "^0.2.231",
-    "@stacksjs/ts-cloud": "^0.11.5",
-    "@ts-analytics/tracking": "^0.1.13",
+    "@stacksjs/buddy": "^0.74.46",
+    "@stacksjs/logging": "^0.74.46",
+    "@stacksjs/stx": "^0.2.286",
+    "@stacksjs/ts-cloud": "^0.16.0",
+    "@ts-analytics/tracking": "^0.1.15",
     "mmdb-lib": "^3.0.3",
-    "stacks": "^0.74.0",
-    "ts-maps": "^0.3.2"
+    "stacks": "^0.74.46",
+    "ts-maps": "^0.3.7"
   },
   "devDependencies": {
     "better-dx": "^0.2.25"
