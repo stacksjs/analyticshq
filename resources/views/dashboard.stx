@@ -73,11 +73,11 @@ const compare = queryParams.compare === '1' && !isAll
 let prevFrom = new Date(new Date(from).getTime() - days * 864e5).toISOString()
 
 const ranges = [
-  { key: '24h', label: '24 hours' },
-  { key: '7d', label: '7 days' },
-  { key: '30d', label: '30 days' },
-  { key: '90d', label: '90 days' },
-  { key: '1y', label: '1 year' },
+  { key: '24h', label: '24h' },
+  { key: '7d', label: '7d' },
+  { key: '30d', label: '30d' },
+  { key: '90d', label: '90d' },
+  { key: '1y', label: '1y' },
   { key: 'all', label: 'All' },
 ]
 
@@ -231,6 +231,25 @@ let live = false
 // analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
 let user = null
 let ownedSites = []
+let activeSiteRecord = null
+
+function siteDomains(site) {
+  if (!site?.domains)
+    return []
+  if (Array.isArray(site.domains))
+    return site.domains.map(String).filter(Boolean)
+  try {
+    const parsed = JSON.parse(String(site.domains))
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  }
+  catch {
+    return []
+  }
+}
+
+function siteLabel(site) {
+  return siteDomains(site)[0] || site?.name || site?.id || 'Untitled site'
+}
 // Read gate: the dashboard only exposes a site's data to someone this site is
 // actually reachable by — its owner, an invited member, OR anyone holding a valid
 // ?share= token. Stays false (→ no queries, no data in the response) for anyone else.
@@ -305,7 +324,7 @@ async function loadData() {
     // Mirrors routes/analytics.ts GET /api/sites deliberately: two answers to
     // "which sites can I reach" that disagree is what produced this.
     ownedSites = (await pgq(
-      `SELECT s.id, s.name, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
+      `SELECT s.id, s.name, s.domains, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
        FROM sites s
        LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
        WHERE s.owner_id = ? OR m.user_id IS NOT NULL
@@ -359,6 +378,9 @@ async function loadData() {
   }
   if (!viewGranted)
     return
+  activeSiteRecord = ownedSites.find(s => String(s.id) === String(siteId))
+    || (await pgq(`SELECT id, name, domains FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+    || null
   // Owner (not a share viewer): surface any existing share token for the link UI.
   if (!shareMode)
     shareToken = (await readSettings(siteId)).share_token || ''
@@ -1018,7 +1040,11 @@ const ownsActive = viewGranted && !shareMode
 // but cannot invite or remove. The endpoints enforce this independently; hiding
 // the controls only avoids offering a button that answers 403.
 const canManageTeam = ownsActive && (activeRole === 'owner' || activeRole === 'admin')
-const showSiteSelect = ownsActive && ownedSites.length > 1
+const showSiteSelect = ownsActive && ownedSites.length > 0
+const activeSite = activeSiteRecord || ownedSites.find(s => String(s.id) === String(siteId)) || null
+const activeSiteName = activeSite?.name || 'Shared site'
+const activeSiteDomain = siteDomains(activeSite)[0] || ''
+const activeSiteLabel = activeSiteDomain || activeSiteName
 
 // The install snippets, one per framework (app/Analytics/install.ts).
 //
@@ -1343,7 +1369,7 @@ async function importFromGa() {
 
   for (let i = 0; i < chunks.length; i++) {
     const [start, end] = chunks[i]
-    gaProgress.set(`Importing ${start.slice(0, 4)} — period ${i + 1} of ${chunks.length}…`)
+    gaProgress.set(`Importing ${start.slice(0, 4)}, period ${i + 1} of ${chunks.length}…`)
     try {
       const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/ga4`, {
         method: 'POST',
@@ -1805,7 +1831,7 @@ async function revokeShare() {
   // Worth surfacing rather than swallowing: a failed revoke means the old link is
   // still live, and silently clearing nothing looks identical to success.
   if (failed)
-    await stxAlert('Could not revoke the share link. It may still be active — please try again.')
+    await stxAlert('Could not revoke the share link. It may still be active. Please try again.')
 }
 // --- Team -------------------------------------------------------------------
 // The lists themselves are server-rendered (see the panel markup). These only
@@ -1869,7 +1895,7 @@ async function revokeInvite(id: string, email: string) {
     }
   }
   catch {}
-  await stxAlert('Could not revoke that invitation. It may still be usable — please try again.')
+  await stxAlert('Could not revoke that invitation. It may still be usable. Please try again.')
 }
 
 async function removeMember(userId: string, email: string) {
@@ -1883,7 +1909,7 @@ async function removeMember(userId: string, email: string) {
     }
   }
   catch {}
-  await stxAlert('Could not remove that person. They may still have access — please try again.')
+  await stxAlert('Could not remove that person. They may still have access. Please try again.')
 }
 
 // Created ONCE, not per click. useTimeout starts on creation and registers an
@@ -2038,27 +2064,188 @@ onMount(() => {
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 
-/* Site switcher. The native chevron sat flush against the control's own rounded edge,
-  so the appearance is reset and the chevron redrawn as a background SVG with room
-  reserved for it (padding-right). Surface, border and radius come from .panel, which is
-  why the select is a panel and not a pill here — 999px is what made the native chevron
-  collide. None of this reaches the open dropdown: the list itself is drawn by the OS and
-  is not stylable, which is why the fix for it landing on top of "+ Add site" is the row
-  layout below, not anything here.
-  The chevron is a data URI, so its colour cannot inherit: it is restated per theme,
-  media query first so the explicit [data-theme] toggle wins. */
+.workspace-header {
+  border-bottom: 1px solid var(--border);
+}
+.workspace-primary,
+.workspace-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.workspace-primary { padding: 0 0 1.1rem; }
+.workspace-range { padding: 0.85rem 0; }
+.workspace-brand,
+.workspace-actions,
+.range-presets,
+.range-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.workspace-brand { min-width: 0; gap: 0.9rem; }
+.workspace-actions { flex-shrink: 0; }
+.site-switcher {
+  min-width: 11rem;
+  max-width: 18rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.site-static {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font: 500 0.875rem/1 var(--sans, ui-sans-serif);
+}
+.range-presets {
+  gap: 0;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.range-link {
+  min-width: 2.75rem;
+  padding: 0.48rem 0.7rem;
+  border-radius: 7px;
+  color: var(--text-2);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+  text-align: center;
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.range-link:hover { color: var(--text); }
+.range-link[aria-current="page"] {
+  background: var(--accent);
+  color: #fff;
+}
+.range-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text-2);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+.range-tool:hover { color: var(--text); border-color: var(--accent); }
+.range-tool:active { transform: scale(0.98); }
+.range-tool:focus-visible,
+.range-link:focus-visible,
+.chrome-btn:focus-visible,
+.icon-btn:focus-visible,
+select.panel:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.range-tool.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+.range-tool i { width: 1rem; height: 1rem; }
+.date-menu { position: relative; }
+.date-menu > summary { list-style: none; }
+.date-menu > summary::-webkit-details-marker { display: none; }
+.date-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  width: min(24rem, calc(100vw - 2.5rem));
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 10%, transparent);
+}
+.date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.date-field label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--text-2);
+  font: 600 0.75rem/1.2 var(--sans, ui-sans-serif);
+}
+.date-field input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: 500 0.8125rem/1 var(--mono, ui-monospace);
+}
+.date-submit { width: 100%; margin-top: 0.75rem; }
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-2);
+}
+.live-status strong { color: var(--text); font-size: 0.75rem; }
+.live-status span:last-child { font-size: 0.75rem; }
+.site-settings-shell > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  list-style: none;
+}
+.site-settings-shell > summary::-webkit-details-marker { display: none; }
+.site-settings-title { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.site-settings-title i { width: 1.1rem; height: 1.1rem; color: var(--text-2); }
+.site-settings-title strong { display: block; font-size: 0.875rem; line-height: 1.25; }
+.site-settings-title span { display: block; margin-top: 0.18rem; color: var(--text-3); font-size: 0.75rem; line-height: 1.35; }
+.settings-chevron { width: 1rem; height: 1rem; flex-shrink: 0; color: var(--text-3); transition: transform 0.15s ease; }
+.site-settings-shell[open] .settings-chevron { transform: rotate(180deg); }
+.site-settings-shell:not([open]) ~ .site-settings-panel { display: none; }
+.site-settings-panel { margin-bottom: 0.75rem; }
+
+@media (max-width: 1023px) {
+  .workspace-primary,
+  .workspace-range { align-items: stretch; flex-direction: column; }
+  .workspace-brand,
+  .workspace-actions,
+  .range-actions { width: 100%; flex-wrap: wrap; }
+  .workspace-actions { justify-content: flex-start; }
+  .site-switcher { min-width: 0; max-width: none; flex: 1; }
+  .range-presets { width: 100%; overflow-x: auto; }
+  .range-link { flex: 1 0 auto; }
+  .range-actions { justify-content: flex-start; }
+  .date-menu { position: static; }
+  .date-popover { left: 0; right: auto; }
+}
+
+/* Site switcher. Surface, border and radius come from .panel. The native menu remains
+  an operating-system control, while the surrounding shell gives it enough room to
+  avoid colliding with adjacent actions. */
 select.panel {
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  cursor: pointer; transition: border-color 0.15s ease;
-  padding-right: 2rem; background-repeat: no-repeat;
-  background-position: right 0.7rem center; background-size: 13px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  cursor: pointer;
+  transition: border-color 0.15s ease;
 }
-@media (prefers-color-scheme: dark) {
-  select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-}
-:root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-:root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 select.panel:hover { border-color: var(--accent); }
 
 /* Map tooltips, themed. ts-maps binds and positions these itself, but only its
@@ -2161,116 +2348,98 @@ select.panel:hover { border-color: var(--accent); }
     LAST </main>, so a page that declares its own makes the router swap the wrong span.
     Same classes as before, one tag name different. --}}
 @section('content')
-<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
-  {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
-      viewer isn't signed in as the owner.
+<div class="px-4 py-7 md:px-8 lg:px-10 min-h-[100dvh]">
+  <div class="mx-auto max-w-[1400px]">
 
-      Three controls, and deliberately no plan CTA. There used to be an Upgrade
-      button here, which was duplication: /account already carries a Plan section
-      showing Free or Pro, an active badge, and the same /pricing link as either
-      "Upgrade to Pro" or "Manage plan". Billing belongs with the account, not
-      pinned to every view of the numbers.
-
-      The route to /account is the point of this block. That page has existed and
-      answered 200 all along with nothing anywhere linking to it, so the only way
-      in was to type the URL.
-
-      isPro() is still read further down for the team-panel paywall — dropping the
-      button here did not orphan it. --}}
-  @if (ownsActive)
-    <div style="position:fixed;top:16px;right:18px;z-index:60;display:flex;gap:6px;align-items:center">
-      <StxLink to="/account" class="chrome-btn">Account</StxLink>
-      <button type="button" @click="logout" class="chrome-btn">Log out</button>
-    </div>
-  @endif
-  <div class="mx-auto max-w-6xl">
-
-    <header class="flex flex-wrap gap-5 items-end justify-between mb-9">
-      <div>
-        <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
-        <p class="mt-2 text-sm text-text-3">
-          Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
-        </p>
-        {{-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
-            <select> hands off to switchSite, which routes to ?site=; the caption line
-            above is the no-owned-sites fallback. "+ Add site" is a link to the
-            reactive create page, not an in-page modal. --}}
-        {{-- The multi-site <select> is gated by a precomputed `showSiteSelect` flag as
-            its own block, and "+ Add site" always shows to the owner. This was
-            originally a workaround for stx miscounting @endif on a nested @if; that
-            bug is fixed as of 0.2.155 (verified on the installed version), so the flag
-            stays only because it reads better than nesting here. --}}
-        {{-- One row, like bughq's header: the switcher, "+ Add site" and the live badge
-            were three sibling `mt-3` blocks in a plain <div>, so each got its own line
-            and the three read as a ragged column. They are peers, so they share one
-            flex row and one size scale (px-3 py-1.5, .panel/.pill chrome from classes
-            rather than per-control inline style). The badge keeps its own wrapper: its
-            spans render reactive {{ }} text, and stx cloaks (display:none) the element
-            whose text is reactive until hydration — folding it into the row itself
-            would put the switcher inside that scope. --}}
-        <div class="flex flex-wrap gap-3 items-center mt-3">
+    <header class="mb-6 workspace-header">
+      <div class="workspace-primary">
+        <div class="workspace-brand">
+          <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
           @if (showSiteSelect)
-            <select @change="switchSite"
-              aria-label="Switch site"
-              class="px-3 py-1.5 text-sm text-text-2 mono panel">
+            <select @change="switchSite" aria-label="Switch site" class="panel site-switcher">
               @foreach (ownedSites as s)
-                <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ s.name || s.id }}</option>
+                <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ siteLabel(s) }}</option>
               @endforeach
             </select>
+          @else
+            <span class="site-static" title="{{ activeSiteLabel }}">{{ activeSiteLabel }}</span>
           @endif
-          @if (ownsActive)
-            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm text-text-2 border border-border pill">+ Add site</StxLink>
-          @endif
-          {{-- The theme toggle sits in this row rather than in a fixed bar over the
-              page. It used to be `position: fixed; top: 16px; right: 18px`, which
-              floated it above whatever was underneath -- on this page that is the
-              map, and the button landed on top of it. In the row it is laid out
-              with its peers and cannot overlap anything.
+        </div>
 
-              SVG rather than the ☾/☀ glyphs it used to draw: those render at
-              whatever the emoji font decides, so the button's height moved between
-              platforms while the pills beside it did not. --}}
-          <button type="button" @click="toggleTheme" :data-t="theme.isDark() ? 'dark' : 'light'"
-            class="icon-btn theme-btn" aria-label="Toggle light or dark theme" title="Toggle theme">
-            <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          </button>
-          <div class="inline-flex gap-2 items-center px-3 py-2 border border-border pill reveal">
+        <div class="workspace-actions">
+          <div class="live-status reveal" aria-label="Current visitors">
             <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
-            <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
-            <span class="text-text-3 text-xs">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
+            <strong class="mono">{{ liveCount() }}</strong>
+            <span>live</span>
           </div>
+          @if (ownsActive)
+            <StxLink to="/sites/new" class="range-tool">
+              <i class="i-hugeicons-add-01" aria-hidden="true"></i>
+              New site
+            </StxLink>
+            <a href="#site-settings" data-no-router class="range-tool" title="Site settings">
+              <i class="i-hugeicons-settings-02" aria-hidden="true"></i>
+              <span class="sr-only">Site settings</span>
+            </a>
+          @endif
+          <button type="button" @click="toggleTheme" :data-t="theme.isDark() ? 'dark' : 'light'" class="range-tool theme-btn" aria-label="Toggle light or dark theme" title="Toggle theme">
+            <i class="i-hugeicons-sun-03 ic-sun" aria-hidden="true"></i>
+            <i class="i-hugeicons-moon-02 ic-moon" aria-hidden="true"></i>
+          </button>
+          @if (ownsActive)
+            <StxLink to="/account" class="chrome-btn">Account</StxLink>
+            <button type="button" @click="logout" class="chrome-btn">Log out</button>
+          @endif
         </div>
       </div>
-      {{-- Wraps, unlike before: the left column is now one row rather than a stack, so
-          the two header halves compete for the same line and this nav carries eleven
-          controls with long range labels ("24 hours", not "24h"). --}}
-      <nav class="flex flex-wrap gap-1.5 items-center">
-        @foreach (ranges as r)
-          <StxLink to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
-            class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ !isCustom && r.key === range ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ r.label }}</StxLink>
-        @endforeach
-        <form method="get" class="inline-flex gap-1.5 items-center" title="Custom date range">
-          <input type="hidden" name="site" value="{{ siteId }}">
-          @if (compare)
-            <input type="hidden" name="compare" value="1">
-          @endif
-          <input type="date" name="from" value="{{ customFrom }}" aria-label="From date"
-            class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
-          <span class="text-text-3 text-xs">to</span>
-          <input type="date" name="to" value="{{ customTo }}" aria-label="To date"
-            class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
-          <button type="submit" class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ isCustom ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border); background: var(--panel);' }} cursor: pointer;">Apply</button>
-        </form>
-        <StxLink to="{{ compareToggleUrl() }}" title="Overlay the previous period on the chart"
-          class="px-3.5 py-1.5 font-medium text-sm border pill"
-          style="{{ isAll ? 'display:none' : (compare ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)') }}">Compare</StxLink>
-        <button type="button" @click="exportCsv"
-          class="px-3.5 py-1.5 font-medium text-sm border pill"
-          style="color: var(--text-2); border-color: var(--border); background: var(--panel); cursor: pointer;">Export CSV</button>
-      </nav>
+
+      <div class="workspace-range">
+        <nav class="range-presets" aria-label="Reporting period">
+          @foreach (ranges as r)
+            <StxLink
+              to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
+              class="range-link"
+              aria-current="{{ !isCustom && r.key === range ? 'page' : 'false' }}"
+            >{{ r.label }}</StxLink>
+          @endforeach
+        </nav>
+
+        <div class="range-actions">
+          <details class="date-menu">
+            <summary class="range-tool {{ isCustom ? 'is-active' : '' }}">
+              <i class="i-hugeicons-calendar-03" aria-hidden="true"></i>
+              {{ isCustom ? (customFrom + ' to ' + customTo) : 'Custom' }}
+            </summary>
+            <form method="get" class="date-popover" aria-label="Custom date range">
+              <input type="hidden" name="site" value="{{ siteId }}">
+              @if (compare)
+                <input type="hidden" name="compare" value="1">
+              @endif
+              <div class="date-grid">
+                <div class="date-field">
+                  <label for="range-from">From</label>
+                  <input id="range-from" type="date" name="from" value="{{ customFrom }}">
+                </div>
+                <div class="date-field">
+                  <label for="range-to">To</label>
+                  <input id="range-to" type="date" name="to" value="{{ customTo }}">
+                </div>
+              </div>
+              <button type="submit" class="date-submit is-active range-tool">Apply range</button>
+            </form>
+          </details>
+          <StxLink
+            to="{{ compareToggleUrl() }}"
+            title="Overlay the previous period on the chart"
+            class="range-tool {{ compare ? 'is-active' : '' }}"
+            style="{{ isAll ? 'display:none' : '' }}"
+          >Compare</StxLink>
+          <button type="button" @click="exportCsv" class="range-tool">
+            <i class="i-hugeicons-download-04" aria-hidden="true"></i>
+            Export
+          </button>
+        </div>
+      </div>
     </header>
 
     {{-- Active filters: click a breakdown row to add one; each pill removes itself,
@@ -2295,6 +2464,39 @@ select.panel:hover { border-color: var(--accent); }
       </div>
     @endif
 
+    @if (viewGranted)
+      {{-- The numbers lead the workspace. Setup and account controls stay available,
+          but they no longer push the report below the first viewport. --}}
+      <section class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal" aria-label="Key metrics">
+        @foreach (kpiCards as kpi)
+          <div class="px-5 py-5 border-border">
+            <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase">{{ kpi.label }}</div>
+            <div class="font-semibold text-3xl tracking-tight mono">{{ kpi.value }}</div>
+            @if (kpi.delta !== null)
+              <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
+                {{ kpi.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(kpi.delta) }}% <span class="text-text-3">vs prev</span>
+              </div>
+            @endif
+          </div>
+        @endforeach
+      </section>
+    @endif
+
+    @if (ownsActive)
+      <details id="site-settings" class="mb-3 panel reveal site-settings-shell">
+        <summary>
+          <span class="site-settings-title">
+            <i class="i-hugeicons-settings-02" aria-hidden="true"></i>
+            <span>
+              <strong>Site settings</strong>
+              <span>Tracking, team access, imports, privacy, and sharing</span>
+            </span>
+          </span>
+          <i class="i-hugeicons-arrow-down-01 settings-chevron" aria-hidden="true"></i>
+        </summary>
+      </details>
+    @endif
+
     {{-- Setup panel: shown to the site's owner so they can grab the install
         snippet for whichever framework they run. Open by default until the first
         pageview lands.
@@ -2304,11 +2506,11 @@ select.panel:hover { border-color: var(--accent); }
         installCode() note in the client block. {{ }} HTML-escapes the snippet so
         the tag shows as text rather than executing. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal" {{ Number(kpis.views) ? '' : 'open' }}>
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Install analyticshq on this site</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Snippet</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
           {{-- Tabs and prose are SERVER-rendered (@foreach, static labels, server
               mustaches) so this panel still says something useful before the
@@ -2343,7 +2545,7 @@ select.panel:hover { border-color: var(--accent); }
               answer here and the server cannot know it. --}}
           <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installCode() }}</pre>
         </div>
-      </details>
+      </section>
     @endif
 
     {{-- Team. Everyone who can reach this site, plus anyone invited who has not
@@ -2359,11 +2561,11 @@ select.panel:hover { border-color: var(--accent); }
         Visible to any member (a viewer should be able to tell how widely a site
         is shared); only admin and owner get the controls. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal">
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Team</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">{{ teamMembers.length }} with access</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
 
           @foreach (teamMembers as m)
@@ -2440,7 +2642,7 @@ select.panel:hover { border-color: var(--accent); }
           @endif
 
         </div>
-      </details>
+      </section>
     @endif
 
     {{-- Import from Google Analytics. Owner-only: it writes history into this
@@ -2454,14 +2656,14 @@ select.panel:hover { border-color: var(--accent); }
         conditional parts use :show with their SSR state in the static style
         (stx-standards §7.1/§7.3), as the share control above does. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal">
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Import from Google Analytics</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">GA4</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
           <p class="mb-3 text-sm text-text-2">
-            Brings your GA4 history over directly — no CSV export. In the Google Cloud project that owns the property:
+            Brings your GA4 history over directly, with no CSV export. In the Google Cloud project that owns the property:
             create a service account, download its JSON key, enable the Analytics Data API, then add that service
             account's email as a <span class="font-medium">Viewer</span> under GA4 → Admin → Property access management.
           </p>
@@ -2510,7 +2712,7 @@ select.panel:hover { border-color: var(--accent); }
             Re-importing the same period replaces it rather than doubling it.
           </p>
         </div>
-      </details>
+      </section>
     @endif
 
     {{-- Import from Fathom. Owner-only for the same reason as the GA panel, and
@@ -2529,11 +2731,11 @@ select.panel:hover { border-color: var(--accent); }
         :dragover, which the runtime does not recognise as events and would
         quietly turn into DOM attributes that never fire. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal">
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Import from Fathom</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">CSV</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
           @if (canImportCsv)
             <p class="mb-3 text-sm text-text-2">
@@ -2609,13 +2811,13 @@ select.panel:hover { border-color: var(--accent); }
             </div>
           @endif
         </div>
-      </details>
+      </section>
     @endif
 
     @if (shareMode)
       <div class="mb-6 px-4 py-3 text-sm panel reveal" style="border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--text-2)">
         <span class="font-semibold text-text">Shared read-only view.</span>
-        You're viewing a shared dashboard — data only, no sign-in needed.
+        This link shows report data only. Sign-in and management controls are unavailable.
       </div>
     @endif
 
@@ -2623,7 +2825,7 @@ select.panel:hover { border-color: var(--accent); }
 
         Two server @ifs and no client @if, for the usual reason: a client @if
         nested inside a server one breaks stx's @endif matching. The instance
-        branch is server-side because config/privacy.ts is a server value — an
+        branch is server-side because config/privacy.ts is a server value, so an
         install that does not permit regions shows the reason rather than a
         switch the endpoint would answer 409 to.
 
@@ -2632,7 +2834,7 @@ select.panel:hover { border-color: var(--accent); }
         optimistic tick that then failed would leave the box saying yes about a
         site recording nothing. --}}
     @if (ownsActive)
-      <div class="mb-8 p-5 panel reveal">
+      <div class="p-5 panel site-settings-panel">
         <div class="flex flex-wrap gap-3 items-start justify-between">
           <div style="max-width:60ch">
             <div class="font-semibold text-sm">Record state and province</div>
@@ -2666,15 +2868,15 @@ select.panel:hover { border-color: var(--accent); }
         Signals live in the <script client> block; shareUrl is seeded from the
         server-bridged existing token so the current link shows on load. --}}
     @if (ownsActive)
-      <div class="mb-8 p-5 panel reveal">
+      <div class="p-5 panel site-settings-panel">
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <div class="font-semibold text-sm">Share this dashboard</div>
-            <div class="mt-0.5 text-text-3 text-xs">A read-only link — anyone with it can view, but not manage, this site.</div>
+            <div class="mt-0.5 text-text-3 text-xs">Anyone with this read-only link can view the report, but cannot manage the site.</div>
           </div>
           {{-- No @if here: a client-signal @if nested inside a server @if breaks stx's
               @endif matching. :show is the binding for this (stx-standards §7.3) and
-              carries its SSR state in the static style, per §7.1 — the element ships
+              carries its SSR state in the static style, per §7.1. The element ships
               hidden and the first effect reveals it. --}}
           <div class="flex flex-wrap gap-2 items-center" :show="shareUrl()" style="display:none">
             <input readonly :value="shareUrl()" aria-label="Share link" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
@@ -2690,21 +2892,6 @@ select.panel:hover { border-color: var(--accent); }
         server ran no queries, so there's nothing to leak here — we show a gated card
         (below, @else) instead of the panels. --}}
     @if (viewGranted)
-
-    {{-- KPIs: hairline-separated, mono numerics, no heavy card chrome --}}
-    <div class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal">
-      @foreach (kpiCards as kpi)
-        <div class="px-5 py-5 border-border">
-          <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase">{{ kpi.label }}</div>
-          <div class="font-semibold text-3xl tracking-tight mono">{{ kpi.value }}</div>
-          @if (kpi.delta !== null)
-            <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
-              {{ kpi.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(kpi.delta) }}% <span class="text-text-3">vs prev</span>
-            </div>
-          @endif
-        </div>
-      @endforeach
-    </div>
 
     {{-- Timeseries: page views (area) + unique visitors (line) --}}
     <div class="mb-6 p-5 panel reveal">
@@ -2773,7 +2960,7 @@ select.panel:hover { border-color: var(--accent); }
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%; background: var(--bar);"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ p.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums text-text-3 mono" title="Bounce rate — of sessions that landed on this page, the share that bounced">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : '—' }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Bounce rate for sessions that landed on this page">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : 'n/a' }}</span>
               <span class="font-medium tabular-nums mono">{{ Number(p.views).toLocaleString() }}</span>
             </span>
           </StxLink>
@@ -2870,7 +3057,7 @@ select.panel:hover { border-color: var(--accent); }
                             it is. Splitting by device divides the sample count,
                             so this is common on small sites and has to read as
                             "not enough people" rather than "broken". --}}
-                        <span class="text-text-3" title="Withheld — {{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }} measurements needed">—</span>
+                        <span class="text-text-3" title="Withheld: {{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }} measurements needed">n/a</span>
                       @else
                         <span class="text-text-3" title="No measurements yet">·</span>
                       @endif
@@ -2924,8 +3111,8 @@ select.panel:hover { border-color: var(--accent); }
                   <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions).toLocaleString() }}</td>
                   {{-- Derived here from the two stored counts, never read from a
                       ctr column -- see the migration for why one is not stored. --}}
-                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions) > 0 ? `${(Number(q.clicks) / Number(q.impressions) * 100).toFixed(1)}%` : '—' }}</td>
-                  <td class="pr-1 py-2 tabular-nums text-right mono">{{ q.position === null ? '—' : Number(q.position).toFixed(1) }}</td>
+                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions) > 0 ? `${(Number(q.clicks) / Number(q.impressions) * 100).toFixed(1)}%` : 'n/a' }}</td>
+                  <td class="pr-1 py-2 tabular-nums text-right mono">{{ q.position === null ? 'n/a' : Number(q.position).toFixed(1) }}</td>
                 </tr>
               @endforeach
             </tbody>
@@ -3410,7 +3597,7 @@ select.panel:hover { border-color: var(--accent); }
     const note = document.querySelector('[data-country-missing]')
     if (note) {
       const label = missing.map(c => serverNames[c] || names[c] || c).join(', ')
-      note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale — see the list below.`
+      note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale. See the list below.`
       note.removeAttribute('hidden')
     }
   }

@@ -702,18 +702,16 @@ export const tsCloud: TsCloudConfig = {
    * Hetzner path (`deployAllComputeSites`) builds each site's `root`, tars it,
    * and ships it to `/var/www/<siteName>` on the box. No new Hetzner buckets are
    * created. Each site's key maps 1:1 to `/var/www/<key>`:
-   *   - `docs`   → /var/www/docs   → served at /docs   on stacksjs.com
-   *   - `blog`   → /var/www/blog   → served at /blog   on stacksjs.com
+   *   - `docs` -> /var/www/docs -> served at /docs on analyticshq.org
    *
    * The Stacks root is served by the `main` server app; do not add a second
-   * static `/` site for stacksjs.com or it will compete with the app route.
+   * static `/` site for analyticshq.org or it will compete with the app route.
    */
   sites: {
     // The analyticshq app itself — a Bun server (`buddy serve`) that renders
     // the stx dashboard + serves the /collect ingest + /api/* stats routes on
     // :3000, fronted by the reverse proxy on analyticshq.org. This is the
-    // ONLY site: no docs/blog/marketing static sites (this is a single-purpose
-    // analytics app, not the stacks.com monorepo the scaffold was cloned from).
+    // main application site, with BunPress documentation mounted at /docs.
     //
     // On the shared `stacks` box (attachTo) ts-cloud namespaces every install
     // dir by project slug — this ships to /var/www/analyticshq-main via the
@@ -824,6 +822,15 @@ export const tsCloud: TsCloudConfig = {
         'rm -rf storage/framework/auto-imports',
       ],
       env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production' },
+    },
+
+    // BunPress documentation, built as static files and mounted under /docs.
+    docs: {
+      root: './dist/docs/.bunpress',
+      path: '/docs',
+      domain: env.APP_DOMAIN || 'analyticshq.org',
+      deploy: 'server',
+      build: 'PATH="$PWD/node_modules/.bin:$PATH" bun node_modules/@stacksjs/buddy/dist/cli.js build docs && test -d dist/docs/.bunpress',
     },
 
     // www → apex redirect.
