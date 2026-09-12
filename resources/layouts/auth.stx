@@ -26,7 +26,7 @@
 :root {
   color-scheme: dark;
   --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
-  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #6d777c;
+  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #7b878c;
   --accent: #46d3c0; --accent-ink: #04201c;
   --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
 }

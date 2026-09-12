@@ -2122,7 +2122,7 @@ onMount(() => {
 .range-link:hover { color: var(--text); }
 .range-link[aria-current="page"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 .range-tool {
   display: inline-flex;
@@ -2153,7 +2153,7 @@ summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.range-tool.is-active { color: #fff; background: var(--accent); border-color: var(--accent); }
+.range-tool.is-active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .range-tool i { width: 1rem; height: 1rem; }
 .date-menu { position: relative; }
 .date-menu > summary { list-style: none; }
@@ -2527,9 +2527,9 @@ select.panel:hover { border-color: var(--accent); }
                 role="tab"
                 @click="installTab.set('{{ opt.id }}')"
                 :style="installTab() === '{{ opt.id }}'
-                  ? 'padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'
+                  ? 'padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'
                   : 'padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'"
-                style="padding:5px 11px;border-radius:999px;border:1px solid {{ opt.id === 'html' ? 'var(--accent)' : 'var(--border)' }};background:{{ opt.id === 'html' ? 'var(--accent)' : 'transparent' }};color:{{ opt.id === 'html' ? '#fff' : 'var(--text-2)' }};font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer"
+                style="padding:5px 11px;border-radius:999px;border:1px solid {{ opt.id === 'html' ? 'var(--accent)' : 'var(--border)' }};background:{{ opt.id === 'html' ? 'var(--accent)' : 'transparent' }};color:{{ opt.id === 'html' ? 'var(--accent-ink)' : 'var(--text-2)' }};font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer"
               >{{ opt.label }}</button>
             @endforeach
           </div>
@@ -2626,7 +2626,7 @@ select.panel:hover { border-color: var(--accent); }
                     display:none until the bundle ran. Busy state is carried by
                     :disabled, an ATTRIBUTE binding, which does not cloak, and by
                     the sibling below, which is supposed to start hidden. --}}
-                <button type="button" @click="sendInvite()" :disabled="inviteBusy()" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Send invitation</button>
+                <button type="button" @click="sendInvite()" :disabled="inviteBusy()" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Send invitation</button>
                 <span :show="inviteBusy()" style="display:none;color:var(--text-3);font:400 12px/1 var(--sans,ui-sans-serif)">Sending…</span>
               </div>
               <p class="mt-2 text-text-3 text-xs">They get an emailed link that works once, for that address only, and expires in 14 days.</p>
@@ -2637,7 +2637,7 @@ select.panel:hover { border-color: var(--accent); }
               <div class="mt-4 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
                 <p class="mb-1 font-semibold text-sm">Invite your teammates with Pro</p>
                 <p class="mb-3 text-text-3 text-xs">Share this site with as many people as you like, each with their own login and their own level of access. Included in Pro at no extra cost per person.</p>
-                <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
+                <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
               </div>
             @endif
           @endif
@@ -2695,7 +2695,7 @@ select.panel:hover { border-color: var(--accent); }
               in separate elements for the same reason: a reactive child cloaks
               its parent. --}}
           <div class="flex flex-wrap gap-3 items-center mt-4">
-            <button type="button" @click="importFromGa" :disabled="gaBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+            <button type="button" @click="importFromGa" :disabled="gaBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
           </div>
           <p class="mt-2 text-text-3 text-xs" :show="gaProgress()" style="display:none">{{ gaProgress() }}</p>
           <p class="mt-3 text-sm text-text-2" :show="gaResult()" style="display:none">{{ gaResult() }}</p>
@@ -2779,7 +2779,7 @@ select.panel:hover { border-color: var(--accent); }
                 button's own text would hide the control until hydration. --}}
             <div class="flex flex-wrap gap-3 items-center mt-4">
               <button type="button" @click="checkFathomExport" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Check this export</button>
-              <button type="button" @click="importFromFathom" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+              <button type="button" @click="importFromFathom" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
             </div>
 
             <p class="mt-2 text-text-3 text-xs" :show="fathomProgress()" style="display:none">{{ fathomProgress() }}</p>
@@ -2808,7 +2808,7 @@ select.panel:hover { border-color: var(--accent); }
             <div class="mt-1 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
               <p class="mb-1 font-semibold text-sm">Import your Fathom history with Pro</p>
               <p class="mb-3 text-text-3 text-xs">Upload your Fathom export and keep every number you already have, sitting alongside the traffic we start tracking today. Included in Pro at no extra cost.</p>
-              <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
+              <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
             </div>
           @endif
         </div>
@@ -2884,7 +2884,7 @@ select.panel:hover { border-color: var(--accent); }
             <button type="button" @click="copyShare" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareCopied() ? 'Copied' : 'Copy' }}</button>
             <button type="button" @click="revokeShare" :disabled="shareBusy()" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-3);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
           </div>
-          <button type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
+          <button type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
         </div>
       </div>
     @endif
@@ -3312,7 +3312,7 @@ select.panel:hover { border-color: var(--accent); }
           <option value="starts_with">starts with</option>
         </select>
         <input name="value" type="number" step="any" placeholder="Value" aria-label="Goal value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
+        <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
       <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:#ef4444">{{ goalError() }}</div>
       @endif
@@ -3413,11 +3413,11 @@ select.panel:hover { border-color: var(--accent); }
       @if (user)
         <h2 class="mb-2 font-semibold text-lg">No site to show yet</h2>
         <p class="mb-5 text-sm text-text-2">Add a site to get a tracking snippet and start seeing analytics here.</p>
-        <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Add a site</StxLink>
+        <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Add a site</StxLink>
       @else
         <h2 class="mb-2 font-semibold text-lg">Sign in to view analytics</h2>
         <p class="mb-5 text-sm text-text-2">This dashboard is private to the site owner.</p>
-        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Sign in</StxLink>
+        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Sign in</StxLink>
       @endif
     </div>
     @endif
