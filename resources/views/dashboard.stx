@@ -2611,11 +2611,12 @@ select.panel:hover { border-color: var(--accent); }
                 <input
                   type="email"
                   x-model="inviteEmail"
+                  aria-label="Teammate email"
                   placeholder="teammate@example.com"
                   autocomplete="off"
                   style="flex:1 1 15rem;min-height:34px;padding:0 0.65rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)"
                 >
-                <select x-model="inviteRole" style="min-height:34px;padding:0 0.5rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)">
+                <select x-model="inviteRole" aria-label="Teammate role" style="min-height:34px;padding:0 0.5rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)">
                   <option value="viewer">can view</option>
                   <option value="admin">can manage</option>
                 </select>
@@ -3299,18 +3300,18 @@ select.panel:hover { border-color: var(--accent); }
           event goals or the URL PATH for pageview goals. --}}
       @if (ownsActive)
       <form @submit="addGoal" class="flex flex-wrap gap-2 items-center mt-4 pt-4" style="border-top:1px solid var(--border)">
-        <input name="name" required maxlength="255" placeholder="Goal name" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <select name="type" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <input name="name" required maxlength="255" placeholder="Goal name" aria-label="Goal name" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <select name="type" aria-label="Goal type" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
           <option value="event">Event</option>
           <option value="pageview">Pageview</option>
         </select>
-        <input name="pattern" required maxlength="255" placeholder="Event name or /path" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <select name="match" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <input name="pattern" required maxlength="255" placeholder="Event name or /path" aria-label="Goal event or path" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <select name="match" aria-label="Goal matching rule" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
           <option value="exact">exact</option>
           <option value="contains">contains</option>
           <option value="starts_with">starts with</option>
         </select>
-        <input name="value" type="number" step="any" placeholder="Value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <input name="value" type="number" step="any" placeholder="Value" aria-label="Goal value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
         <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
       <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:#ef4444">{{ goalError() }}</div>
