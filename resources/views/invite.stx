@@ -89,11 +89,11 @@ const roleLabel = invite?.role === 'admin' ? 'view the reports and change settin
 // Round-trips the reader back here after they sign in or register.
 const returnTo = `/invite?token=${encodeURIComponent(token)}`
 
-// The token is the only thing that crosses. Everything else this block resolved
+// The capability is the only thing that crosses. Everything else this block resolved
 // — the invite row, the viewer, the refusal — stays server-side: the client has
 // no decision to make, it only posts the token back for the server to re-check.
-const inviteToken = token
-defineClientPayload({ inviteToken })
+const inviteCapability = token
+defineClientPayload({ inviteCapability })
 </script>
 
 <script client>
@@ -110,7 +110,7 @@ async function accept(): Promise<void> {
     const res = await session.authFetch('/api/invites/accept', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: inviteToken }),
+      body: JSON.stringify({ token: inviteCapability }),
     })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.siteId) {

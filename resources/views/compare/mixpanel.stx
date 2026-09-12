@@ -1,5 +1,5 @@
 <script server>
-import { competitors, crumbsFor } from '../../data/competitors'
+import { competitors, crumbsFor } from '../data/competitors'
 
 const c = competitors.mixpanel
 const crumbs = crumbsFor(c)

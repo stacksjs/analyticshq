@@ -93,12 +93,12 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     @endif
 
     <div>
-      <label class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
-      <input name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
+      <label for="site-name" class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
+      <input id="site-name" name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
     </div>
     <div>
-      <label class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
-      <input name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
+      <label for="site-domain" class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
+      <input id="site-domain" name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
     </div>
 
     <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
