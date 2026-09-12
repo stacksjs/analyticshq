@@ -280,7 +280,7 @@ const regionGeoAllowed = privacy.geo.granularity === 'region'
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
 // UI can show/copy/revoke the link. Bridged into the client block.
-let shareToken = ''
+let __shareToken = ''
 
 // Race all DB work against a short timeout: if PostgreSQL isn't reachable, a
 // TCP connect can hang far longer than a render should wait, so we bail to the
@@ -383,7 +383,7 @@ async function loadData() {
     || null
   // Owner (not a share viewer): surface any existing share token for the link UI.
   if (!shareMode)
-    shareToken = (await readSettings(siteId)).share_token || ''
+    __shareToken = (await readSettings(siteId)).share_token || ''
 
   // Team: who can already reach this site, and who has been invited but has not
   // accepted yet. Resolved server-side and rendered with @foreach so the panel
@@ -1125,7 +1125,11 @@ const exportPayload = {
  * because the snippets are built from server config but can only be *finished*
  * on the client, which is the one thing that knows the real origin.
  */
-defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareToken })
+// This capability is intentionally available only to the authenticated owner
+// UI so it can display the existing share link. The underlying server binding
+// stays private and only this exact scalar crosses the bridge.
+const shareCapability = __shareToken
+defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareCapability })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1144,12 +1148,12 @@ useSeoMeta({
 const goalError = state('')
 const goalBusy = state(false)
 const isPro = state(false)
-// Share link: seeded from the server-bridged existing token (shareToken/activeSiteId
+// Share link: seeded from the server-bridged existing capability and activeSiteId
 // are server consts inlined here by the data bridge), then create/revoke live.
 // Built by shareLinkFor rather than by a second copy of the same template -- it is
 // declared further down and reached by hoisting, which is the trade for having one
 // place that decides what a share URL looks like.
-const shareUrl = state(shareToken ? shareLinkFor(shareToken) : '')
+const shareUrl = state(shareCapability ? shareLinkFor(shareCapability) : '')
 const shareBusy = state(false)
 const shareCopied = state(false)
 // Live "current visitors": seeded from the server render, then polled so the
@@ -2051,7 +2055,7 @@ onMount(() => {
 {{-- The token block, body and .wordmark that stood here were byte-identical to
     account.stx's and now live once in resources/layouts/app.stx. What remains is what
     only the dashboard uses. It is pushed rather than left loose: under a layout stx
-    sweeps every orphan <style> out of the page and appends it AFTER the content, in the
+    sweeps every orphan style block out of the page and appends it AFTER the content, in the
     body, so a loose block would still apply but from the wrong place. --}}
 @push('styles')
 {{-- ts-maps' own stylesheet. Same-origin from /vendor like the engine beside it
@@ -2343,9 +2347,9 @@ select.panel:hover { border-color: var(--accent); }
 </style>
 @endpush
 
-{{-- A <div>, not <main>. The router container is the single <main> in
-    resources/layouts/app.stx: fragment extraction slices from the first <main> to the
-    LAST </main>, so a page that declares its own makes the router swap the wrong span.
+{{-- A div rather than another main. The router container is owned by
+    resources/layouts/app.stx: fragment extraction uses that single container,
+    so a page that declares its own makes the router swap the wrong span.
     Same classes as before, one tag name different. --}}
 @section('content')
 <div class="px-4 py-7 md:px-8 lg:px-10 min-h-[100dvh]">
@@ -2503,7 +2507,7 @@ select.panel:hover { border-color: var(--accent); }
 
         The tab strip is x-for over the server-built catalogue, and the body is
         reactive because the origin can only be resolved in the browser — see the
-        installCode() note in the client block. {{ }} HTML-escapes the snippet so
+        installCode() note in the client block. Server interpolation HTML-escapes the snippet so
         the tag shows as text rather than executing. --}}
     @if (ownsActive)
       <section class="border-border panel site-settings-panel">
@@ -2514,7 +2518,7 @@ select.panel:hover { border-color: var(--accent); }
         <div class="pb-5 px-5">
           {{-- Tabs and prose are SERVER-rendered (@foreach, static labels, server
               mustaches) so this panel still says something useful before the
-              bundle runs. An x-for with a reactive {{ }} label cloaked the whole
+              bundle runs. An x-for with a reactive text label cloaked the whole
               body — x-cloak is display:none, so a new user with nothing to look
               at but install instructions got a blank box. Only the code block
               below is reactive, and only because the origin lives in the
@@ -2553,7 +2557,7 @@ select.panel:hover { border-color: var(--accent); }
 
         Lists are SERVER-rendered with @foreach and server mustaches, for the
         reason spelled out on the install panel above: an x-for whose rows carry
-        reactive {{ }} makes stx cloak the container, and x-cloak is display:none.
+        reactive text makes stx cloak the container, and x-cloak is display:none.
         A mutation re-reads from the server rather than patching a reactive list
         in place — invites are rare and correctness is worth more than avoiding a
         reload here.
@@ -2620,8 +2624,8 @@ select.panel:hover { border-color: var(--accent); }
                   <option value="viewer">can view</option>
                   <option value="admin">can manage</option>
                 </select>
-                {{-- Static label. It was `{{ inviteBusy() ? 'Sending…' : 'Send
-                    invitation' }}`, and stx cloaks any element whose own text is
+                {{-- Static label. It used to choose between Sending and Send
+                    invitation reactively, and stx cloaks any element whose own text is
                     a reactive mustache — so the primary control on this panel was
                     display:none until the bundle ran. Busy state is carried by
                     :disabled, an ATTRIBUTE binding, which does not cloak, and by
@@ -2866,7 +2870,7 @@ select.panel:hover { border-color: var(--accent); }
     @endif
 
     {{-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
-        Signals live in the <script client> block; shareUrl is seeded from the
+        Signals live in the client script block; shareUrl is seeded from the
         server-bridged existing token so the current link shows on load. --}}
     @if (ownsActive)
       <div class="p-5 panel site-settings-panel">
@@ -3171,9 +3175,9 @@ select.panel:hover { border-color: var(--accent); }
         that way. The map is drawn into an empty div by a plain module script, so
         nothing in this subtree is reactive and nothing can be hidden.
 
-        A <div>, not <main>: the router's fragment extraction slices from the
-        first <main> to the last </main>, so a second one makes the SPA swap the
-        wrong span.
+        This remains a div because the router's fragment extraction expects the
+        one main owned by the layout. A second one makes the SPA swap the wrong
+        span.
 
         The bar list below is NOT redundant. A browser-side map is blank until
         the bundle runs, and it is the only thing a reader gets with JS off, on a
@@ -3257,7 +3261,7 @@ select.panel:hover { border-color: var(--accent); }
 
     {{-- Top referrers: the actual referring URLs (full referrer), a drill-down beneath the
         normalized Top sources / channels. Clickable to filter; excludes empty/direct traffic.
-        {{ }} escapes the (beacon-supplied) url. --}}
+        Server interpolation escapes the beacon-supplied URL. --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
@@ -3341,7 +3345,7 @@ select.panel:hover { border-color: var(--accent); }
 
     {{-- Top outbound links / file downloads: the URLs behind the auto-tracked Outbound
         Link / File Download events (properties.url). GROUP BY properties (dialect-portable,
-        no JSON_EXTRACT); site+range scoped like Events. Display-only; {{ }} escapes the url. --}}
+        no JSON_EXTRACT); site+range scoped like Events. Server interpolation escapes the URL. --}}
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Outbound links</h2>
@@ -3433,7 +3437,7 @@ select.panel:hover { border-color: var(--accent); }
 {{-- Pre-render token guard: send a signed-out visitor to /login before paint.
 
     This USED to also mirror the localStorage token into the analyticshq_token cookie
-    and reload once, so the <script server> block could owner-scope the switcher and
+    and reload once, so the server script block could owner-scope the switcher and
     setup panel. Both halves are gone (#33): stacks 0.70.369 has LoginAction set the
     cookie in its own response, so it is present on the very first authenticated
     document request — and the cookie is HttpOnly, so this block could not have written

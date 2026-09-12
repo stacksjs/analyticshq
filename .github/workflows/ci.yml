@@ -201,7 +201,7 @@ jobs:
 
   deploy-prod:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-check.outputs.contains_release == '0'
-    needs: [secrets, lint, typecheck, test, release-check]
+    needs: [secrets, lint, typecheck, test, release-check, build]
     runs-on: ubuntu-latest
     environment: production
 
@@ -250,7 +250,7 @@ jobs:
 
   deploy-stage:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (startsWith(github.ref, 'refs/tags/') && contains(github.ref, '-beta.'))
-    needs: [secrets, lint, typecheck, test]
+    needs: [secrets, lint, typecheck, test, build]
     runs-on: ubuntu-latest
     environment: staging
 
@@ -297,7 +297,7 @@ jobs:
 
   deploy-dev:
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
-    needs: [secrets, lint, typecheck, test]
+    needs: [secrets, lint, typecheck, test, build]
     runs-on: ubuntu-latest
     environment: development
 
@@ -343,7 +343,6 @@ jobs:
         run: bun buddy deploy development --yes
 
   build:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -377,6 +376,9 @@ jobs:
 
       - name: Validate responsive visual contracts
         run: bun run visual:validate
+
+      - name: Validate production release artifact
+        run: bun run release:validate
 
       - name: Verify generated files are current
         run: git diff --exit-code
