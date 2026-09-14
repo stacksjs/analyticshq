@@ -20,6 +20,7 @@ import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
+import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
 import { featureUnavailableMessage, isUnlimited, limitReachedMessage, type PlanFeatures, type PlanLimits } from '../config/plans'
@@ -551,25 +552,12 @@ route.post('/collect', async (request: any) => {
     }).execute()
   }
   else {
-    // Reserved auto-tracked events (Outbound Link / File Download) carry only a url. Store
-    // it canonically as {"url":...} regardless of any extra keys / key-order a caller sends,
-    // so the dashboard's GROUP BY properties aggregates exactly one row per URL — a client
-    // can't split or pollute a URL's row by appending junk keys.
-    let props = body.p ? JSON.stringify(body.p) : null
-    if ((String(event) === 'Outbound Link' || String(event) === 'File Download') && body.p && body.p.url) {
-      let url = String(body.p.url)
-      props = JSON.stringify({ url })
-      // properties is varchar(255): trim the url until the wrapped JSON fits, so it stays
-      // valid JSON (the dashboard JSON.parses it) and never overflows the column — on Postgres
-      // an over-length varchar insert errors (22001) and would 500 the beacon. Only pathologically
-      // long hrefs hit the loop. (TODO: widen custom_events.properties for full-length urls.)
-      while (props.length > 255 && url.length) {
-        url = url.slice(0, -8)
-        props = JSON.stringify({ url })
-      }
-    }
-    // .catch like the sites/sessions inserts above: a storage failure (e.g. an over-length
-    // non-reserved props blob under strict sql_mode) must never 500 the public beacon.
+    // Reserved auto-tracked events carry only their canonical URL, so grouping
+    // stays stable even when a caller sends extra keys in a different order.
+    // Optional metadata is bounded before it reaches the database.
+    const props = serializeEventProperties(event, body.p)
+    // .catch like the sites/sessions inserts above: a storage failure must
+    // never turn the public beacon into a 500 response.
     await db.insertInto('custom_events').values({
       id: randomId(),
       site_id: String(siteId),
