@@ -357,7 +357,7 @@ describe('the map talks to nothing but this origin', () => {
 
   test('interaction is disabled — this is a report, not an explorer', () => {
     const s = mapScript()
-    for (const opt of ['dragging', 'scrollWheelZoom', 'doubleClickZoom', 'touchZoom'])
+    for (const opt of ['dragging', 'scrollWheelZoom', 'doubleClickZoom', 'pinchZoom'])
       expect({ opt, disabled: new RegExp(`${opt}:\\s*false`).test(s) }).toEqual({ opt, disabled: true })
   })
 

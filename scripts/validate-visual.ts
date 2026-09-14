@@ -14,6 +14,8 @@ interface PageAudit {
   focusable: number
   imagesWithoutAlt: number
   overflow: number
+  undersizedDashboardControls: string[]
+  wrappedDashboardValues: string[]
   unresolved: boolean
   unnamedControls: string[]
 }
@@ -182,6 +184,20 @@ const auditExpression = `(() => {
     return { r: 255, g: 255, b: 255, a: 1 }
   }
   const controls = [...document.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea')].filter(visible)
+  const dashboardControls = [...document.querySelectorAll('.site-switcher, .range-link, .range-tool, .chrome-btn, .ga-row, .goal-form input, .goal-form select, .goal-form button')].filter(visible)
+  const undersizedDashboardControls = dashboardControls.flatMap(element => {
+    const rect = element.getBoundingClientRect()
+    if (rect.width >= 44 && rect.height >= 44) return []
+    const name = element.getAttribute('aria-label') || element.textContent?.trim().replace(/\\s+/g, ' ').slice(0, 32) || element.tagName.toLowerCase()
+    return [name + ' (' + Math.round(rect.width) + 'x' + Math.round(rect.height) + ')']
+  })
+  const wrappedDashboardValues = [...document.querySelectorAll('.kpi-value')].filter(visible).flatMap(element => {
+    const rect = element.getBoundingClientRect()
+    const lineHeight = Number.parseFloat(getComputedStyle(element).lineHeight)
+    return rect.height > lineHeight * 1.5 || element.scrollWidth > element.clientWidth + 1
+      ? [element.textContent?.trim() || 'metric value']
+      : []
+  })
   const unnamedControls = controls.filter(element => !label(element)).map(element => {
     const identity = element.id ? '#' + element.id : element.getAttribute('name') ? '[name="' + element.getAttribute('name') + '"]' : ''
     return element.tagName.toLowerCase() + identity
@@ -210,9 +226,21 @@ const auditExpression = `(() => {
     focusable: controls.length,
     imagesWithoutAlt: [...document.images].filter(image => !image.hasAttribute('alt')).length,
     overflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+    undersizedDashboardControls,
+    wrappedDashboardValues,
     unresolved: document.body.innerText.includes('{{') || document.body.innerText.includes('@if'),
     unnamedControls,
   }
+})()`
+
+const dashboardFixtureExpression = `(() => {
+  const fixture = document.createElement('section')
+  fixture.id = 'visual-dashboard-fixture'
+  fixture.setAttribute('aria-hidden', 'true')
+  fixture.style.cssText = 'position:absolute;left:1rem;top:0;width:calc(100vw - 2rem);opacity:0.001;pointer-events:none;z-index:-1'
+  const columns = Array.from({ length: 90 }, (_, index) => '<div class="relative flex-1 ga-col"><div class="ga-tip">Day ' + index + '</div></div>').join('')
+  fixture.innerHTML = '<select class="panel site-switcher" aria-label="Switch site"><option>example.com</option></select><a class="range-link" href="#">24h</a><button class="range-tool">Export</button><a class="chrome-btn" href="#">Account</a><a class="ga-row" href="#">Page row</a><form class="goal-form"><input aria-label="Goal name"></form><section class="grid grid-cols-2"><div class="px-5"><div class="kpi-label">Average visit time</div><div class="text-3xl kpi-value mono">27m 47s</div></div></section><div class="p-5 panel"><div class="relative h-44 w-full ga-chart"><div class="flex absolute inset-0">' + columns + '</div></div></div>'
+  document.body.appendChild(fixture)
 })()`
 
 async function main(): Promise<void> {
@@ -290,9 +318,15 @@ async function main(): Promise<void> {
             document.documentElement.setAttribute('color-mode', theme)
           })()`)
           await Bun.sleep(500)
+          if (route === '/dashboard') await cdp.evaluate(dashboardFixtureExpression)
           const audit = await cdp.evaluate<PageAudit>(auditExpression)
+          if (route === '/dashboard') await cdp.evaluate("document.getElementById('visual-dashboard-fixture')?.remove()")
           const key = `${route} at ${viewport.name}/${theme}`
           if (audit.overflow > 1) failures.push(`${key}: ${audit.overflow}px horizontal overflow`)
+          if (viewport.mobile && audit.undersizedDashboardControls.length)
+            failures.push(`${key}: undersized dashboard controls ${audit.undersizedDashboardControls.join(', ')}`)
+          if (viewport.mobile && audit.wrappedDashboardValues.length)
+            failures.push(`${key}: wrapped dashboard metric values ${audit.wrappedDashboardValues.join(', ')}`)
           if (audit.unresolved) failures.push(`${key}: unresolved template expression is visible`)
           if (audit.imagesWithoutAlt) failures.push(`${key}: ${audit.imagesWithoutAlt} image(s) have no alt attribute`)
           if (audit.unnamedControls.length) failures.push(`${key}: unnamed controls ${audit.unnamedControls.join(', ')}`)
