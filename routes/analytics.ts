@@ -20,9 +20,10 @@ import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app
 import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
+import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
-import { isUnlimited, limitReachedMessage, type PlanLimits } from '../config/plans'
+import { featureUnavailableMessage, isUnlimited, limitReachedMessage, type PlanFeatures, type PlanLimits } from '../config/plans'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { healthResponse } from '../app/Support/health'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
@@ -33,6 +34,9 @@ import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVita
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
+import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
+import { readFathomZip } from '../app/Analytics/fathom-zip'
+import { foldRegions } from '../app/Analytics/regions'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -47,7 +51,7 @@ import {
   randomId,
   referrerSource,
 } from '../app/Analytics/tracking'
-import { countryFromIp } from '../app/Analytics/geo'
+import { countryFromIp, geoHasRegions, regionFromIp } from '../app/Analytics/geo'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -239,6 +243,74 @@ function clip255(v: unknown): string | null {
 }
 
 /**
+ * Sites that opted into region geo, cached for a minute.
+ *
+ * ## Why there is a cache at all
+ *
+ * This is read on every single beacon, and it is the only thing on that path
+ * that would need the `sites` row. An uncached `SELECT` here would add a round
+ * trip to every page view on the internet's behalf to answer a question whose
+ * answer changes when somebody ticks a checkbox.
+ *
+ * A minute of staleness is the cost, and it is the right direction: a site
+ * owner who turns regions OFF keeps recording them for up to a minute, which is
+ * visible and self-correcting, while `pgq` failing means recording none.
+ */
+const REGION_SITE_TTL_MS = 60_000
+const regionSites = new Map<string, { on: boolean, at: number }>()
+
+/**
+ * Has this site asked for region, on an install that permits it?
+ *
+ * Both halves, in that order, and the instance half first because it is free.
+ *
+ * THAT ORDERING STOPPED BEING FREE WHEN THE CEILING WAS RAISED. It used to
+ * return here on every default install, because `granularity` defaulted to
+ * `'country'`; the default is now `'region'`, so the common path reaches the
+ * cache instead. What that costs is one `SELECT region_geo` per site per minute
+ * — not per beacon — and every hit after the first inside that minute is a Map
+ * lookup. An operator who wants the old zero-cost behaviour sets `granularity`
+ * back to `'country'`, which also takes the option away from site owners.
+ *
+ * FAILS CLOSED. Every path that is not an explicit `true` from the database
+ * returns false: no row, an unreadable column, a query that threw. The worst
+ * case of getting this wrong in one direction is a gap in a breakdown, and in
+ * the other it is recording sub-country location for a site that did not ask.
+ */
+async function siteWantsRegion(siteId: string): Promise<boolean> {
+  if (privacy.geo.granularity !== 'region')
+    return false
+
+  const now = Date.now()
+  const hit = regionSites.get(siteId)
+  if (hit && now - hit.at < REGION_SITE_TTL_MS)
+    return hit.on
+
+  const rows = await pgq(
+    `SELECT region_geo FROM sites WHERE id = ? LIMIT 1`,
+    [siteId],
+  ).catch(() => null) as Array<{ region_geo?: unknown }> | null
+
+  if (rows === null)
+    return false
+
+  // Drivers spell a Postgres boolean as `true`, `'t'` or `1` depending on which
+  // one is in front of us. Anything else, including undefined, is not a yes.
+  const raw = rows[0]?.region_geo
+  const on = raw === true || raw === 't' || raw === 1
+  regionSites.set(siteId, { on, at: now })
+  return on
+}
+
+/** Forget the cached opt-ins. Called when a site's setting changes, and by tests. */
+export function resetRegionSiteCache(siteId?: string): void {
+  if (siteId)
+    regionSites.delete(siteId)
+  else
+    regionSites.clear()
+}
+
+/**
  * Goal-matching contract. A goal targets either a `pageview` (matched against
  * the page path) or an `event` (matched against the custom event name), using
  * one of three `match_type`s. Returns whether the current hit fires this goal.
@@ -393,14 +465,20 @@ route.post('/collect', async (request: any) => {
     ? String(recentSession[0].session_id)
     : createHash('sha256').update(`${siteId}|${visitorId}|${Math.floor(Date.now() / SESSION_WINDOW_MS)}`).digest('hex').slice(0, 32)
   const info = parseUserAgent(ua)
-  // 'none' records no location at all; there is deliberately no city/region
-  // option, since adding one would be a product decision, not config (#11).
+  // 'none' records no location at all. 'country' and 'region' both resolve the
+  // country here; the difference between them is only whether a site is ALLOWED
+  // to ask for more, which `siteWantsRegion` decides below.
   //
   // `ip` is the one already read above for the visitor hash — geo resolves from
   // the same value, in the same request, and it is discarded with it. Passing it
   // here is what makes country work at all on a host with no CDN in front of it,
   // which is every self-hosted install and our own production box.
-  const country = privacy.geo.granularity === 'country' ? geoCountry(request.headers, ip) : undefined
+  const country = privacy.geo.granularity !== 'none' ? geoCountry(request.headers, ip) : undefined
+  // IP only, with no CDN-header equivalent: the edge headers carry a country and
+  // nothing finer, so there is no header path to read a subdivision out of. A
+  // site behind Cloudflare that opts in gets regions from the local database or
+  // not at all.
+  const region = (await siteWantsRegion(String(siteId))) ? regionFromIp(ip) : undefined
   const now = new Date().toISOString()
 
   let url: URL | null = null
@@ -430,6 +508,7 @@ route.post('/collect', async (request: any) => {
     referrer: cleanReferrer(body.r),
     referrer_source: source,
     country: country ?? null,
+    region: region ?? null,
     device_type: info.deviceType,
     browser: info.browser,
     os: info.os,
@@ -457,6 +536,7 @@ route.post('/collect', async (request: any) => {
       utm_content: utmParam(body.utm_content),
       utm_term: utmParam(body.utm_term),
       country: country ?? null,
+      region: region ?? null,
       device_type: info.deviceType,
       browser: info.browser,
       browser_version: null,
@@ -472,25 +552,12 @@ route.post('/collect', async (request: any) => {
     }).execute()
   }
   else {
-    // Reserved auto-tracked events (Outbound Link / File Download) carry only a url. Store
-    // it canonically as {"url":...} regardless of any extra keys / key-order a caller sends,
-    // so the dashboard's GROUP BY properties aggregates exactly one row per URL — a client
-    // can't split or pollute a URL's row by appending junk keys.
-    let props = body.p ? JSON.stringify(body.p) : null
-    if ((String(event) === 'Outbound Link' || String(event) === 'File Download') && body.p && body.p.url) {
-      let url = String(body.p.url)
-      props = JSON.stringify({ url })
-      // properties is varchar(255): trim the url until the wrapped JSON fits, so it stays
-      // valid JSON (the dashboard JSON.parses it) and never overflows the column — on Postgres
-      // an over-length varchar insert errors (22001) and would 500 the beacon. Only pathologically
-      // long hrefs hit the loop. (TODO: widen custom_events.properties for full-length urls.)
-      while (props.length > 255 && url.length) {
-        url = url.slice(0, -8)
-        props = JSON.stringify({ url })
-      }
-    }
-    // .catch like the sites/sessions inserts above: a storage failure (e.g. an over-length
-    // non-reserved props blob under strict sql_mode) must never 500 the public beacon.
+    // Reserved auto-tracked events carry only their canonical URL, so grouping
+    // stays stable even when a caller sends extra keys in a different order.
+    // Optional metadata is bounded before it reaches the database.
+    const props = serializeEventProperties(event, body.p)
+    // .catch like the sites/sessions inserts above: a storage failure must
+    // never turn the public beacon into a 500 response.
     await db.insertInto('custom_events').values({
       id: randomId(),
       site_id: String(siteId),
@@ -676,6 +743,27 @@ async function requirePlanAllows(siteId: string, resource: keyof PlanLimits, cou
     return null
 
   return json({ error: limitReachedMessage(resource, limit, plan), plan, upgradeUrl: '/pricing' }, 402)
+}
+
+/**
+ * Gate an action on the plan INCLUDING a capability, rather than on having room
+ * left under a cap.
+ *
+ * Same 402 envelope as `requirePlanAllows`, so the dashboard's existing error
+ * path needs nothing new, and the same composition rule: call the role check
+ * first, so an outsider gets 403/404 and learns nothing about the owner's
+ * billing.
+ *
+ * `=== true` rather than truthiness. A capability nobody declared reads as
+ * `undefined`, and an entitlement that arrived malformed has to fail closed -
+ * the boolean form of the reasoning in `isUnlimited`.
+ */
+async function requirePlanIncludes(siteId: string, feature: keyof PlanFeatures, error: string): Promise<Response | null> {
+  const { plan, features } = await planForSite(siteId)
+  if (features[feature] === true)
+    return null
+
+  return json({ error, plan, upgradeUrl: '/pricing' }, 402)
 }
 
 // ---------------------------------------------------------------------------
@@ -1178,6 +1266,32 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     params.push(JSON.stringify(settings))
   }
 
+  // Region (state/province) geo, off by default (#7 revisited).
+  //
+  // OWNER, not admin, unlike everything above it. The rest of this route is
+  // configuration — a name, a timezone, a currency — and this one changes what
+  // the product records about the people who visit. That is the site owner's
+  // call to make and not a delegated one, the same line the Fathom import draws.
+  //
+  // REFUSED RATHER THAN STORED when the install does not permit it. A setting
+  // that saves, reads back as on, and records nothing is worse than an error: it
+  // sends the owner looking at their snippet, their DNS and their ad blocker for
+  // a reason that was in config/privacy.ts the whole time.
+  if (body.regionGeo !== undefined) {
+    if (typeof body.regionGeo !== 'boolean')
+      return json({ error: 'regionGeo must be true or false' }, 400)
+    const notOwner = await requireSiteOwner(request, siteId)
+    if (notOwner)
+      return notOwner
+    if (body.regionGeo === true && privacy.geo.granularity !== 'region') {
+      return json({
+        error: 'This install records country only. Region geolocation has to be permitted for the whole install before a site can turn it on. Set geo.granularity to "region" in config/privacy.ts.',
+      }, 409)
+    }
+    sets.push('region_geo = ?')
+    params.push(body.regionGeo)
+  }
+
   if (!sets.length)
     return json({ error: 'nothing to update' }, 400)
 
@@ -1185,7 +1299,11 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
   params.push(new Date().toISOString())
   params.push(String(siteId))
   await pgq(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`, params)
-  const rows = await pgq(`SELECT id, name, domains, timezone, is_active FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
+  // The ingest caches this site's region opt-in for a minute. Dropping the entry
+  // here makes turning it OFF take effect on the next beacon rather than at the
+  // end of a TTL the owner cannot see.
+  resetRegionSiteCache(String(siteId))
+  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
   return json({ site: rows?.[0] ?? null })
 }).middleware('auth').skipCsrf()
 
@@ -2470,6 +2588,230 @@ route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
 }).middleware('auth').skipCsrf()
 
 // ---------------------------------------------------------------------------
+// Fathom import (CSV upload)
+// ---------------------------------------------------------------------------
+// The migration path off Fathom, and the one import a customer can do without
+// holding a credential for anything. Fathom's dashboard download is a zip of
+// about eighteen CSVs, and it is posted as base64 in the JSON body and unzipped
+// here, which is why there is no multipart handling despite this being a file
+// upload. The zip is held for the length of the request, and neither it nor the
+// CSVs inside it are written anywhere but into the synthesized rows.
+//
+// PAID, unlike the GA4 and Search Console imports above. Those two ask Google
+// for the data with a credential the customer already has; this one is the whole
+// migration in a single upload.
+//
+// TWO SHAPES OF REQUEST, one handler. `dryRun` reads the export, reports what it
+// found, and writes nothing - the only guard against importing one site's
+// history into another, because nothing in the eighteen files names the site.
+// The real run does the same reading and then writes.
+//
+// DATE WINDOWING rather than a partial write. An export covers one fixed range,
+// so an import that stopped halfway could not be finished by re-exporting a
+// shorter one: a shorter export has different breakdown totals, so the synthesis
+// lands on a different split and mints different ids, and the second attempt
+// would stack on the first instead of colliding with it. `fromDay`/`toDay`
+// filter the SAME export instead, and because the synthesis is deterministic the
+// windows compose into exactly the import the whole file would have produced.
+
+route.options('/api/sites/{siteId}/import/fathom', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/sites/{siteId}/import/fathom', async (request: any) => {
+  const siteId = request.params.siteId
+  // Owner, not admin: this writes history into the site's own tables, and
+  // `replace` deletes a previous import. Role first, plan second, so an
+  // outsider learns nothing about the owner's billing.
+  const denied = await requireSiteOwner(request, siteId)
+  if (denied)
+    return denied
+
+  const blocked = await requirePlanIncludes(
+    String(siteId),
+    'csvImport',
+    featureUnavailableMessage('Importing from a CSV file', 'bring your existing history into this site'),
+  )
+  if (blocked)
+    return blocked
+
+  const body = request.jsonBody ?? {}
+
+  // TWO UPLOAD SHAPES, and `names` is what makes them one handler from here on:
+  // every filename the upload carried, whether or not its text came with it.
+  //
+  // `zip` is what the dashboard sends - Fathom's own download, base64 in the
+  // same JSON body, unzipped on this side because a browser can inflate a
+  // deflate stream but cannot read the zip container around it. `files`, the
+  // filename-to-CSV-text object, is still accepted: it is what the CLI importer
+  // and anyone who unzipped the export themselves send, and the zip path
+  // reduces to exactly it after one call.
+  let files: Map<string, string>
+  let names: string[]
+
+  if (typeof body.zip === 'string') {
+    // Not pre-measured before decoding, for the same reason the branch below
+    // measures after parsing: by the time either runs the whole body is already
+    // a string in memory, and how big a request may be is the server's question
+    // rather than this handler's.
+    const unzipped = readFathomZip(new Uint8Array(Buffer.from(body.zip, 'base64')))
+    if ('error' in unzipped)
+      return json({ error: unzipped.error }, unzipped.tooLarge ? 413 : 400)
+    files = unzipped.files
+    names = unzipped.names
+  }
+  else {
+    const raw = body.files
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+      return json({ error: 'Send the export as a "zip" of base64 zip bytes, or as a "files" object of filename to CSV text.' }, 400)
+
+    const entries = Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string')
+    if (!entries.length)
+      return json({ error: 'Send the export as a "zip" of base64 zip bytes, or as a "files" object of filename to CSV text.' }, 400)
+
+    // byteLength, not String.length: a path or a page title outside ASCII costs
+    // more bytes than characters, and the cap is about what crosses the wire.
+    const bytes = entries.reduce((n, [, v]) => n + Buffer.byteLength(String(v), 'utf8'), 0)
+    if (bytes > FATHOM_MAX_UPLOAD_BYTES) {
+      return json({
+        error: 'That export is larger than 5 MB of CSV, which is more than one request can take. In Fathom, choose a shorter date range, download again, and import the pieces one after another. Each import adds to the last.',
+      }, 413)
+    }
+
+    files = new Map(entries.map(([k, v]) => [String(k), String(v)]))
+    names = [...files.keys()].map(fathomBasename)
+  }
+
+  // Fathom has a second export route - Exports, then Custom Export - which is
+  // queued, emailed, and shaped nothing like the dashboard zip. Saying so beats
+  // "Summary.csv was not in the upload" for someone holding the wrong download.
+  if (!names.includes('Summary.csv') && names.filter(n => n.startsWith('pageviews-')).length >= 2) {
+    return json({
+      error: 'These files come from Fathom\'s Custom Export, which we cannot read yet. Use the download button on the Fathom dashboard instead: it produces a zip with Summary.csv and Pages.csv in it.',
+    }, 400)
+  }
+
+  // `names` as the second argument, so a zip still gets its "not imported yet"
+  // warning: the referrers, entry/exit page, events and UTM files were in the
+  // upload but were never inflated, so the map cannot show they were there.
+  const read = readFathomExport(files, names)
+  if ('error' in read)
+    return json({ error: read.error }, 400)
+
+  // A filtered export is a subset of the site that looks exactly like a whole
+  // one, and imports as a quiet period that never happened. Confirmed, not
+  // warned about afterwards.
+  if (read.notes.filtersApplied > 0 && body.acceptFiltered !== true) {
+    return json({
+      error: 'This export was taken with filters applied in Fathom, so it holds part of your traffic and not all of it. Importing it will look like a quiet period on your dashboard. Clear the filters in Fathom and download again, or confirm that you want the filtered subset.',
+    }, 400)
+  }
+
+  const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  if (body.fromDay !== undefined && !isDay(body.fromDay))
+    return json({ error: 'fromDay must be YYYY-MM-DD.' }, 400)
+  if (body.toDay !== undefined && !isDay(body.toDay))
+    return json({ error: 'toDay must be YYYY-MM-DD.' }, 400)
+
+  const all = fathomRecords(read.export)
+  const records = all.filter(r =>
+    (!isDay(body.fromDay) || r.date >= body.fromDay)
+    && (!isDay(body.toDay) || r.date <= body.toDay))
+
+  // Counted from the whole export, never from the window, so the answer does not
+  // change depending on which slice is being asked about.
+  const estimate = estimateRows(read.export)
+  const windowed = isDay(body.fromDay) || isDay(body.toDay)
+  if (!windowed && estimate.pageViews > FATHOM_MAX_ROWS_PER_REQUEST) {
+    return json({
+      error: `This export would create about ${estimate.pageViews.toLocaleString()} page views, and one import can write ${FATHOM_MAX_ROWS_PER_REQUEST.toLocaleString()}. Nothing was imported. Import it a few days at a time instead.`,
+      estimate,
+      maxRows: FATHOM_MAX_ROWS_PER_REQUEST,
+      range: { from: read.export.from, to: read.export.to },
+    }, 413)
+  }
+
+  const warnings = fathomImportWarnings(read.notes)
+
+  if (body.dryRun === true) {
+    // Whether this site has been imported into before, so "Replace" is a choice
+    // the customer makes knowing there is something to replace.
+    const prior = await pgq(
+      `SELECT 1 FROM page_views WHERE site_id = ? AND id LIKE ? LIMIT 1`,
+      [String(siteId), `${FATHOM_PAGE_VIEW_PREFIX}%`],
+    ).catch(() => []) as unknown[]
+
+    return json({
+      ok: true,
+      dryRun: true,
+      range: { from: read.export.from, to: read.export.to },
+      preview: {
+        // Which files were actually read. Named because a zip upload is opaque
+        // to the person who sent it: they chose one file, not seven, so this is
+        // the only place they can see that Countries.csv was in there.
+        read: [...files.keys()].map(fathomBasename).sort(),
+        paths: read.export.pages.size,
+        people: read.notes.people,
+        visitors: read.notes.reconciledVisitors,
+        pageViews: estimate.pageViews,
+        sessions: estimate.sessions,
+        priorImport: (prior?.length ?? 0) > 0,
+      },
+      maxRows: FATHOM_MAX_ROWS_PER_REQUEST,
+      warnings,
+    })
+  }
+
+  // Only the Fathom prefixes. A previous GA import belongs to a different
+  // importer and is not this one's to delete.
+  if (body.replace === true) {
+    await pgq(`DELETE FROM page_views WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${FATHOM_PAGE_VIEW_PREFIX}%`]).catch(() => {})
+    await pgq(`DELETE FROM sessions WHERE site_id = ? AND id LIKE ?`, [String(siteId), `${FATHOM_SESSION_PREFIX}%`]).catch(() => {})
+  }
+
+  const now = new Date()
+  let pageViews = 0
+  let sessions = 0
+  let sessBuf: Record<string, unknown>[] = []
+  let pvBuf: Record<string, unknown>[] = []
+
+  const flush = async (): Promise<void> => {
+    // Sessions first: page_views.session_id has a foreign key to it.
+    const s = buildInsert('sessions', sessBuf)
+    if (s)
+      await db.unsafe(s.sql, s.params)
+    const p = buildInsert('page_views', pvBuf)
+    if (p)
+      await db.unsafe(p.sql, p.params)
+    sessBuf = []
+    pvBuf = []
+  }
+
+  for (const record of records) {
+    const rows = synthesizeRecord(String(siteId), record, now, {
+      pageView: FATHOM_PAGE_VIEW_PREFIX,
+      session: FATHOM_SESSION_PREFIX,
+    })
+    sessBuf.push(...rows.sessions)
+    pvBuf.push(...rows.pageViews)
+    sessions += rows.sessions.length
+    pageViews += rows.pageViews.length
+    if (pvBuf.length >= 2000)
+      await flush()
+  }
+  await flush()
+
+  return json({
+    ok: true,
+    dryRun: false,
+    imported: { pageViews, sessions, records: records.length },
+    range: {
+      from: isDay(body.fromDay) ? body.fromDay : read.export.from,
+      to: isDay(body.toDay) ? body.toDay : read.export.to,
+    },
+    warnings,
+  })
+}).middleware('auth').skipCsrf().rateLimit(12, 'minute')
+
+// ---------------------------------------------------------------------------
 // Search Console (#25)
 // ---------------------------------------------------------------------------
 // The one thing our own tracker genuinely cannot see. Search engines strip the
@@ -3108,7 +3450,23 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
 // breakdown has a documented JSON endpoint too (issue #15). `column` is always a
 // fixed literal from the registrations below (never user input), so
 // interpolating it into the query is safe.
-function topDimension(path: string, column: string, key: string): void {
+/**
+ * `floorRows` applies the disclosure minimum to each ROW, not to the report.
+ *
+ * `suppressedResponse` below withholds a whole report when FILTERS narrowed the
+ * population past the floor — "the disclosure comes from narrowing, not from
+ * smallness", which is right for country: a list saying three people visited
+ * from Iceland identifies nobody, because Iceland is four hundred thousand
+ * people and three of them came.
+ *
+ * A subdivision is not that. It is already a narrowing, applied by the visitor's
+ * own location rather than by a filter, and a state with two visitors on a site
+ * with two thousand is a much smaller haystack than any country. So the regions
+ * breakdown holds every row under the minimum back and reports them together as
+ * "Other" — the traffic still counts, and nobody can point at where it came
+ * from.
+ */
+function topDimension(path: string, column: string, key: string, opts: { floorRows?: boolean } = {}): void {
   route.get(path, async (request: any) => {
     const siteId = request.params.siteId
     const denied = await requireSiteRole(request, siteId, 'viewer')
@@ -3121,19 +3479,48 @@ function topDimension(path: string, column: string, key: string): void {
     const withheld = await suppressedResponse(siteId, from, to, flt)
     if (withheld)
       return withheld
+    // Floored dimensions are grouped in full and cut below, because the rows
+    // that fall under the minimum have to be SUMMED, and a LIMIT applied first
+    // would compute "Other" from the top twenty instead of from everything.
+    // Bounded either way: there are about four thousand ISO subdivisions.
     const result = await filteredQuery(
       `SELECT ${column} AS name, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
       FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND ${column} IS NOT NULL AND ${column} <> ''${flt.sql}
-      GROUP BY ${column} ORDER BY views DESC LIMIT 20`,
+      GROUP BY ${column} ORDER BY views DESC${opts.floorRows ? '' : ' LIMIT 20'}`,
       [siteId, from, to, ...flt.params],
     )
     if ('response' in result)
       return result.response
-    return json({ [key]: result.rows })
+    if (!opts.floorRows)
+      return json({ [key]: result.rows })
+
+    // The fold is shared with the dashboard panel rather than written twice —
+    // see app/Analytics/regions.ts. Two spellings of one threshold would show
+    // one figure in the panel and another through the API for the same day.
+    const folded = foldRegions(
+      (result.rows as Array<Record<string, unknown>>).map(r => ({
+        region: r.name == null ? null : String(r.name),
+        views: Number(r.views),
+        visitors: Number(r.visitors),
+      })),
+      privacy.minSegmentSize,
+      20,
+    )
+    const rows: Array<Record<string, unknown>> = folded.rows.map(r => ({ name: r.region, views: r.views, visitors: r.visitors }))
+    // Cannot collide with a real value: regions are ISO codes like "US-CA".
+    if (folded.other)
+      rows.push({ name: 'Other', views: folded.other.views, visitors: folded.other.visitors })
+    return json({ [key]: rows })
   }).middleware('auth')
 }
 
 topDimension('/api/sites/{siteId}/countries', 'country', 'countries')
+// Empty for every site that has not opted in, which is the honest answer rather
+// than a 404: the dimension exists, this site has no rows for it. The disclosure
+// floor matters more here than anywhere else — a country with four thousand
+// visitors can hold a state with three — and it applies unchanged, because
+// `topDimension` runs every dimension through the same `suppressedResponse`.
+topDimension('/api/sites/{siteId}/regions', 'region', 'regions', { floorRows: true })
 topDimension('/api/sites/{siteId}/devices', 'device_type', 'devices')
 topDimension('/api/sites/{siteId}/browsers', 'browser', 'browsers')
 topDimension('/api/sites/{siteId}/operating-systems', 'os', 'operating_systems')
@@ -3243,5 +3630,11 @@ route.get('/api/health', () => healthResponse({
     // A known-routable address. Resolving it proves the database opened and
     // answered, which a file-exists check would not.
     geo: countryFromIp('8.8.8.8') !== null,
+    // Whether the installed database can answer at subdivision level at all.
+    // False on a default install, and that is not a fault: the country database
+    // carries no subdivisions. It is here because "I ticked region on and see no
+    // regions" is otherwise unanswerable without shell access — almost always
+    // this, rather than anything wrong with the site's setting.
+    geoRegion: geoHasRegions(),
   },
 }))

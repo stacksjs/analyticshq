@@ -19,7 +19,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { normCountry } from '../../app/Analytics/country'
-import { countryFromIp, geoDbPath, resetGeoCache } from '../../app/Analytics/geo'
+import { countryFromIp, geoDbPath, geoHasRegions, regionFromIp, resetGeoCache } from '../../app/Analytics/geo'
 import { geoCountry } from '../../app/Analytics/tracking'
 
 /** Build a Headers from a plain object, the shape `/collect` receives. */
@@ -176,10 +176,15 @@ describe('countryFromIp against the real database', () => {
     expect(performance.now() - t).toBeLessThan(2000)
   })
 
-  maybe('is the country database, not the city one', () => {
-    // Country-only is an invariant (#7, #28). Loading a city-level DB here would
-    // be a product decision smuggled in as a file swap, so assert the file we
-    // actually load has no city data in it.
+  maybe('the DEFAULT database is the country one, not the city one', () => {
+    // Region geo is now reachable, so this no longer says "never a city file".
+    // It says the file a normal deployment loads is still the country one, which
+    // is the other half of what makes region opt-in: with this on disk, a site
+    // that ticks the box records nothing.
+    //
+    // An operator who wants regions points ANALYTICSHQ_GEO_DB at DB-IP's City
+    // Lite deliberately. That is a decision someone makes, which was always the
+    // objection (#7, #28) — not a file swap nobody noticed.
     const raw = readFileSync(dbPath)
     const meta = raw.subarray(raw.length - 200_000).toString('latin1')
     expect(meta).toContain('Country')
@@ -197,12 +202,55 @@ describe('countryFromIp against the real database', () => {
  * says in prose that changing geo means changing `competitors.ts` in the same
  * commit — this is that rule, enforced.
  */
+describe('regionFromIp degrades to nothing without a city database', () => {
+  // The most important property in this file, and the one that makes opt-in
+  // region geo safe to ship: the DEFAULT install cannot record a region even if
+  // every flag says yes, because the database on disk has no subdivisions in it.
+  // A regression here would mean a site that ticked the box on a country-only
+  // install silently started collecting sub-country location.
+  const dbPath = geoDbPath()
+  const present = existsSync(dbPath)
+  const maybe = present ? test : test.skip
+
+  maybe('the shipped country database yields no regions at all', () => {
+    for (const ip of ['8.8.8.8', '1.1.1.1', '212.227.222.8', '2001:4860:4860::8888'])
+      expect({ ip, region: regionFromIp(ip) }).toEqual({ ip, region: null })
+  })
+
+  maybe('and says so, so /api/health can report why', () => {
+    expect(geoHasRegions()).toBe(false)
+  })
+
+  maybe('country still resolves for the same addresses', () => {
+    // Proves the null above is the absence of subdivisions and not a broken
+    // lookup — without this, a geo module that returned null for everything
+    // would pass the test above.
+    expect(countryFromIp('8.8.8.8')).toBe('US')
+  })
+
+  test('the addresses that never resolve a country never resolve a region', () => {
+    for (const ip of ['', '0.0.0.0', '127.0.0.1', '::1', '1.2.3', 'not-an-ip', '999.1.1.1'])
+      expect({ ip, region: regionFromIp(ip) }).toEqual({ ip, region: null })
+  })
+
+  test('no database at all is not an error', () => {
+    process.env.ANALYTICSHQ_GEO_DB = join(import.meta.dir, 'does-not-exist.mmdb')
+    resetGeoCache()
+    expect(regionFromIp('8.8.8.8')).toBeNull()
+    expect(geoHasRegions()).toBe(false)
+  })
+})
+
 describe('the public copy matches how country actually resolves', () => {
   const surfaces = [
     'resources/views/index.stx',
     'resources/views/features.stx',
     'resources/views/features/geography.stx',
     'resources/data/competitors.ts',
+    // Added when region geo shipped: the charter had carried the debunked
+    // "derived from CDN edge headers" line all along, because it was not on this
+    // list and the four surfaces that were had been fixed without it.
+    'PRIVACY.md',
   ].map(rel => ({ rel, src: readFileSync(join(import.meta.dir, '../..', rel), 'utf8') }))
 
   test('no page claims country comes from a CDN edge header', () => {
@@ -223,11 +271,26 @@ describe('the public copy matches how country actually resolves', () => {
     expect(geography).toContain('CC BY 4.0')
   })
 
-  test('the country-only promise is still made', () => {
-    // The invariant behind #7 and #28. If this ever stops being claimed it
-    // should be because the product changed, which is a decision, not an edit.
+  test('the no-city promise is still made, and nothing claims country-only any more', () => {
+    // What #7 and #28 protect, restated for a product where region is reachable.
+    //
+    // The previous version asserted the phrase "Country only" appeared somewhere
+    // in the file. That is why it kept passing while region shipped: five other
+    // entries still said country-only about US, and one match anywhere satisfied
+    // it. So this pins the claim that is actually still true — no city, ever —
+    // and fails on any surviving country-only claim about ourselves.
     const competitors = surfaces.find(s => s.rel.endsWith('competitors.ts'))!.src
-    expect(competitors).toMatch(/Country only/)
+    expect(competitors).toMatch(/[Nn]ever (a )?city|[Nn]o city/)
+
+    // `us:` and the marketing prose describe analyticshq. `them:` describes a
+    // competitor, and Simple Analytics really is country-only — saying so is
+    // accurate and must stay allowed.
+    const ours = competitors
+      .split('\n')
+      .filter(l => !l.includes('them:') || l.includes('us:'))
+      .map(l => l.includes('them:') ? l.slice(l.indexOf('us:')) : l)
+      .join('\n')
+    expect(ours).not.toMatch(/[Cc]ountry[- ]only/)
   })
 })
 
@@ -240,7 +303,9 @@ describe('the ingest path is wired to all of this', () => {
   })
 
   test('resolution is still gated on the privacy granularity', () => {
-    expect(routes).toContain("privacy.geo.granularity === 'country'")
+    // 'none' is the only value that resolves nothing, so the gate reads as "not
+    // none" now that 'region' also resolves a country.
+    expect(routes).toContain("privacy.geo.granularity !== 'none'")
   })
 
   test('the IP is not persisted anywhere', () => {

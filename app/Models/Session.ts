@@ -33,6 +33,10 @@ export default defineModel({
     utm_medium: { fillable: true, validation: { rule: schema.string().optional().max(64) } },
     utm_campaign: { fillable: true, validation: { rule: schema.string().optional().max(128) } },
     country: { fillable: true, validation: { rule: schema.string().optional().max(2) } },
+    // ISO 3166-2, `US-CA`. Written alongside country by /collect for a site that
+    // opted into region geo, and null everywhere else. Named here for the same
+    // reason as on PageView: the schema differ works from these attributes.
+    region: { fillable: true, validation: { rule: schema.string().optional().max(6) } },
     device_type: { fillable: true, validation: { rule: schema.string().optional().max(16) } },
     browser: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     os: { fillable: true, validation: { rule: schema.string().optional().max(32) } },

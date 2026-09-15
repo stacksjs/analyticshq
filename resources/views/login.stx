@@ -79,15 +79,15 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     @endif
 
     <div>
-      <label class="block mb-1.5 font-medium text-text-2 text-xs">Email</label>
-      <input name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field">
+      <label for="login-email" class="block mb-1.5 font-medium text-text-2 text-xs">Email</label>
+      <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field">
     </div>
     <div>
       <div class="flex items-baseline justify-between mb-1.5">
-        <label class="font-medium text-text-2 text-xs">Password</label>
+        <label for="login-password" class="font-medium text-text-2 text-xs">Password</label>
         <StxLink to="/forgot-password" class="text-text-3 text-xs hover:text-accent">Forgot?</StxLink>
       </div>
-      <input name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field">
     </div>
 
     <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">

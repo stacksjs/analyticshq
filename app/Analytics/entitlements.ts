@@ -26,12 +26,14 @@
  */
 
 import { db } from '@stacksjs/database'
-import { DEFAULT_PLAN, PAID_PLAN, PLAN_LIMITS, SELF_HOSTED_LIMITS, SELF_HOSTED_PLAN, billingEnabled, type PlanLimits } from '../../config/plans'
+import { DEFAULT_PLAN, PAID_PLAN, PLAN_FEATURES, PLAN_LIMITS, SELF_HOSTED_FEATURES, SELF_HOSTED_LIMITS, SELF_HOSTED_PLAN, billingEnabled, type PlanFeatures, type PlanLimits } from '../../config/plans'
 
 export interface ResolvedPlan {
   /** `self-hosted` | `free` | `pro`. Carried alongside the limits so an error can name it. */
   plan: string
   limits: PlanLimits
+  /** The capability half of the plan. Resolved together so one query answers both. */
+  features: PlanFeatures
 }
 
 /**
@@ -90,18 +92,13 @@ export async function siteOwnerId(siteId: string): Promise<number | null> {
  */
 export async function planForSite(siteId: string): Promise<ResolvedPlan> {
   if (!billingEnabled())
-    return { plan: SELF_HOSTED_PLAN, limits: SELF_HOSTED_LIMITS }
+    return { plan: SELF_HOSTED_PLAN, limits: SELF_HOSTED_LIMITS, features: SELF_HOSTED_FEATURES }
 
   const ownerId = await siteOwnerId(siteId)
   if (ownerId == null)
-    return { plan: DEFAULT_PLAN, limits: PLAN_LIMITS[DEFAULT_PLAN]! }
+    return { plan: DEFAULT_PLAN, limits: PLAN_LIMITS[DEFAULT_PLAN]!, features: PLAN_FEATURES[DEFAULT_PLAN]! }
 
   const pro = await userIsPro(ownerId)
   const plan = pro ? PAID_PLAN : DEFAULT_PLAN
-  return { plan, limits: PLAN_LIMITS[plan]! }
-}
-
-/** Convenience for the common question. */
-export async function siteIsPro(siteId: string): Promise<boolean> {
-  return (await planForSite(siteId)).plan !== DEFAULT_PLAN
+  return { plan, limits: PLAN_LIMITS[plan]!, features: PLAN_FEATURES[plan]! }
 }

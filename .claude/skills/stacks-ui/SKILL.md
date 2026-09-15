@@ -20,7 +20,7 @@ For premium, non-templated UI (layout, typography, color, motion) built on stx +
 - Core package: `storage/framework/core/ui/src/`
 - Components: `storage/framework/core/ui/src/components/`
 - UI config: `config/ui.ts` (Crosswind)
-- STX config: `config/stx.ts`
+- STX config: `config/ui.ts`
 - STX engine: `node_modules/@stacksjs/stx/`
 - Crosswind: `node_modules/@cwcss/crosswind/`
 - Component types: `storage/framework/types/components.d.ts`
@@ -235,7 +235,7 @@ export default {
 } satisfies CrosswindOptions
 ```
 
-## STX Configuration (config/stx.ts)
+## STX Configuration (config/ui.ts)
 
 ```typescript
 export default {

@@ -59,6 +59,10 @@ export const FILTER_COLUMNS: Record<string, string> = {
   source: 'referrer_source',
   referrer: 'referrer',
   country: 'country',
+  // ISO 3166-2, "US-CA". Null on every site that has not opted into region geo,
+  // so a filter on it there matches nothing rather than erroring — which is the
+  // same thing `utm_term` does on a site that never tags a campaign.
+  region: 'region',
   device: 'device_type',
   browser: 'browser',
   os: 'os',

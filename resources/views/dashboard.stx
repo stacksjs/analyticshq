@@ -16,7 +16,9 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUr
 // .ts module for the same reason the formatters above do.
 import { installTargets } from '../../app/Analytics/install'
 import { listSiteMembers } from '../../app/Analytics/access'
-import { siteIsPro } from '../../app/Analytics/entitlements'
+import { planForSite } from '../../app/Analytics/entitlements'
+import { foldRegions, splitRegion } from '../../app/Analytics/regions'
+import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
 
@@ -71,11 +73,11 @@ const compare = queryParams.compare === '1' && !isAll
 let prevFrom = new Date(new Date(from).getTime() - days * 864e5).toISOString()
 
 const ranges = [
-  { key: '24h', label: '24 hours' },
-  { key: '7d', label: '7 days' },
-  { key: '30d', label: '30 days' },
-  { key: '90d', label: '90 days' },
-  { key: '1y', label: '1 year' },
+  { key: '24h', label: '24h' },
+  { key: '7d', label: '7d' },
+  { key: '30d', label: '30d' },
+  { key: '90d', label: '90d' },
+  { key: '1y', label: '1y' },
   { key: 'all', label: 'All' },
 ]
 
@@ -91,6 +93,11 @@ const FILTERS = {
   referrer: { col: 'referrer', label: 'Referrer' },
   channel: { col: null, label: 'Channel' },
   country: { col: 'country', label: 'Country' },
+  // ISO 3166-2, `US-CA`. The Top regions panel links its rows here, and
+  // without this entry those links were parsed by nothing and silently did
+  // not filter -- app/Analytics/filters.ts has its own FILTER_COLUMNS map for
+  // the API endpoints, and adding it there did not add it here.
+  region: { col: 'region', label: 'Region' },
   device: { col: 'device_type', label: 'Device' },
   browser: { col: 'browser', label: 'Browser' },
   os: { col: 'os', label: 'OS' },
@@ -114,7 +121,10 @@ const filterParams = []
 // utm*) would strip mid-session rows before ROW_NUMBER/COUNT(*) OVER run and corrupt
 // first/last-page identity + the session-length bounce count. The window queries use
 // sessionFilterSql (this subset) instead of the full filterSql.
-const SESSION_DIMENSIONS = new Set(['country', 'device', 'browser', 'os'])
+// `region` belongs here for the same reason `country` does: it is resolved once
+// per visit from one address, so it is identical on every page_view of a
+// session and safe inside the entry/exit-page window subqueries.
+const SESSION_DIMENSIONS = new Set(['country', 'region', 'device', 'browser', 'os'])
 let sessionFilterSql = ''
 const sessionFilterParams = []
 for (const key of Object.keys(FILTERS)) {
@@ -181,6 +191,7 @@ let referrers = []
 let referrerUrls = []
 let countries = []
 let countryMap = []
+let regions = []
 let devices = []
 let browsers = []
 let systems = []
@@ -220,6 +231,25 @@ let live = false
 // analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
 let user = null
 let ownedSites = []
+let activeSiteRecord = null
+
+function siteDomains(site) {
+  if (!site?.domains)
+    return []
+  if (Array.isArray(site.domains))
+    return site.domains.map(String).filter(Boolean)
+  try {
+    const parsed = JSON.parse(String(site.domains))
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : []
+  }
+  catch {
+    return []
+  }
+}
+
+function siteLabel(site) {
+  return siteDomains(site)[0] || site?.name || site?.id || 'Untitled site'
+}
 // Read gate: the dashboard only exposes a site's data to someone this site is
 // actually reachable by — its owner, an invited member, OR anyone holding a valid
 // ?share= token. Stays false (→ no queries, no data in the response) for anyone else.
@@ -233,11 +263,24 @@ let activeRole = null
 let teamMembers = []
 let teamInvites = []
 let teamIsPro = false
+// Does this site's plan include the CSV importer? Server-resolved so the panel is
+// right before any JS runs; the endpoint answers 402 whatever this says.
+let canImportCsv = false
+/** Whether THIS site opted into region geo. Drives the panel and the toggle. */
+let regionGeo = false
+/**
+ * Whether this INSTALL permits it at all.
+ *
+ * Read from config rather than from the API, so the settings row can say "your
+ * server does not allow this" instead of offering a switch the endpoint answers
+ * 409 to. `privacy` is already imported for the retention copy below.
+ */
+const regionGeoAllowed = privacy.geo.granularity === 'region'
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
 // UI can show/copy/revoke the link. Bridged into the client block.
-let shareToken = ''
+let __shareToken = ''
 
 // Race all DB work against a short timeout: if PostgreSQL isn't reachable, a
 // TCP connect can hang far longer than a render should wait, so we bail to the
@@ -281,7 +324,7 @@ async function loadData() {
     // Mirrors routes/analytics.ts GET /api/sites deliberately: two answers to
     // "which sites can I reach" that disagree is what produced this.
     ownedSites = (await pgq(
-      `SELECT s.id, s.name, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
+      `SELECT s.id, s.name, s.domains, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
        FROM sites s
        LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
        WHERE s.owner_id = ? OR m.user_id IS NOT NULL
@@ -335,9 +378,12 @@ async function loadData() {
   }
   if (!viewGranted)
     return
+  activeSiteRecord = ownedSites.find(s => String(s.id) === String(siteId))
+    || (await pgq(`SELECT id, name, domains FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+    || null
   // Owner (not a share viewer): surface any existing share token for the link UI.
   if (!shareMode)
-    shareToken = (await readSettings(siteId)).share_token || ''
+    __shareToken = (await readSettings(siteId)).share_token || ''
 
   // Team: who can already reach this site, and who has been invited but has not
   // accepted yet. Resolved server-side and rendered with @foreach so the panel
@@ -358,10 +404,24 @@ async function loadData() {
       )) ?? []
       // Drives the paywall copy. The endpoints enforce independently — this only
       // decides whether to show an invite form or an upgrade prompt.
-      teamIsPro = await siteIsPro(siteId)
+      //
+      // One resolution, two questions. Both flags come out of a single
+      // planForSite call: a plan helper per flag would be one round trip each
+      // for one answer, and planForSite is the only definition of either.
+      const resolved = await planForSite(siteId)
+      teamIsPro = resolved.plan !== DEFAULT_PLAN
+      canImportCsv = resolved.features.csvImport === true
+      // Region opt-in. Its own tiny query rather than a join onto the plan
+      // resolution: this is one boolean on `sites` and planForSite answers a
+      // different question about a different table.
+      const geoRow = (await pgq(`SELECT region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
+      const rawGeo = geoRow[0]?.region_geo
+      regionGeo = rawGeo === true || rawGeo === 't' || rawGeo === 1
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
+      // Both plan flags stay false, so a database hiccup shows the upgrade prompt
+      // rather than a control the endpoint would refuse.
       teamMembers = []
       teamInvites = []
     }
@@ -527,6 +587,18 @@ async function loadData() {
   // same `filter` clause.
   countryMap = (await pgq(
     `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country`, p)) ?? []
+  // Regions, and unlike every other breakdown here this one is NOT limited in
+  // SQL. The rows below the disclosure floor have to be summed into "Other", and
+  // a LIMIT applied first would compute that total from the top eight instead of
+  // from everything. Bounded anyway: there are about four thousand ISO
+  // subdivisions, and a site only ever has rows for the ones it saw.
+  //
+  // Empty on every site that has not opted in, because the column is null there.
+  // The panel is hidden in that case rather than rendering an empty state, so a
+  // dashboard does not grow a permanently blank card for a feature nobody asked
+  // for.
+  regions = (await pgq(
+    `SELECT region, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY views DESC`, p)) ?? []
   devices = (await pgq(
     `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p)) ?? []
   browsers = (await pgq(
@@ -724,6 +796,66 @@ const countryRows = countries.map((c) => {
 })
 
 /**
+ * Top regions, with every state under the disclosure floor folded into "Other".
+ *
+ * ## The floor is applied HERE, not in the query
+ *
+ * It is the same rule and the same number the `/api/sites/{id}/regions`
+ * endpoint applies, and it is deliberately duplicated rather than shared,
+ * because there is nothing to share: the endpoint filters rows it fetched and so
+ * does this. What matters is that they agree, and `region-geo.test.ts` asserts
+ * both read `privacy.minSegmentSize`.
+ *
+ * A subdivision is a much smaller haystack than a country — a country with four
+ * thousand visitors can hold a state with three — which is why regions get a
+ * per-row floor when no other breakdown on this page does. The traffic still
+ * counts in the total; what is withheld is which state it came from.
+ *
+ * ## Why the label is a code and not a name
+ *
+ * `US-CA` is what the column holds, what addFilterUrl puts in the query string,
+ * and what the filter matches, so the code has to survive on the row. Spelling
+ * it out would mean shipping a table of every ISO 3166-2 subdivision name — some
+ * four thousand of them — to render a panel that is off by default. The flag
+ * carries the country and the code carries the state, which is how most of these
+ * are written down anyway.
+ */
+const REGION_FLOOR = privacy.minSegmentSize
+const foldedRegions = foldRegions(regions, REGION_FLOOR, 8)
+/**
+ * The country the reader has drilled into, or ''.
+ *
+ * Clicking a country on the map navigates to `?country=US`, and every query on
+ * this page — the regions one included — is built from the same `filter`, so the
+ * panel is already narrowed to that country's states without asking for it. This
+ * only changes how the result is LABELLED: inside one country the flag is on
+ * every row saying the same thing, so the subdivision code carries it alone.
+ */
+const regionCountry = String(queryParams.country ?? '').trim().toUpperCase()
+const regionTitle = regionCountry
+  ? `Regions in ${countryName(regionCountry)}`
+  : 'Top regions'
+const regionRows = foldedRegions.rows.map((r) => {
+  const parts = splitRegion(r.region)
+  // A row whose value is not `CC-SUB` renders as itself rather than as a flag
+  // built out of the wrong two letters.
+  if (!parts)
+    return { ...r, label: r.region }
+  return { ...r, label: regionCountry ? parts.subdivision : `${flag(parts.country)} ${parts.subdivision}` }
+})
+if (foldedRegions.other) {
+  regionRows.push({
+    // Empty, so clicking this row filters to nothing rather than to a state —
+    // which is the point of the bucket.
+    region: '',
+    label: `Other (under ${REGION_FLOOR} visitors)`,
+    views: foldedRegions.other.views,
+    visitors: foldedRegions.other.visitors,
+  })
+}
+const maxRegion = regionRows.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
+
+/**
  * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
  * what `page_views.country` holds and what the map's feature ids are.
  *
@@ -908,7 +1040,11 @@ const ownsActive = viewGranted && !shareMode
 // but cannot invite or remove. The endpoints enforce this independently; hiding
 // the controls only avoids offering a button that answers 403.
 const canManageTeam = ownsActive && (activeRole === 'owner' || activeRole === 'admin')
-const showSiteSelect = ownsActive && ownedSites.length > 1
+const showSiteSelect = ownsActive && ownedSites.length > 0
+const activeSite = activeSiteRecord || ownedSites.find(s => String(s.id) === String(siteId)) || null
+const activeSiteName = activeSite?.name || 'Shared site'
+const activeSiteDomain = siteDomains(activeSite)[0] || ''
+const activeSiteLabel = activeSiteDomain || activeSiteName
 
 // The install snippets, one per framework (app/Analytics/install.ts).
 //
@@ -989,7 +1125,11 @@ const exportPayload = {
  * because the snippets are built from server config but can only be *finished*
  * on the client, which is the one thing that knows the real origin.
  */
-defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareToken })
+// This capability is intentionally available only to the authenticated owner
+// UI so it can display the existing share link. The underlying server binding
+// stays private and only this exact scalar crosses the bridge.
+const shareCapability = __shareToken
+defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareCapability })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1008,12 +1148,12 @@ useSeoMeta({
 const goalError = state('')
 const goalBusy = state(false)
 const isPro = state(false)
-// Share link: seeded from the server-bridged existing token (shareToken/activeSiteId
+// Share link: seeded from the server-bridged existing capability and activeSiteId
 // are server consts inlined here by the data bridge), then create/revoke live.
 // Built by shareLinkFor rather than by a second copy of the same template -- it is
 // declared further down and reached by hoisting, which is the trade for having one
 // place that decides what a share URL looks like.
-const shareUrl = state(shareToken ? shareLinkFor(shareToken) : '')
+const shareUrl = state(shareCapability ? shareLinkFor(shareCapability) : '')
 const shareBusy = state(false)
 const shareCopied = state(false)
 // Live "current visitors": seeded from the server render, then polled so the
@@ -1233,7 +1373,7 @@ async function importFromGa() {
 
   for (let i = 0; i < chunks.length; i++) {
     const [start, end] = chunks[i]
-    gaProgress.set(`Importing ${start.slice(0, 4)} — period ${i + 1} of ${chunks.length}…`)
+    gaProgress.set(`Importing ${start.slice(0, 4)}, period ${i + 1} of ${chunks.length}…`)
     try {
       const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/ga4`, {
         method: 'POST',
@@ -1271,6 +1411,380 @@ async function importFromGa() {
   gaResult.set(pageViews
     ? `Imported ${pageViews.toLocaleString()} page views and ${sessions.toLocaleString()} sessions. Reload to see them.`
     : 'Google returned no data for that property and period.')
+}
+
+// --- Region geolocation opt-in -----------------------------------------------
+// Seeded from the server's `regionGeo`, which the data bridge inlines here as a
+// literal. The signal follows the SERVER's answer and never leads it: the box
+// moves when a request comes back ok, so a refusal or a dropped connection
+// leaves it saying exactly what the site is actually recording.
+const regionGeoOn: StxSignal<boolean> = state(typeof regionGeo === 'boolean' ? regionGeo : false)
+const regionGeoBusy: StxSignal<boolean> = state(false)
+const regionGeoMsg: StxSignal<string> = state('')
+
+async function toggleRegionGeo(): Promise<void> {
+  if (regionGeoBusy())
+    return
+  const next = !regionGeoOn()
+  regionGeoBusy.set(true)
+  regionGeoMsg.set('')
+  try {
+    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ regionGeo: next }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      regionGeoOn.set(next)
+      // Says what happens NEXT, not what happened: no historical row grows a
+      // region, and turning it off leaves the ones already recorded in place.
+      regionGeoMsg.set(next
+        ? 'Regions will be recorded from the next page view. Visits already recorded keep the country they have.'
+        : 'Regions are no longer recorded. The ones already recorded are still in your reports; delete this site\'s data to remove them.')
+    }
+    else {
+      regionGeoMsg.set(data?.error || 'That change could not be saved.')
+    }
+  }
+  catch {
+    regionGeoMsg.set('Could not reach the server.')
+  }
+  regionGeoBusy.set(false)
+}
+
+// --- Fathom import (CSV upload) ----------------------------------------------
+// The migration path off Fathom. Fathom's dashboard download is a zip, and it is
+// posted whole, base64 in the JSON body, and opened on the server: the browser
+// can inflate a deflate stream but cannot read the zip container around it, and
+// the code that can belongs in a real module where tsc and the test suite can
+// see it. That keeps the whole feature on the existing authFetch/jsonBody path -
+// no multipart, no FormData, no boundary - while removing the one step the
+// customer used to perform on our behalf rather than for a reason: unzip this,
+// now pick these seven files out of the eighteen inside.
+//
+// The CSV path is still here for an export somebody unzipped themselves, and
+// because the CLI importer speaks it.
+//
+// HAND-ROLLED ON PURPOSE. @stacksjs/components ships no file input in any of its
+// families and stx exports no file or drop composable, so there is no primitive
+// to reuse here. Do not "fix" this into a component that does not exist.
+//
+// The file is read with @change and e.target.files, never x-model: stx's model
+// binding has no file branch, so it would hold the browser's fake path string
+// and a programmatic write to a file input throws, inside an effect that
+// re-throws and takes the caller down with it.
+const fathomFiles: StxSignal<Record<string, string>> = state({} as Record<string, string>)
+// The zip, base64, ready to be a JSON string value. Exclusive with fathomFiles:
+// whichever the customer handed over, the other is emptied, so there is never a
+// question of which one the request carries.
+const fathomZip: StxSignal<string> = state('')
+const fathomPicked: StxSignal<string> = state('')
+const fathomReplace: StxSignal<boolean> = state(false)
+const fathomAcceptFiltered: StxSignal<boolean> = state(false)
+const fathomDragging: StxSignal<boolean> = state(false)
+const fathomBusy: StxSignal<boolean> = state(false)
+const fathomProgress: StxSignal<string> = state('')
+const fathomPreview: StxSignal<string> = state('')
+const fathomResult: StxSignal<string> = state('')
+const fathomWarnings: StxSignal<string[]> = state([] as string[])
+const fathomFileInput = useRef<HTMLInputElement>('fathomFileInput')
+
+/** The files the importer reads. Anything else in the export is left alone. */
+const FATHOM_WANTED = ['Summary.csv', 'Pages.csv', 'Countries.csv', 'Device_Types.csv', 'Browsers.csv', 'Operating_Systems.csv', 'Sources.csv']
+const FATHOM_MAX_BYTES = 5 * 1024 * 1024
+
+/** Whatever path the picker reports, only the name at the end of it is matched. */
+function fathomName(path: string): string {
+  const parts = String(path).split(/[/\\]/).filter(p => p !== '')
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
+/** Whether anything has been chosen yet, in either of the two shapes. */
+function fathomHasUpload(): boolean {
+  return fathomZip() !== '' || Object.keys(fathomFiles()).length > 0
+}
+
+/**
+ * A file as base64, via a data URL.
+ *
+ * readAsDataURL rather than btoa over the bytes: btoa takes a string of
+ * charcodes, so feeding it a 5 MB file means chunking it under the argument
+ * limit and building the string by hand. The browser already does exactly that
+ * conversion here, natively, in one call.
+ */
+function fathomBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    // "data:application/zip;base64,AAA..." - everything after the first comma.
+    reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(',') + 1))
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Take whatever was dropped or picked: the zip Fathom hands over, or the CSVs
+ * from one somebody already unzipped.
+ *
+ * The zip is NOT opened here. A browser can inflate a deflate stream but cannot
+ * read the zip container around it, and the hundred lines that do are typed and
+ * tested in `app/Analytics/fathom-zip.ts` rather than untypeable inline in this
+ * file. So the zip travels whole, and it travels smaller than the CSV text it
+ * replaces.
+ */
+async function acceptFathomFiles(list: FileList | null): Promise<void> {
+  fathomDragging.set(false)
+  const all = list ? Array.from(list) : []
+  if (!all.length) {
+    await stxAlert('Choose your Fathom export first.')
+    return
+  }
+
+  const zips = all.filter(f => /\.zip$/i.test(f.name))
+  if (zips.length > 1) {
+    await stxAlert('Choose one zip at a time. Each Fathom export covers one date range, and they import one after another.')
+    return
+  }
+  if (zips.length && all.length > 1) {
+    await stxAlert('That is a zip and some loose files together. Choose either the zip on its own, or the CSV files from an export you unzipped yourself.')
+    return
+  }
+
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+
+  if (zips.length === 1) {
+    const zip = zips[0]
+    if (zip.size > FATHOM_MAX_BYTES) {
+      await stxAlert('That zip is larger than 5 MB. In Fathom, choose a shorter date range, download again, and import the pieces one after another.')
+      return
+    }
+    fathomProgress.set('Reading your export...')
+    let encoded = ''
+    try {
+      encoded = await fathomBase64(zip)
+    }
+    catch {
+      fathomProgress.set('')
+      await stxAlert('That zip could not be read. Try choosing it again.')
+      return
+    }
+    fathomProgress.set('')
+    fathomFiles.set({})
+    fathomZip.set(encoded)
+    // The names inside are not known until the server opens it, so the check
+    // step is what reports them. Naming the zip is all this line can honestly do.
+    fathomPicked.set(`Ready to import: ${zip.name}`)
+    return
+  }
+
+  const wanted = all.filter(f => FATHOM_WANTED.includes(fathomName(f.name)))
+  if (!wanted.length) {
+    await stxAlert('None of those are Fathom files. Choose the zip your Fathom dashboard downloaded, or the CSV files from inside it.')
+    return
+  }
+  if (wanted.reduce((n, f) => n + f.size, 0) > FATHOM_MAX_BYTES) {
+    await stxAlert('That export is larger than 5 MB of CSV. Choose the zip instead, which is smaller, or in Fathom choose a shorter date range and import the pieces one after another.')
+    return
+  }
+
+  fathomProgress.set('Reading your files...')
+  const picked: Record<string, string> = {}
+  try {
+    for (const f of wanted)
+      picked[fathomName(f.name)] = await f.text()
+  }
+  catch {
+    fathomProgress.set('')
+    await stxAlert('One of those files could not be read. Try choosing them again.')
+    return
+  }
+  fathomProgress.set('')
+  fathomZip.set('')
+  fathomFiles.set(picked)
+  fathomPicked.set(`Ready to import: ${Object.keys(picked).sort().join(', ')}`)
+}
+
+async function pickFathomFiles(e: Event): Promise<void> {
+  await acceptFathomFiles((e.target as HTMLInputElement).files)
+}
+
+async function dropFathomFiles(e: DragEvent): Promise<void> {
+  await acceptFathomFiles(e.dataTransfer?.files ?? null)
+}
+
+function dragFathomOver(): void {
+  fathomDragging.set(true)
+}
+
+function dragFathomLeave(): void {
+  fathomDragging.set(false)
+}
+
+/**
+ * Split a range into windows of at most `days` days each.
+ *
+ * An export too big for one request is not re-exported shorter: that would
+ * change the breakdown totals and therefore the synthesized ids. The same file
+ * is posted again with a narrower window instead, which is deterministic, so the
+ * windows add up to exactly the import the whole file would have produced.
+ */
+function fathomWindows(from: string, to: string, days: number): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  const end = new Date(`${to}T00:00:00Z`).getTime()
+  let start = new Date(`${from}T00:00:00Z`).getTime()
+  while (start <= end) {
+    const stop = Math.min(end, start + (days - 1) * 86400000)
+    out.push([new Date(start).toISOString().slice(0, 10), new Date(stop).toISOString().slice(0, 10)])
+    start = stop + 86400000
+  }
+  return out.length ? out : [[from, to]]
+}
+
+/** One request. Returns the parsed body, or null when it could not be reached. */
+async function postFathom(payload: Record<string, unknown>): Promise<any> {
+  // Whichever shape was chosen, sent every time - the check, the import and each
+  // window all re-post it. A zip is the cheaper of the two to send repeatedly.
+  const upload = fathomZip() ? { zip: fathomZip() } : { files: fathomFiles() }
+  const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/fathom`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...upload, acceptFiltered: fathomAcceptFiltered(), ...payload }),
+  })
+  const data = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, data }
+}
+
+function fathomFailure(status: number, data: any): string {
+  if (status === 429)
+    return 'Several imports have started in the last minute. Wait a minute and try again.'
+  return data?.error || 'The import failed.'
+}
+
+async function checkFathomExport(): Promise<void> {
+  if (fathomBusy())
+    return
+  if (!fathomHasUpload()) {
+    await stxAlert('Choose your Fathom export first.')
+    return
+  }
+  fathomBusy.set(true)
+  fathomProgress.set('Checking your export...')
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+  try {
+    const { ok, status, data } = await postFathom({ dryRun: true })
+    if (!ok) {
+      fathomResult.set(fathomFailure(status, data))
+    }
+    else {
+      const p = data.preview ?? {}
+      const prior = p.priorImport ? ' This site already has history imported from Fathom.' : ''
+      // Which files were read, because a zip upload is opaque to the person who
+      // sent it: they chose one file, and this is where they find out that the
+      // country and browser breakdowns were inside it.
+      const read = ((p.read ?? []) as string[]).join(', ')
+      fathomPreview.set(
+        `${read ? `Read ${read}. ` : ''}`
+        + `Found ${Number(p.paths ?? 0).toLocaleString()} pages, ${Number(p.visitors ?? 0).toLocaleString()} visitors and `
+        + `${Number(p.pageViews ?? 0).toLocaleString()} page views, covering ${data.range?.from} to ${data.range?.to}. `
+        + `Nothing has been imported yet.${prior}`,
+      )
+      fathomWarnings.set((data.warnings ?? []) as string[])
+    }
+  }
+  catch {
+    fathomResult.set('Could not reach the server.')
+  }
+  fathomBusy.set(false)
+  fathomProgress.set('')
+}
+
+async function importFromFathom(): Promise<void> {
+  if (fathomBusy())
+    return
+  if (!fathomHasUpload()) {
+    await stxAlert('Choose your Fathom export first.')
+    return
+  }
+  fathomBusy.set(true)
+  fathomProgress.set('Importing your Fathom history...')
+  fathomPreview.set('')
+  fathomResult.set('')
+  fathomWarnings.set([])
+
+  let pageViews = 0
+  let sessions = 0
+  let failure = ''
+  const warnings: string[] = []
+
+  try {
+    const first = await postFathom({ replace: fathomReplace() })
+    if (first.ok) {
+      pageViews += Number(first.data.imported?.pageViews ?? 0)
+      sessions += Number(first.data.imported?.sessions ?? 0)
+      warnings.push(...((first.data.warnings ?? []) as string[]))
+    }
+    else if (first.status === 413 && first.data.range?.from) {
+      // Too big for one request. Post the SAME files again in date windows,
+      // sized from the estimate the server just sent back.
+      const range = first.data.range
+      const total = Number(first.data.estimate?.pageViews ?? 0)
+      const max = Number(first.data.maxRows ?? 50000)
+      const span = fathomWindows(range.from, range.to, 3650)[0]
+      const allDays = Math.round((new Date(`${span[1]}T00:00:00Z`).getTime() - new Date(`${span[0]}T00:00:00Z`).getTime()) / 86400000) + 1
+      // Two thirds of the cap per window, so an uneven distribution across the
+      // range does not push one window back over it.
+      const perWindow = Math.max(1, Math.floor(allDays * ((max * 0.66) / Math.max(total, 1))))
+      const windows = fathomWindows(range.from, range.to, perWindow)
+
+      for (let i = 0; i < windows.length; i++) {
+        const [fromDay, toDay] = windows[i]
+        fathomProgress.set(`Importing ${fromDay} to ${toDay}, part ${i + 1} of ${windows.length}...`)
+        // `replace` on the first window only: it clears the whole previous
+        // import, so sending it again would delete the windows just written.
+        const res = await postFathom({ fromDay, toDay, replace: i === 0 && fathomReplace() })
+        if (!res.ok) {
+          failure = fathomFailure(res.status, res.data)
+          break
+        }
+        pageViews += Number(res.data.imported?.pageViews ?? 0)
+        sessions += Number(res.data.imported?.sessions ?? 0)
+        for (const w of (res.data.warnings ?? []) as string[]) {
+          if (!warnings.includes(w))
+            warnings.push(w)
+        }
+      }
+    }
+    else {
+      failure = fathomFailure(first.status, first.data)
+    }
+  }
+  catch {
+    failure = 'Could not reach the server. If the import had already started, some of that export may have been written. Check your dashboard before importing again.'
+  }
+
+  fathomBusy.set(false)
+  fathomProgress.set('')
+  fathomWarnings.set(warnings)
+
+  if (failure) {
+    fathomResult.set(`${failure}${pageViews ? ` ${pageViews.toLocaleString()} page views were imported before it stopped.` : ''}`)
+    return
+  }
+
+  fathomFiles.set({})
+  fathomZip.set('')
+  fathomPicked.set('')
+  const input = fathomFileInput()
+  if (input)
+    input.value = ''
+  fathomResult.set(pageViews
+    ? `Imported ${pageViews.toLocaleString()} page views and ${sessions.toLocaleString()} visits. Reload to see them.`
+    : 'That export held no traffic to import.')
 }
 
 async function createShare() {
@@ -1321,7 +1835,7 @@ async function revokeShare() {
   // Worth surfacing rather than swallowing: a failed revoke means the old link is
   // still live, and silently clearing nothing looks identical to success.
   if (failed)
-    await stxAlert('Could not revoke the share link. It may still be active — please try again.')
+    await stxAlert('Could not revoke the share link. It may still be active. Please try again.')
 }
 // --- Team -------------------------------------------------------------------
 // The lists themselves are server-rendered (see the panel markup). These only
@@ -1385,7 +1899,7 @@ async function revokeInvite(id: string, email: string) {
     }
   }
   catch {}
-  await stxAlert('Could not revoke that invitation. It may still be usable — please try again.')
+  await stxAlert('Could not revoke that invitation. It may still be usable. Please try again.')
 }
 
 async function removeMember(userId: string, email: string) {
@@ -1399,7 +1913,7 @@ async function removeMember(userId: string, email: string) {
     }
   }
   catch {}
-  await stxAlert('Could not remove that person. They may still have access — please try again.')
+  await stxAlert('Could not remove that person. They may still have access. Please try again.')
 }
 
 // Created ONCE, not per click. useTimeout starts on creation and registers an
@@ -1541,7 +2055,7 @@ onMount(() => {
 {{-- The token block, body and .wordmark that stood here were byte-identical to
     account.stx's and now live once in resources/layouts/app.stx. What remains is what
     only the dashboard uses. It is pushed rather than left loose: under a layout stx
-    sweeps every orphan <style> out of the page and appends it AFTER the content, in the
+    sweeps every orphan style block out of the page and appends it AFTER the content, in the
     body, so a loose block would still apply but from the wrong place. --}}
 @push('styles')
 {{-- ts-maps' own stylesheet. Same-origin from /vendor like the engine beside it
@@ -1554,27 +2068,188 @@ onMount(() => {
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 
-/* Site switcher. The native chevron sat flush against the control's own rounded edge,
-  so the appearance is reset and the chevron redrawn as a background SVG with room
-  reserved for it (padding-right). Surface, border and radius come from .panel, which is
-  why the select is a panel and not a pill here — 999px is what made the native chevron
-  collide. None of this reaches the open dropdown: the list itself is drawn by the OS and
-  is not stylable, which is why the fix for it landing on top of "+ Add site" is the row
-  layout below, not anything here.
-  The chevron is a data URI, so its colour cannot inherit: it is restated per theme,
-  media query first so the explicit [data-theme] toggle wins. */
+.workspace-header {
+  border-bottom: 1px solid var(--border);
+}
+.workspace-primary,
+.workspace-range {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.workspace-primary { padding: 0 0 1.1rem; }
+.workspace-range { padding: 0.85rem 0; }
+.workspace-brand,
+.workspace-actions,
+.range-presets,
+.range-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.workspace-brand { min-width: 0; gap: 0.9rem; }
+.workspace-actions { flex-shrink: 0; }
+.site-switcher {
+  min-width: 11rem;
+  max-width: 18rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.site-static {
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+  font: 500 0.875rem/1 var(--sans, ui-sans-serif);
+}
+.range-presets {
+  gap: 0;
+  padding: 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.range-link {
+  min-width: 2.75rem;
+  padding: 0.48rem 0.7rem;
+  border-radius: 7px;
+  color: var(--text-2);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+  text-align: center;
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.range-link:hover { color: var(--text); }
+.range-link[aria-current="page"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.range-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--text-2);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+.range-tool:hover { color: var(--text); border-color: var(--accent); }
+.range-tool:active { transform: scale(0.98); }
+.range-tool:focus-visible,
+.range-link:focus-visible,
+.chrome-btn:focus-visible,
+.icon-btn:focus-visible,
+select.panel:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.range-tool.is-active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.range-tool i { width: 1rem; height: 1rem; }
+.date-menu { position: relative; }
+.date-menu > summary { list-style: none; }
+.date-menu > summary::-webkit-details-marker { display: none; }
+.date-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 40;
+  width: min(24rem, calc(100vw - 2.5rem));
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 10%, transparent);
+}
+.date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.date-field label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--text-2);
+  font: 600 0.75rem/1.2 var(--sans, ui-sans-serif);
+}
+.date-field input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: 500 0.8125rem/1 var(--mono, ui-monospace);
+}
+.date-submit { width: 100%; margin-top: 0.75rem; }
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-2);
+}
+.live-status strong { color: var(--text); font-size: 0.75rem; }
+.live-status span:last-child { font-size: 0.75rem; }
+.site-settings-shell > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  list-style: none;
+}
+.site-settings-shell > summary::-webkit-details-marker { display: none; }
+.site-settings-title { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.site-settings-title i { width: 1.1rem; height: 1.1rem; color: var(--text-2); }
+.site-settings-title strong { display: block; font-size: 0.875rem; line-height: 1.25; }
+.site-settings-title span { display: block; margin-top: 0.18rem; color: var(--text-3); font-size: 0.75rem; line-height: 1.35; }
+.settings-chevron { width: 1rem; height: 1rem; flex-shrink: 0; color: var(--text-3); transition: transform 0.15s ease; }
+.site-settings-shell[open] .settings-chevron { transform: rotate(180deg); }
+.site-settings-shell:not([open]) ~ .site-settings-panel { display: none; }
+.site-settings-panel { margin-bottom: 0.75rem; }
+
+@media (max-width: 1023px) {
+  .workspace-primary,
+  .workspace-range { align-items: stretch; flex-direction: column; }
+  .workspace-brand,
+  .workspace-actions,
+  .range-actions { width: 100%; flex-wrap: wrap; }
+  .workspace-actions { justify-content: flex-start; }
+  .site-switcher { min-width: 0; max-width: none; flex: 1; }
+  .range-presets { width: 100%; overflow-x: auto; }
+  .range-link { flex: 1 0 auto; }
+  .range-actions { justify-content: flex-start; }
+  .date-menu { position: static; }
+  .date-popover { left: 0; right: auto; }
+}
+
+/* Site switcher. Surface, border and radius come from .panel. The native menu remains
+  an operating-system control, while the surrounding shell gives it enough room to
+  avoid colliding with adjacent actions. */
 select.panel {
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  cursor: pointer; transition: border-color 0.15s ease;
-  padding-right: 2rem; background-repeat: no-repeat;
-  background-position: right 0.7rem center; background-size: 13px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  cursor: pointer;
+  transition: border-color 0.15s ease;
 }
-@media (prefers-color-scheme: dark) {
-  select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-}
-:root[data-theme="dark"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
-:root[data-theme="light"] select.panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
 select.panel:hover { border-color: var(--accent); }
 
 /* Map tooltips, themed. ts-maps binds and positions these itself, but only its
@@ -1624,13 +2299,17 @@ select.panel:hover { border-color: var(--accent); }
 .ga-dot-v { background: var(--accent); }
 .ga-dot-u { background: var(--text-3); }
 .ga-col:hover .ga-dot { opacity: 1; }
-.ga-tip { position: absolute; left: 50%; transform: translateX(-50%) translateY(calc(-100% - 12px)); min-width: 124px; padding: 8px 10px; border-radius: 9px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.14); opacity: 0; visibility: hidden; transition: opacity 0.12s ease; pointer-events: none; z-index: 20; }
-.ga-col:hover .ga-tip { opacity: 1; visibility: visible; }
+.ga-tip { display: none; position: absolute; left: 50%; transform: translateX(-50%) translateY(calc(-100% - 12px)); min-width: 124px; padding: 8px 10px; border-radius: 9px; background: var(--panel); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.14); pointer-events: none; z-index: 20; }
+.ga-col:hover .ga-tip { display: block; }
 .ga-tip-day { font-size: 11px; color: var(--text-2); margin-bottom: 5px; }
 .ga-tip-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); white-space: nowrap; line-height: 1.7; }
 .ga-tip-row b { margin-left: auto; color: var(--text); font-weight: 600; }
 .ga-sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
-@media (prefers-reduced-motion: reduce) { .ga-dot, .ga-tip { transition: none; } }
+@media (max-width: 1023px) {
+  .ga-col:hover::before,
+  .ga-dot,
+  .ga-tip { display: none; }
+}
 
 /* Export CSV pill: hover tightens the border to the accent like the range pills. */
 #export-csv:hover { color: var(--text); border-color: var(--accent); }
@@ -1664,114 +2343,130 @@ select.panel:hover { border-color: var(--accent); }
 .chrome-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--panel); color: var(--text-2); font: 500 13px/1 var(--sans, ui-sans-serif); text-decoration: none; cursor: pointer; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 .chrome-btn:hover { color: var(--text); border-color: var(--accent); }
 .chrome-icon { padding: 7px 10px; font-size: 14px; line-height: 1; }
+
+@media (max-width: 767px) {
+  .site-switcher,
+  .range-tool,
+  .live-status,
+  .chrome-btn,
+  .range-link,
+  .ga-row,
+  .goal-form input,
+  .goal-form select,
+  .goal-form button { min-height: 2.75rem; }
+
+  .site-switcher { height: 2.75rem; }
+  .range-link { display: inline-flex; align-items: center; justify-content: center; }
+  .range-tool { min-width: 2.75rem; }
+  .ga-row { align-items: center; }
+  .kpi-label { min-height: 2rem; }
+  .kpi-value { font-size: clamp(1.375rem, 7.25vw, 1.875rem); line-height: 1.2; white-space: nowrap; }
+}
+/* One glyph at a time. `theme.isDark()` writes data-t, and these pick the matching
+  icon -- the same contract bughq's header uses, so the two toggles behave alike. */
+.theme-btn .ic-sun, .theme-btn .ic-moon { display: none; }
+.theme-btn[data-t="light"] .ic-moon { display: block; }
+.theme-btn[data-t="dark"] .ic-sun { display: block; }
 </style>
 @endpush
 
-{{-- A <div>, not <main>. The router container is the single <main> in
-    resources/layouts/app.stx: fragment extraction slices from the first <main> to the
-    LAST </main>, so a page that declares its own makes the router swap the wrong span.
+{{-- A div rather than another main. The router container is owned by
+    resources/layouts/app.stx: fragment extraction uses that single container,
+    so a page that declares its own makes the router swap the wrong span.
     Same classes as before, one tag name different. --}}
 @section('content')
-<div class="px-5 py-10 md:px-10 min-h-[100dvh]">
-  {{-- Account chrome (fixed top-right). Owner-only (ownsActive) — a read-only share
-      viewer isn't signed in as the owner.
+<div class="px-4 py-7 md:px-8 lg:px-10 min-h-[100dvh]">
+  <div class="mx-auto max-w-[1400px]">
 
-      Three controls, and deliberately no plan CTA. There used to be an Upgrade
-      button here, which was duplication: /account already carries a Plan section
-      showing Free or Pro, an active badge, and the same /pricing link as either
-      "Upgrade to Pro" or "Manage plan". Billing belongs with the account, not
-      pinned to every view of the numbers.
-
-      The route to /account is the point of this block. That page has existed and
-      answered 200 all along with nothing anywhere linking to it, so the only way
-      in was to type the URL.
-
-      isPro() is still read further down for the team-panel paywall — dropping the
-      button here did not orphan it. --}}
-  @if (ownsActive)
-    <div style="position:fixed;top:16px;right:18px;z-index:60;display:flex;gap:6px;align-items:center">
-      <button type="button" @click="toggleTheme" class="chrome-btn chrome-icon" aria-label="Toggle light or dark theme" title="Toggle theme">
-        <span :show="!theme.isDark()" aria-hidden="true">☾</span>
-        <span :show="theme.isDark()" style="display:none" aria-hidden="true">☀</span>
-      </button>
-      <StxLink to="/account" class="chrome-btn">Account</StxLink>
-      <button type="button" @click="logout" class="chrome-btn">Log out</button>
-    </div>
-  @endif
-  <div class="mx-auto max-w-6xl">
-
-    <header class="flex flex-wrap gap-5 items-end justify-between mb-9">
-      <div>
-        <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
-        <p class="mt-2 text-sm text-text-3">
-          Site <span class="text-text-2 mono">{{ siteId }}</span> · {{ isAll ? 'all time' : ('last ' + days + ' days') }}
-        </p>
-        {{-- Site switcher (server-rendered, owner-scoped — mirrors bughq): the
-            <select> hands off to switchSite, which routes to ?site=; the caption line
-            above is the no-owned-sites fallback. "+ Add site" is a link to the
-            reactive create page, not an in-page modal. --}}
-        {{-- The multi-site <select> is gated by a precomputed `showSiteSelect` flag as
-            its own block, and "+ Add site" always shows to the owner. This was
-            originally a workaround for stx miscounting @endif on a nested @if; that
-            bug is fixed as of 0.2.155 (verified on the installed version), so the flag
-            stays only because it reads better than nesting here. --}}
-        {{-- One row, like bughq's header: the switcher, "+ Add site" and the live badge
-            were three sibling `mt-3` blocks in a plain <div>, so each got its own line
-            and the three read as a ragged column. They are peers, so they share one
-            flex row and one size scale (px-3 py-1.5, .panel/.pill chrome from classes
-            rather than per-control inline style). The badge keeps its own wrapper: its
-            spans render reactive {{ }} text, and stx cloaks (display:none) the element
-            whose text is reactive until hydration — folding it into the row itself
-            would put the switcher inside that scope. --}}
-        <div class="flex flex-wrap gap-3 items-center mt-3">
+    <header class="mb-6 workspace-header">
+      <div class="workspace-primary">
+        <div class="workspace-brand">
+          <h1 class="leading-none text-2xl md:text-[28px] wordmark">analyticshq</h1>
           @if (showSiteSelect)
-            <select @change="switchSite"
-              aria-label="Switch site"
-              class="px-3 py-1.5 text-sm mono panel text-text-2">
+            <select @change="switchSite" aria-label="Switch site" class="panel site-switcher">
               @foreach (ownedSites as s)
-                <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ s.name || s.id }}</option>
+                <option value="{{ s.id }}" {{ String(s.id) === String(siteId) ? 'selected' : '' }}>{{ siteLabel(s) }}</option>
               @endforeach
             </select>
+          @else
+            <span class="site-static" title="{{ activeSiteLabel }}">{{ activeSiteLabel }}</span>
           @endif
-          @if (ownsActive)
-            <StxLink to="/sites/new" class="px-3 py-1.5 font-medium text-sm border pill text-text-2 border-border">+ Add site</StxLink>
-          @endif
-          <div class="inline-flex gap-2 items-center px-3 py-2 border border-border pill reveal">
+        </div>
+
+        <div class="workspace-actions">
+          <div class="live-status reveal" aria-label="Current visitors">
             <span :class="liveCount() ? 'live-dot' : ''" :style="`position: relative; display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
-            <span class="font-semibold text-xs mono" :style="`color: ${liveCount() ? 'var(--text)' : 'var(--text-3)'}`">{{ liveCount() }}</span>
-            <span class="text-text-3 text-xs">current {{ liveCount() === 1 ? 'visitor' : 'visitors' }}</span>
+            <strong class="mono">{{ liveCount() }}</strong>
+            <span>live</span>
           </div>
+          @if (ownsActive)
+            <StxLink to="/sites/new" class="range-tool">
+              <i class="i-hugeicons-add-01" aria-hidden="true"></i>
+              New site
+            </StxLink>
+            <a href="#site-settings" data-no-router class="range-tool" title="Site settings">
+              <i class="i-hugeicons-settings-02" aria-hidden="true"></i>
+              <span class="sr-only">Site settings</span>
+            </a>
+          @endif
+          <button type="button" @click="toggleTheme" :data-t="theme.isDark() ? 'dark' : 'light'" class="range-tool theme-btn" aria-label="Toggle light or dark theme" title="Toggle theme">
+            <i class="i-hugeicons-sun-03 ic-sun" aria-hidden="true"></i>
+            <i class="i-hugeicons-moon-02 ic-moon" aria-hidden="true"></i>
+          </button>
+          @if (ownsActive)
+            <StxLink to="/account" class="chrome-btn">Account</StxLink>
+            <button type="button" @click="logout" class="chrome-btn">Log out</button>
+          @endif
         </div>
       </div>
-      {{-- Wraps, unlike before: the left column is now one row rather than a stack, so
-          the two header halves compete for the same line and this nav carries eleven
-          controls with long range labels ("24 hours", not "24h"). --}}
-      <nav class="flex flex-wrap gap-1.5 items-center">
-        @foreach (ranges as r)
-          <StxLink to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
-            class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ !isCustom && r.key === range ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)' }}">{{ r.label }}</StxLink>
-        @endforeach
-        <form method="get" class="inline-flex gap-1.5 items-center" title="Custom date range">
-          <input type="hidden" name="site" value="{{ siteId }}">
-          @if (compare)
-            <input type="hidden" name="compare" value="1">
-          @endif
-          <input type="date" name="from" value="{{ customFrom }}" aria-label="From date"
-            class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
-          <span class="text-text-3 text-xs">to</span>
-          <input type="date" name="to" value="{{ customTo }}" aria-label="To date"
-            class="px-2 py-1.5 text-sm border pill" style="color: var(--text-2); border-color: var(--border); background: var(--panel);">
-          <button type="submit" class="px-3.5 py-1.5 font-medium text-sm border pill"
-            style="{{ isCustom ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border); background: var(--panel);' }} cursor: pointer;">Apply</button>
-        </form>
-        <StxLink to="{{ compareToggleUrl() }}" title="Overlay the previous period on the chart"
-          class="px-3.5 py-1.5 font-medium text-sm border pill"
-          style="{{ isAll ? 'display:none' : (compare ? 'color: #fff; background: var(--accent); border-color: var(--accent)' : 'color: var(--text-2); border-color: var(--border)') }}">Compare</StxLink>
-        <button type="button" @click="exportCsv"
-          class="px-3.5 py-1.5 font-medium text-sm border pill"
-          style="color: var(--text-2); border-color: var(--border); background: var(--panel); cursor: pointer;">Export CSV</button>
-      </nav>
+
+      <div class="workspace-range">
+        <nav class="range-presets" aria-label="Reporting period">
+          @foreach (ranges as r)
+            <StxLink
+              to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
+              class="range-link"
+              aria-current="{{ !isCustom && r.key === range ? 'page' : 'false' }}"
+            >{{ r.label }}</StxLink>
+          @endforeach
+        </nav>
+
+        <div class="range-actions">
+          <details class="date-menu">
+            <summary class="range-tool {{ isCustom ? 'is-active' : '' }}">
+              <i class="i-hugeicons-calendar-03" aria-hidden="true"></i>
+              {{ isCustom ? (customFrom + ' to ' + customTo) : 'Custom' }}
+            </summary>
+            <form method="get" class="date-popover" aria-label="Custom date range">
+              <input type="hidden" name="site" value="{{ siteId }}">
+              @if (compare)
+                <input type="hidden" name="compare" value="1">
+              @endif
+              <div class="date-grid">
+                <div class="date-field">
+                  <label for="range-from">From</label>
+                  <input id="range-from" type="date" name="from" value="{{ customFrom }}">
+                </div>
+                <div class="date-field">
+                  <label for="range-to">To</label>
+                  <input id="range-to" type="date" name="to" value="{{ customTo }}">
+                </div>
+              </div>
+              <button type="submit" class="date-submit is-active range-tool">Apply range</button>
+            </form>
+          </details>
+          <StxLink
+            to="{{ compareToggleUrl() }}"
+            title="Overlay the previous period on the chart"
+            class="range-tool {{ compare ? 'is-active' : '' }}"
+            style="{{ isAll ? 'display:none' : '' }}"
+          >Compare</StxLink>
+          <button type="button" @click="exportCsv" class="range-tool">
+            <i class="i-hugeicons-download-04" aria-hidden="true"></i>
+            Export
+          </button>
+        </div>
+      </div>
     </header>
 
     {{-- Active filters: click a breakdown row to add one; each pill removes itself,
@@ -1796,24 +2491,57 @@ select.panel:hover { border-color: var(--accent); }
       </div>
     @endif
 
+    @if (viewGranted)
+      {{-- The numbers lead the workspace. Setup and account controls stay available,
+          but they no longer push the report below the first viewport. --}}
+      <section class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal" aria-label="Key metrics">
+        @foreach (kpiCards as kpi)
+          <div class="px-5 py-5 border-border">
+            <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase kpi-label">{{ kpi.label }}</div>
+            <div class="font-semibold text-3xl tracking-tight kpi-value mono">{{ kpi.value }}</div>
+            @if (kpi.delta !== null)
+              <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
+                {{ kpi.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(kpi.delta) }}% <span class="text-text-3">vs prev</span>
+              </div>
+            @endif
+          </div>
+        @endforeach
+      </section>
+    @endif
+
+    @if (ownsActive)
+      <details id="site-settings" class="mb-3 panel reveal site-settings-shell">
+        <summary>
+          <span class="site-settings-title">
+            <i class="i-hugeicons-settings-02" aria-hidden="true"></i>
+            <span>
+              <strong>Site settings</strong>
+              <span>Tracking, team access, imports, privacy, and sharing</span>
+            </span>
+          </span>
+          <i class="i-hugeicons-arrow-down-01 settings-chevron" aria-hidden="true"></i>
+        </summary>
+      </details>
+    @endif
+
     {{-- Setup panel: shown to the site's owner so they can grab the install
         snippet for whichever framework they run. Open by default until the first
         pageview lands.
 
         The tab strip is x-for over the server-built catalogue, and the body is
         reactive because the origin can only be resolved in the browser — see the
-        installCode() note in the client block. {{ }} HTML-escapes the snippet so
+        installCode() note in the client block. Server interpolation HTML-escapes the snippet so
         the tag shows as text rather than executing. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal" {{ Number(kpis.views) ? '' : 'open' }}>
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Install analyticshq on this site</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Snippet</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
           {{-- Tabs and prose are SERVER-rendered (@foreach, static labels, server
               mustaches) so this panel still says something useful before the
-              bundle runs. An x-for with a reactive {{ }} label cloaked the whole
+              bundle runs. An x-for with a reactive text label cloaked the whole
               body — x-cloak is display:none, so a new user with nothing to look
               at but install instructions got a blank box. Only the code block
               below is reactive, and only because the origin lives in the
@@ -1826,9 +2554,9 @@ select.panel:hover { border-color: var(--accent); }
                 role="tab"
                 @click="installTab.set('{{ opt.id }}')"
                 :style="installTab() === '{{ opt.id }}'
-                  ? 'padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'
+                  ? 'padding:5px 11px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'
                   : 'padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer'"
-                style="padding:5px 11px;border-radius:999px;border:1px solid {{ opt.id === 'html' ? 'var(--accent)' : 'var(--border)' }};background:{{ opt.id === 'html' ? 'var(--accent)' : 'transparent' }};color:{{ opt.id === 'html' ? '#fff' : 'var(--text-2)' }};font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer"
+                style="padding:5px 11px;border-radius:999px;border:1px solid {{ opt.id === 'html' ? 'var(--accent)' : 'var(--border)' }};background:{{ opt.id === 'html' ? 'var(--accent)' : 'transparent' }};color:{{ opt.id === 'html' ? 'var(--accent-ink)' : 'var(--text-2)' }};font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer"
               >{{ opt.label }}</button>
             @endforeach
           </div>
@@ -1844,7 +2572,7 @@ select.panel:hover { border-color: var(--accent); }
               answer here and the server cannot know it. --}}
           <pre class="px-4 py-3 text-xs mono" style="white-space: pre; overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); margin: 0">{{ installCode() }}</pre>
         </div>
-      </details>
+      </section>
     @endif
 
     {{-- Team. Everyone who can reach this site, plus anyone invited who has not
@@ -1852,7 +2580,7 @@ select.panel:hover { border-color: var(--accent); }
 
         Lists are SERVER-rendered with @foreach and server mustaches, for the
         reason spelled out on the install panel above: an x-for whose rows carry
-        reactive {{ }} makes stx cloak the container, and x-cloak is display:none.
+        reactive text makes stx cloak the container, and x-cloak is display:none.
         A mutation re-reads from the server rather than patching a reactive list
         in place — invites are rare and correctness is worth more than avoiding a
         reload here.
@@ -1860,11 +2588,11 @@ select.panel:hover { border-color: var(--accent); }
         Visible to any member (a viewer should be able to tell how widely a site
         is shared); only admin and owner get the controls. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal">
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Team</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">{{ teamMembers.length }} with access</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
 
           @foreach (teamMembers as m)
@@ -1910,21 +2638,22 @@ select.panel:hover { border-color: var(--accent); }
                 <input
                   type="email"
                   x-model="inviteEmail"
+                  aria-label="Teammate email"
                   placeholder="teammate@example.com"
                   autocomplete="off"
                   style="flex:1 1 15rem;min-height:34px;padding:0 0.65rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)"
                 >
-                <select x-model="inviteRole" style="min-height:34px;padding:0 0.5rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)">
+                <select x-model="inviteRole" aria-label="Teammate role" style="min-height:34px;padding:0 0.5rem;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font:400 13px/1 var(--sans,ui-sans-serif)">
                   <option value="viewer">can view</option>
                   <option value="admin">can manage</option>
                 </select>
-                {{-- Static label. It was `{{ inviteBusy() ? 'Sending…' : 'Send
-                    invitation' }}`, and stx cloaks any element whose own text is
+                {{-- Static label. It used to choose between Sending and Send
+                    invitation reactively, and stx cloaks any element whose own text is
                     a reactive mustache — so the primary control on this panel was
                     display:none until the bundle ran. Busy state is carried by
                     :disabled, an ATTRIBUTE binding, which does not cloak, and by
                     the sibling below, which is supposed to start hidden. --}}
-                <button type="button" @click="sendInvite()" :disabled="inviteBusy()" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Send invitation</button>
+                <button type="button" @click="sendInvite()" :disabled="inviteBusy()" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Send invitation</button>
                 <span :show="inviteBusy()" style="display:none;color:var(--text-3);font:400 12px/1 var(--sans,ui-sans-serif)">Sending…</span>
               </div>
               <p class="mt-2 text-text-3 text-xs">They get an emailed link that works once, for that address only, and expires in 14 days.</p>
@@ -1935,13 +2664,13 @@ select.panel:hover { border-color: var(--accent); }
               <div class="mt-4 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
                 <p class="mb-1 font-semibold text-sm">Invite your teammates with Pro</p>
                 <p class="mb-3 text-text-3 text-xs">Share this site with as many people as you like, each with their own login and their own level of access. Included in Pro at no extra cost per person.</p>
-                <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
+                <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
               </div>
             @endif
           @endif
 
         </div>
-      </details>
+      </section>
     @endif
 
     {{-- Import from Google Analytics. Owner-only: it writes history into this
@@ -1955,14 +2684,14 @@ select.panel:hover { border-color: var(--accent); }
         conditional parts use :show with their SSR state in the static style
         (stx-standards §7.1/§7.3), as the share control above does. --}}
     @if (ownsActive)
-      <details class="mb-8 border-border panel reveal">
-        <summary class="flex items-center justify-between px-5 py-4" style="cursor: pointer">
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
           <span class="font-semibold text-sm">Import from Google Analytics</span>
           <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">GA4</span>
-        </summary>
+        </div>
         <div class="pb-5 px-5">
           <p class="mb-3 text-sm text-text-2">
-            Brings your GA4 history over directly — no CSV export. In the Google Cloud project that owns the property:
+            Brings your GA4 history over directly, with no CSV export. In the Google Cloud project that owns the property:
             create a service account, download its JSON key, enable the Analytics Data API, then add that service
             account's email as a <span class="font-medium">Viewer</span> under GA4 → Admin → Property access management.
           </p>
@@ -1993,7 +2722,7 @@ select.panel:hover { border-color: var(--accent); }
               in separate elements for the same reason: a reactive child cloaks
               its parent. --}}
           <div class="flex flex-wrap gap-3 items-center mt-4">
-            <button type="button" @click="importFromGa" :disabled="gaBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+            <button type="button" @click="importFromGa" :disabled="gaBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
           </div>
           <p class="mt-2 text-text-3 text-xs" :show="gaProgress()" style="display:none">{{ gaProgress() }}</p>
           <p class="mt-3 text-sm text-text-2" :show="gaResult()" style="display:none">{{ gaResult() }}</p>
@@ -2011,36 +2740,178 @@ select.panel:hover { border-color: var(--accent); }
             Re-importing the same period replaces it rather than doubling it.
           </p>
         </div>
-      </details>
+      </section>
+    @endif
+
+    {{-- Import from Fathom. Owner-only for the same reason as the GA panel, and
+        Pro-gated on top of it, which the panel above is not: that one asks
+        Google for the data with a credential the customer already holds, and
+        this one is the whole migration in a single upload.
+
+        The plan branch is a SERVER @if inside the server @if. A client @if
+        nested in a server @if breaks stx's @endif matching, which is why the
+        conditional parts below use :show with their SSR state in the static
+        style, exactly as the GA panel does.
+
+        The file control is hand-rolled because there is nothing to reuse:
+        @stacksjs/components ships no file input and stx exports no file or drop
+        composable. Drag events must be @drop / @dragover and never :drop /
+        :dragover, which the runtime does not recognise as events and would
+        quietly turn into DOM attributes that never fire. --}}
+    @if (ownsActive)
+      <section class="border-border panel site-settings-panel">
+        <div class="flex items-center justify-between px-5 py-4">
+          <span class="font-semibold text-sm">Import from Fathom</span>
+          <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">CSV</span>
+        </div>
+        <div class="pb-5 px-5">
+          @if (canImportCsv)
+            <p class="mb-3 text-sm text-text-2">
+              In Fathom, set the date range you want and clear any filters, then click the download icon at the top
+              right of your dashboard. Drop the zip it gives you here, exactly as it downloaded.
+            </p>
+
+            <label for="fathom-files"
+              class="flex flex-col gap-1 items-center mt-3 px-5 py-8 text-center border-2 border-dashed rounded-xl"
+              :class="fathomDragging() ? 'border-accent' : 'border-border'"
+              style="cursor: pointer"
+              @dragover.prevent
+              @dragenter.prevent="dragFathomOver"
+              @dragleave.prevent="dragFathomLeave"
+              @drop.prevent="dropFathomFiles">
+              <span class="text-lg text-text-3 i-hugeicons-upload-01" aria-hidden="true"></span>
+              <span class="font-medium text-sm text-text-2">Choose your export, or drop it here</span>
+              <span class="text-text-3 text-xs">The zip from your Fathom dashboard, up to 5 MB. Already unzipped it? Choose the CSVs instead: Summary.csv and Pages.csv are required, and Countries, Device_Types, Browsers, Operating_Systems and Sources are used when you include them.</span>
+              <input id="fathom-files" ref="fathomFileInput" type="file" multiple accept=".zip,application/zip,.csv,text/csv" class="sr-only" @change="pickFathomFiles">
+            </label>
+
+            <p class="mt-2 text-sm text-text-2" :show="fathomPicked()" style="display:none">{{ fathomPicked() }}</p>
+
+            <div class="flex flex-col gap-2 mt-4">
+              <label class="flex gap-2 items-start text-text-2 text-xs" style="cursor: pointer">
+                <input type="checkbox" x-model="fathomReplace" style="margin-top:2px">
+                <span>
+                  Replace what I imported from Fathom before
+                  <span class="block text-text-3">Removes the rows an earlier Fathom upload created for this site. Traffic we tracked ourselves, and anything imported from Google Analytics, are left alone.</span>
+                </span>
+              </label>
+              <label class="flex gap-2 items-start text-text-2 text-xs" style="cursor: pointer">
+                <input type="checkbox" x-model="fathomAcceptFiltered" style="margin-top:2px">
+                <span>Import this export even though filters were applied in Fathom</span>
+              </label>
+            </div>
+
+            {{-- Both labels are STATIC and busy state rides on :disabled, an
+                attribute binding, which does not cloak. A reactive mustache in a
+                button's own text would hide the control until hydration. --}}
+            <div class="flex flex-wrap gap-3 items-center mt-4">
+              <button type="button" @click="checkFathomExport" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text-2);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Check this export</button>
+              <button type="button" @click="importFromFathom" :disabled="fathomBusy()" style="padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">Import my history</button>
+            </div>
+
+            <p class="mt-2 text-text-3 text-xs" :show="fathomProgress()" style="display:none">{{ fathomProgress() }}</p>
+            <p class="mt-3 text-sm text-text-2" :show="fathomPreview()" style="display:none">{{ fathomPreview() }}</p>
+            <p class="mt-3 text-sm text-text-2" :show="fathomResult()" style="display:none">{{ fathomResult() }}</p>
+
+            {{-- Warnings get their own rows and are never folded into the result
+                line, for the same reason as the GA panel: a partial import that
+                reads as a clean one becomes a mystery traffic drop months later. --}}
+            <div class="mt-3" :show="fathomWarnings().length" style="display:none">
+              <div x-for="w in fathomWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, #f59e0b 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
+            </div>
+
+            <p class="mt-4 text-text-3 text-xs">
+              Fathom exports daily totals, not individual visits, so nobody can recover the visits themselves from this
+              file. We create page views and sessions that add up to your Fathom totals. Day by day the numbers match,
+              but inside a day they are spread evenly, and the columns cannot be combined: asking how many Chrome
+              visitors were in Germany will give you a made up answer, because your export does not contain it.
+              Sub-country location is dropped, because we only ever store country. Referrers, entry and exit pages,
+              events and UTM campaigns are not imported yet.
+            </p>
+          @else
+            {{-- The paywall. Server-rendered from the site owner's plan, so it is
+                correct before any JS runs; the endpoint answers 402 regardless
+                of what this shows. --}}
+            <div class="mt-1 px-4 py-3" style="border: 1px solid var(--border); border-radius: 10px; background: var(--bg)">
+              <p class="mb-1 font-semibold text-sm">Import your Fathom history with Pro</p>
+              <p class="mb-3 text-text-3 text-xs">Upload your Fathom export and keep every number you already have, sitting alongside the traffic we start tracking today. Included in Pro at no extra cost.</p>
+              <StxLink to="/pricing" class="inline-block" style="padding:7px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);text-decoration:none">Upgrade to Pro</StxLink>
+            </div>
+          @endif
+        </div>
+      </section>
     @endif
 
     @if (shareMode)
       <div class="mb-6 px-4 py-3 text-sm panel reveal" style="border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); color: var(--text-2)">
         <span class="font-semibold text-text">Shared read-only view.</span>
-        You're viewing a shared dashboard — data only, no sign-in needed.
+        This link shows report data only. Sign-in and management controls are unavailable.
+      </div>
+    @endif
+
+    {{-- Region geolocation (owner-only, off by default).
+
+        Two server @ifs and no client @if, for the usual reason: a client @if
+        nested inside a server one breaks stx's @endif matching. The instance
+        branch is server-side because config/privacy.ts is a server value, so an
+        install that does not permit regions shows the reason rather than a
+        switch the endpoint would answer 409 to.
+
+        The checkbox is :checked + @change and NOT x-model. x-model would own the
+        value, and the value here is the server's until a request succeeds: an
+        optimistic tick that then failed would leave the box saying yes about a
+        site recording nothing. --}}
+    @if (ownsActive)
+      <div class="p-5 panel site-settings-panel">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div style="max-width:60ch">
+            <div class="font-semibold text-sm">Record state and province</div>
+            <div class="mt-0.5 text-text-3 text-xs">
+              Off by default. With it on, this site records the state or province a visit came from, never a city and
+              never coordinates. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
+              quiet region cannot be narrowed down to a person.
+            </div>
+          </div>
+          @if (regionGeoAllowed)
+            <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
+              <input type="checkbox" :checked="regionGeoOn()" :disabled="regionGeoBusy()" @change="toggleRegionGeo">
+              <span>Record regions</span>
+            </label>
+          @else
+            <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Not enabled on this server</span>
+          @endif
+        </div>
+        @if (!regionGeoAllowed)
+          <p class="mt-3 text-text-3 text-xs">
+            This server records country only. Whoever runs it can allow regions by setting <span class="mono">geo.granularity</span>
+            to <span class="mono">'region'</span> in <span class="mono">config/privacy.ts</span> and installing a geolocation database that
+            carries subdivisions. The default one does not.
+          </p>
+        @endif
+        <p class="mt-3 text-sm text-text-2" :show="regionGeoMsg()" style="display:none">{{ regionGeoMsg() }}</p>
       </div>
     @endif
 
     {{-- Share control (owner-only): reactive create/copy/revoke of a read-only link.
-        Signals live in the <script client> block; shareUrl is seeded from the
+        Signals live in the client script block; shareUrl is seeded from the
         server-bridged existing token so the current link shows on load. --}}
     @if (ownsActive)
-      <div class="mb-8 p-5 panel reveal">
+      <div class="p-5 panel site-settings-panel">
         <div class="flex flex-wrap gap-3 items-center justify-between">
           <div>
             <div class="font-semibold text-sm">Share this dashboard</div>
-            <div class="mt-0.5 text-text-3 text-xs">A read-only link — anyone with it can view, but not manage, this site.</div>
+            <div class="mt-0.5 text-text-3 text-xs">Anyone with this read-only link can view the report, but cannot manage the site.</div>
           </div>
           {{-- No @if here: a client-signal @if nested inside a server @if breaks stx's
               @endif matching. :show is the binding for this (stx-standards §7.3) and
-              carries its SSR state in the static style, per §7.1 — the element ships
+              carries its SSR state in the static style, per §7.1. The element ships
               hidden and the first effect reveals it. --}}
           <div class="flex flex-wrap gap-2 items-center" :show="shareUrl()" style="display:none">
             <input readonly :value="shareUrl()" aria-label="Share link" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
             <button type="button" @click="copyShare" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareCopied() ? 'Copied' : 'Copy' }}</button>
             <button type="button" @click="revokeShare" :disabled="shareBusy()" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-3);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
           </div>
-          <button type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
+          <button type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none;padding:8px 13px;border-radius:9px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
         </div>
       </div>
     @endif
@@ -2049,21 +2920,6 @@ select.panel:hover { border-color: var(--accent); }
         server ran no queries, so there's nothing to leak here — we show a gated card
         (below, @else) instead of the panels. --}}
     @if (viewGranted)
-
-    {{-- KPIs: hairline-separated, mono numerics, no heavy card chrome --}}
-    <div class="grid grid-cols-2 lg:grid-cols-7 mb-6 border-border lg:divide-x panel reveal">
-      @foreach (kpiCards as kpi)
-        <div class="px-5 py-5 border-border">
-          <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase">{{ kpi.label }}</div>
-          <div class="font-semibold text-3xl tracking-tight mono">{{ kpi.value }}</div>
-          @if (kpi.delta !== null)
-            <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
-              {{ kpi.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(kpi.delta) }}% <span class="text-text-3">vs prev</span>
-            </div>
-          @endif
-        </div>
-      @endforeach
-    </div>
 
     {{-- Timeseries: page views (area) + unique visitors (line) --}}
     <div class="mb-6 p-5 panel reveal">
@@ -2132,7 +2988,7 @@ select.panel:hover { border-color: var(--accent); }
             <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%; background: var(--bar);"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ p.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
-              <span class="tabular-nums text-text-3 mono" title="Bounce rate — of sessions that landed on this page, the share that bounced">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : '—' }}</span>
+              <span class="tabular-nums text-text-3 mono" title="Bounce rate for sessions that landed on this page">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : 'n/a' }}</span>
               <span class="font-medium tabular-nums mono">{{ Number(p.views).toLocaleString() }}</span>
             </span>
           </StxLink>
@@ -2229,7 +3085,7 @@ select.panel:hover { border-color: var(--accent); }
                             it is. Splitting by device divides the sample count,
                             so this is common on small sites and has to read as
                             "not enough people" rather than "broken". --}}
-                        <span class="text-text-3" title="Withheld — {{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }} measurements needed">—</span>
+                        <span class="text-text-3" title="Withheld: {{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }} measurements needed">n/a</span>
                       @else
                         <span class="text-text-3" title="No measurements yet">·</span>
                       @endif
@@ -2283,8 +3139,8 @@ select.panel:hover { border-color: var(--accent); }
                   <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions).toLocaleString() }}</td>
                   {{-- Derived here from the two stored counts, never read from a
                       ctr column -- see the migration for why one is not stored. --}}
-                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions) > 0 ? `${(Number(q.clicks) / Number(q.impressions) * 100).toFixed(1)}%` : '—' }}</td>
-                  <td class="pr-1 py-2 tabular-nums text-right mono">{{ q.position === null ? '—' : Number(q.position).toFixed(1) }}</td>
+                  <td class="py-2 tabular-nums text-right mono">{{ Number(q.impressions) > 0 ? `${(Number(q.clicks) / Number(q.impressions) * 100).toFixed(1)}%` : 'n/a' }}</td>
+                  <td class="pr-1 py-2 tabular-nums text-right mono">{{ q.position === null ? 'n/a' : Number(q.position).toFixed(1) }}</td>
                 </tr>
               @endforeach
             </tbody>
@@ -2342,9 +3198,9 @@ select.panel:hover { border-color: var(--accent); }
         that way. The map is drawn into an empty div by a plain module script, so
         nothing in this subtree is reactive and nothing can be hidden.
 
-        A <div>, not <main>: the router's fragment extraction slices from the
-        first <main> to the last </main>, so a second one makes the SPA swap the
-        wrong span.
+        This remains a div because the router's fragment extraction expects the
+        one main owned by the layout. A second one makes the SPA swap the wrong
+        span.
 
         The bar list below is NOT redundant. A browser-side map is blank until
         the bundle runs, and it is the only thing a reader gets with JS off, on a
@@ -2383,6 +3239,20 @@ select.panel:hover { border-color: var(--accent); }
       {{-- Top countries --}}
       <BreakdownPanel title="Top countries" :rows="countryRows" labelKey="country" displayKey="label" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
 
+      {{-- Top regions. Server-side @if, not a :show, because a site that never
+          opted in has no region column values at all and should not grow a
+          permanently empty card for a feature it does not use. The panel appears
+          when the setting is on, which is also when the first rows start
+          arriving.
+
+          `filterKey="region"` matches the FILTER_COLUMNS entry, so clicking a
+          row filters the whole dashboard by it exactly as a country does. The
+          "Other" row carries an empty `region`, so it filters to nothing rather
+          than to a state — which is the point of it. --}}
+      @if (regionGeo)
+        <BreakdownPanel :title="regionTitle" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
+      @endif
+
       {{-- Devices --}}
       <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />
     </div>
@@ -2414,7 +3284,7 @@ select.panel:hover { border-color: var(--accent); }
 
     {{-- Top referrers: the actual referring URLs (full referrer), a drill-down beneath the
         normalized Top sources / channels. Clickable to filter; excludes empty/direct traffic.
-        {{ }} escapes the (beacon-supplied) url. --}}
+        Server interpolation escapes the beacon-supplied URL. --}}
     <div class="mt-6 p-5 panel reveal">
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
@@ -2456,20 +3326,20 @@ select.panel:hover { border-color: var(--accent); }
           /api/sites/{site}/goals via @submit=addGoal. Pattern is the event NAME for
           event goals or the URL PATH for pageview goals. --}}
       @if (ownsActive)
-      <form @submit="addGoal" class="flex flex-wrap gap-2 items-center mt-4 pt-4" style="border-top:1px solid var(--border)">
-        <input name="name" required maxlength="255" placeholder="Goal name" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <select name="type" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+      <form @submit="addGoal" class="flex flex-wrap gap-2 items-center mt-4 pt-4 goal-form" style="border-top:1px solid var(--border)">
+        <input name="name" required maxlength="255" placeholder="Goal name" aria-label="Goal name" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <select name="type" aria-label="Goal type" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
           <option value="event">Event</option>
           <option value="pageview">Pageview</option>
         </select>
-        <input name="pattern" required maxlength="255" placeholder="Event name or /path" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <select name="match" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <input name="pattern" required maxlength="255" placeholder="Event name or /path" aria-label="Goal event or path" style="flex:1;min-width:110px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <select name="match" aria-label="Goal matching rule" style="padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
           <option value="exact">exact</option>
           <option value="contains">contains</option>
           <option value="starts_with">starts with</option>
         </select>
-        <input name="value" type="number" step="any" placeholder="Value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
-        <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:#fff;font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
+        <input name="value" type="number" step="any" placeholder="Value" aria-label="Goal value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
+        <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
       <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:#ef4444">{{ goalError() }}</div>
       @endif
@@ -2498,7 +3368,7 @@ select.panel:hover { border-color: var(--accent); }
 
     {{-- Top outbound links / file downloads: the URLs behind the auto-tracked Outbound
         Link / File Download events (properties.url). GROUP BY properties (dialect-portable,
-        no JSON_EXTRACT); site+range scoped like Events. Display-only; {{ }} escapes the url. --}}
+        no JSON_EXTRACT); site+range scoped like Events. Server interpolation escapes the URL. --}}
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       <div class="p-5 panel reveal">
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Outbound links</h2>
@@ -2570,11 +3440,11 @@ select.panel:hover { border-color: var(--accent); }
       @if (user)
         <h2 class="mb-2 font-semibold text-lg">No site to show yet</h2>
         <p class="mb-5 text-sm text-text-2">Add a site to get a tracking snippet and start seeing analytics here.</p>
-        <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Add a site</StxLink>
+        <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Add a site</StxLink>
       @else
         <h2 class="mb-2 font-semibold text-lg">Sign in to view analytics</h2>
         <p class="mb-5 text-sm text-text-2">This dashboard is private to the site owner.</p>
-        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:#fff;text-decoration:none">Sign in</StxLink>
+        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Sign in</StxLink>
       @endif
     </div>
     @endif
@@ -2590,7 +3460,7 @@ select.panel:hover { border-color: var(--accent); }
 {{-- Pre-render token guard: send a signed-out visitor to /login before paint.
 
     This USED to also mirror the localStorage token into the analyticshq_token cookie
-    and reload once, so the <script server> block could owner-scope the switcher and
+    and reload once, so the server script block could owner-scope the switcher and
     setup panel. Both halves are gone (#33): stacks 0.70.369 has LoginAction set the
     cookie in its own response, so it is present on the very first authenticated
     document request — and the cookie is HttpOnly, so this block could not have written
@@ -2703,7 +3573,7 @@ select.panel:hover { border-color: var(--accent); }
       dragging: false,
       scrollWheelZoom: false,
       doubleClickZoom: false,
-      touchZoom: false,
+      pinchZoom: false,
       keyboard: false,
     })
     layer = new GeoJSON(world, { style: styleFor(tokens()) })
@@ -2755,7 +3625,7 @@ select.panel:hover { border-color: var(--accent); }
     const note = document.querySelector('[data-country-missing]')
     if (note) {
       const label = missing.map(c => serverNames[c] || names[c] || c).join(', ')
-      note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale — see the list below.`
+      note.textContent = `${label} ${missing.length === 1 ? 'is' : 'are'} too small to plot at this scale. See the list below.`
       note.removeAttribute('hidden')
     }
   }

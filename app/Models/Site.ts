@@ -55,6 +55,17 @@ export default defineModel({
       factory: () => true,
     },
 
+    // Region (state/province) geolocation, off unless the site owner turns it on
+    // and the install permits it (config/privacy.ts). Declared here because the
+    // schema differ compares the live tables against these attributes, and a
+    // column the models do not name is one it proposes dropping on every deploy
+    // -- which is what refused three deploys in a row on 2026-08-23.
+    region_geo: {
+      fillable: true,
+      validation: { rule: schema.boolean().optional() },
+      factory: () => false,
+    },
+
     owner_id: {
       fillable: true,
       validation: { rule: schema.number().optional() },

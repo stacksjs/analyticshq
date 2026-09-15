@@ -28,28 +28,64 @@ describe('guardrail: cookieless / no device storage', () => {
   })
 })
 
-describe('guardrail: country-only geolocation', () => {
-  test('the ingest populates country only — never city or region', () => {
-    // page_views/sessions carry country only; city/region must stay null.
-    // A populated `city:`/`region:` object key here would regress us below the
-    // country-only line (stricter than Plausible/Fathom). See issue #7.
+describe('guardrail: no city, and region only when asked for twice', () => {
+  test('the ingest never populates a city, at any granularity', () => {
+    // This is the half of issue #7 that did not move. Region became reachable as
+    // an opt-in; city did not, and there is no setting, database read or code
+    // path that reaches one. A populated `city:` key here would take us below
+    // the line /compare/plausible and /compare/umami still claim.
     expect(analytics).not.toMatch(/^\s*city\s*:/m)
-    expect(analytics).not.toMatch(/^\s*region\s*:/m)
   })
 
-  test('the schema and models carry no city/region columns', () => {
-    // The columns were removed (issue #7) so the sub-country capability cannot be
-    // quietly switched on. Re-adding a region/city column trips this guardrail.
+  test('the schema carries no city column', () => {
     const files = [
       'database/migrations/0000000003-create-page_views-table.sql',
       'database/migrations/0000000005-create-sessions-table.sql',
+      'database/migrations/0000000051-add-opt-in-region-geo.sql',
       'app/Models/PageView.ts',
       'app/Models/Session.ts',
     ]
     for (const f of files) {
       const src = read(f)
-      expect(src).not.toMatch(/["\s](city|region)["\s]*(varchar|:)/i)
+      expect(src).not.toMatch(/["\s]city["\s]*(varchar|:)/i)
     }
+  })
+
+  test('region is written only when the install permits it and the site asked', () => {
+    // The guardrail that replaces "no region column, ever". Two independent
+    // gates, and this pins that neither was collapsed into the other: an
+    // instance check that returns before any query, and a per-site flag.
+    expect(analytics).toMatch(/privacy\.geo\.granularity !== 'region'\s*\)?\s*\n?\s*return false/)
+    expect(analytics).toContain('siteWantsRegion')
+    // The region value never comes from anywhere but the subdivision lookup.
+    expect(analytics).toMatch(/region\s*=\s*\(await siteWantsRegion\([\s\S]{0,40}\?\s*regionFromIp/)
+  })
+
+  test('a site cannot opt in on an install that does not permit it', () => {
+    // Refused with a 409 rather than stored: a setting that saves, reads back as
+    // on and records nothing sends the owner debugging their snippet.
+    const patch = analytics.slice(analytics.indexOf('body.regionGeo !== undefined'))
+    expect(patch.slice(0, 900)).toMatch(/granularity !== 'region'[\s\S]{0,400}409/)
+  })
+
+  test('turning region off is not delayed by the ingest cache', () => {
+    expect(analytics).toContain('resetRegionSiteCache(String(siteId))')
+  })
+
+  test('the region opt-in is the site owner\'s call, not an admin\'s', () => {
+    // The rest of PATCH /api/sites/{siteId} is admin-gated configuration. This
+    // field changes what is recorded about visitors, so it re-checks for owner.
+    const patch = analytics.slice(analytics.indexOf('body.regionGeo !== undefined'))
+    expect(patch.slice(0, 600)).toContain('requireSiteOwner(request, siteId)')
+  })
+
+  test('geo.ts reads the first subdivision and nothing below it', () => {
+    // subdivisions[1] and beyond are counties and districts — a granularity
+    // nobody opted into, under a setting that says region.
+    const geo = read('app/Analytics/geo.ts')
+    expect(geo).toContain('subdivisions?.[0]')
+    expect(geo).not.toMatch(/subdivisions\??\.\[[1-9]/)
+    expect(geo).not.toMatch(/\bcity\b\s*[?.]/)
   })
 })
 

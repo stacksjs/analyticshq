@@ -101,3 +101,8 @@ storage/framework/cache/
 # vendored. Committing it would add 8MB to every clone twelve times a year to
 # carry data that is stale the month after it lands. See app/Analytics/geo.ts.
 /storage/geo/
+
+# Worktrees created by Claude Code. Local scratch checkouts of this same repo —
+# never content to commit, and `git add -A` otherwise stages one as an embedded
+# git repository.
+.claude/worktrees/

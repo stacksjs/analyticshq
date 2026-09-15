@@ -24,14 +24,25 @@
  * so this is *stricter* than the CDN-header story it replaces: that one required
  * a CDN to be terminating your traffic and seeing every visitor.
  *
- * ## Country only
+ * ## Country by default, region only if asked for twice
  *
- * DB-IP Lite is the country-level database, deliberately: the city database
- * exists and we do not use it. Country-only geolocation is an invariant here
- * (issue #7, `config/privacy.ts`, migration `0000000011` which dropped the
- * region/city columns, and `tests/unit/privacy-guardrails.test.ts` which fails
- * CI if they come back). This module returns two letters and has no other shape
- * available to it.
+ * Country-only WAS an unconditional invariant here (issue #7, migration
+ * `0000000011` which dropped the region and city columns). It is now the
+ * default rather than the ceiling: a site owner can opt into region — state or
+ * province, never city — and everything else stays where it was.
+ *
+ * Two independent things have to be true before a single region is recorded,
+ * which is the point:
+ *
+ *  1. The site has `region_geo` on. Off for every site that exists, and off for
+ *     every site created after this, because the column defaults to false.
+ *  2. The operator installed a database that HAS subdivisions. The default file
+ *     is still DB-IP's country-level one, which carries none, so a flag flipped
+ *     without a deliberate change to the deployment records nothing.
+ *
+ * City is not reachable from either. `regionFromIp` reads `subdivisions[0]` and
+ * nothing else, `tests/unit/privacy-guardrails.test.ts` still fails CI if a
+ * `city` column reappears, and the comparison pages still say no city, ever.
  *
  * ## The database file
  *
@@ -41,6 +52,11 @@
  * monthly. Not committed: it is a binary blob with a monthly cadence and its own
  * license. `.github/workflows/deploy.yml` fetches it; `ANALYTICSHQ_GEO_DB`
  * overrides the path.
+ *
+ * DB-IP's City Lite file is the same format and license and is a drop-in for it:
+ * point `ANALYTICSHQ_GEO_DB` at that instead and `regionFromIp` starts
+ * answering. It is a much larger download, which is why it is not the default
+ * and why fetching it is opt-in in the deploy workflow.
  *
  * Attribution is required by the license and is rendered on /features/geography.
  */
@@ -52,10 +68,22 @@ import process from 'node:process'
 import { Reader } from 'mmdb-lib'
 import { normCountry } from './country'
 
-/** Shape we read out of the country database. Everything else in it is ignored. */
-interface CountryRecord {
+/**
+ * Shape we read out of whichever database is installed. Everything else is
+ * ignored.
+ *
+ * `subdivisions` is absent from the country database and present in the city
+ * one, which is the entire mechanism behind opt-in region geo: the granularity
+ * available to this install is a property of the FILE ON DISK, not of a flag.
+ * An operator who never fetches the city database cannot turn regions on by
+ * misconfiguring something, because there is nothing in the country database
+ * for `regionFromIp` to return.
+ */
+interface GeoRecord {
   country?: { iso_code?: string }
   registered_country?: { iso_code?: string }
+  /** ISO 3166-2 subdivisions, most general first. Only the first is read. */
+  subdivisions?: Array<{ iso_code?: string, names?: { en?: string } }>
 }
 
 /**
@@ -74,7 +102,7 @@ export function geoDbPath(env: NodeJS.ProcessEnv = process.env): string {
  * and there is no usable database". `false` rather than retrying, so a missing
  * file costs one failed read for the process lifetime instead of one per beacon.
  */
-let cached: MmdbReader<CountryRecord> | false | null = null
+let cached: MmdbReader<GeoRecord> | false | null = null
 
 /**
  * Load the database, once.
@@ -86,11 +114,11 @@ let cached: MmdbReader<CountryRecord> | false | null = null
  * recording pageviews, which is a far worse outcome than an empty country
  * column.
  */
-function reader(): MmdbReader<CountryRecord> | null {
+function reader(): MmdbReader<GeoRecord> | null {
   if (cached !== null)
     return cached || null
   try {
-    cached = new Reader<CountryRecord>(readFileSync(geoDbPath()))
+    cached = new Reader<GeoRecord>(readFileSync(geoDbPath()))
   }
   catch {
     // Absent, unreadable, or not a valid MMDB. All three mean the same thing to
@@ -138,7 +166,7 @@ function isWellFormed(addr: string): boolean {
  * input. None of them are errors worth distinguishing at the call site — they
  * all mean "no country recorded".
  */
-export function countryFromIp(ip: string): string | null {
+function lookup(ip: string): GeoRecord | null {
   const addr = (ip || '').trim()
   // The pre-rpx-0.11.46 sentinel, and what a same-box request genuinely is.
   // Skipped before touching the database so a misconfigured proxy shows up as
@@ -153,13 +181,76 @@ export function countryFromIp(ip: string): string | null {
     return null
 
   try {
-    const found = db.get(addr)
-    // `registered_country` is the fallback the format provides for addresses
-    // whose assignment is known but whose location is not.
-    const iso = found?.country?.iso_code ?? found?.registered_country?.iso_code
-    return iso ? normCountry(iso) : null
+    return db.get(addr)
   }
   catch {
     return null
   }
+}
+
+export function countryFromIp(ip: string): string | null {
+  const found = lookup(ip)
+  // `registered_country` is the fallback the format provides for addresses
+  // whose assignment is known but whose location is not.
+  const iso = found?.country?.iso_code ?? found?.registered_country?.iso_code
+  return iso ? normCountry(iso) : null
+}
+
+/**
+ * ISO 3166-2 for an IP — `"US-CA"` — or `null`.
+ *
+ * ## Null is the normal answer
+ *
+ * This returns `null` for everything `countryFromIp` returns `null` for, and
+ * then for two more cases that are the common ones in practice: the installed
+ * database is the country-level file and carries no subdivisions at all, and
+ * the address resolves to a country the city database has no subdivision for.
+ * Region geo is opt-in per site AND requires the operator to have installed a
+ * database that can answer, so "no region" is the default state of the product
+ * and not a fault to report.
+ *
+ * ## Why the compound code, and not the bare subdivision
+ *
+ * The subdivision code alone is ambiguous across countries — `CA` is California
+ * in `US-CA` and a dozen unrelated things elsewhere, and it collides with the
+ * alpha-2 country code for Canada, so a bare column would mix regions and
+ * countries in any query that touched both. Prefixing the country makes the
+ * value globally unique and sorts regions of the same country together.
+ *
+ * ## Why only the first subdivision
+ *
+ * MMDB orders them most general first, so `subdivisions[0]` is the state or
+ * province and anything after it is a county or district. Reading further down
+ * would be a granularity nobody opted into: the setting is called region, the
+ * comparison pages say region, and a county is neither.
+ */
+export function regionFromIp(ip: string): string | null {
+  const found = lookup(ip)
+  const iso = found?.country?.iso_code ?? found?.registered_country?.iso_code
+  const country = iso ? normCountry(iso) : null
+  if (!country)
+    return null
+
+  const sub = found?.subdivisions?.[0]?.iso_code?.trim()
+  if (!sub)
+    return null
+  // Upper case and A-Z0-9 only: ISO 3166-2 subdivision codes are one to three
+  // of those, and anything else is a database we did not expect rather than a
+  // region worth writing into a column.
+  const code = sub.toUpperCase()
+  if (!/^[A-Z0-9]{1,3}$/.test(code))
+    return null
+
+  return `${country}-${code}`
+}
+
+/**
+ * Can the installed database answer region queries at all?
+ *
+ * For `/api/health`, which reports country resolution the same way. A site that
+ * opted into regions and is recording none is almost always this: the operator
+ * turned the setting on and left the country-level database in place.
+ */
+export function geoHasRegions(): boolean {
+  return regionFromIp('8.8.8.8') !== null
 }
