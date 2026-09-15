@@ -186,6 +186,9 @@
         gap: 0.25rem;
         min-width: 232px;
         padding: 0.6rem;
+        max-height: calc(100dvh - 92px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
         background: var(--surface-2);
         border: 1px solid var(--line-strong);
         border-radius: var(--r);
@@ -695,6 +698,7 @@
         .footer-brand { grid-column: 1 / -1; }
       }
       @media (max-width: 860px) {
+        body:has(.nav-menu[open]) { overflow: hidden; }
         .nav-links { display: none; }
         .nav-cta { display: none; }
         .nav-menu { display: block; }
