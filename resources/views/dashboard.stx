@@ -1731,15 +1731,17 @@ async function importFromFathom(): Promise<void> {
     else if (first.status === 413 && first.data.range?.from) {
       // Too big for one request. Post the SAME files again in date windows,
       // sized from the estimate the server just sent back.
-      const range = first.data.range
+      // Not `range`: that name reaches this block from the server for switchSite,
+      // and the bridge withholds any name the block declares, even nested like this.
+      const importRange = first.data.range
       const total = Number(first.data.estimate?.pageViews ?? 0)
       const max = Number(first.data.maxRows ?? 50000)
-      const span = fathomWindows(range.from, range.to, 3650)[0]
+      const span = fathomWindows(importRange.from, importRange.to, 3650)[0]
       const allDays = Math.round((new Date(`${span[1]}T00:00:00Z`).getTime() - new Date(`${span[0]}T00:00:00Z`).getTime()) / 86400000) + 1
       // Two thirds of the cap per window, so an uneven distribution across the
       // range does not push one window back over it.
       const perWindow = Math.max(1, Math.floor(allDays * ((max * 0.66) / Math.max(total, 1))))
-      const windows = fathomWindows(range.from, range.to, perWindow)
+      const windows = fathomWindows(importRange.from, importRange.to, perWindow)
 
       for (let i = 0; i < windows.length; i++) {
         const [fromDay, toDay] = windows[i]
