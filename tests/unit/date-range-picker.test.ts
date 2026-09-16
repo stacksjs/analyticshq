@@ -113,6 +113,19 @@ describe('date range picker: wiring', () => {
     expect(dashboard).not.toContain('type="date"')
   })
 
+  test('an open panel is dismissed by a click outside it', () => {
+    // A native <details> has no outside-click close, so the component adds a
+    // transparent full-viewport backdrop behind the panel that closes it.
+    expect(component).toContain('<div class="drp-backdrop" @click="pickClose"')
+    expect(component).toMatch(/function pickClose\(e\) \{[\s\S]*?closest\('details'\)[\s\S]*?removeAttribute\('open'\)/)
+    // It sits below the panel and above the sticky nav so a click on the panel
+    // itself never reaches it, but a click on the page behind does.
+    const backdrop = dashboard.match(/\.drp-backdrop\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(backdrop).toContain('position: fixed')
+    expect(backdrop).toContain('inset: 0')
+    expect(backdrop).toMatch(/z-index:\s*39\b/)
+  })
+
   test('at phone width the panel shows one calendar inside the visible viewport', () => {
     // Anchored on the rule that already switches the menu to phone layout, so the
     // test does not depend on the block's breakpoint value.

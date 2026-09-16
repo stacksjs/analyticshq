@@ -181,6 +181,16 @@ function pickLeftMonth(e) { pickSetYm(pickYearOf(calYm()), Number(e.target.value
 function pickLeftYear(e) { pickSetYm(Number(e.target.value), pickMonthIdx(calYm()), false) }
 function pickRightMonth(e) { pickSetYm(pickYearOf(pickRightYm()), Number(e.target.value), true) }
 function pickRightYear(e) { pickSetYm(Number(e.target.value), pickMonthIdx(pickRightYm()), true) }
+// A native <details> only closes from its own summary, so an open panel would
+// otherwise sit there after the pointer moves on. The transparent .drp-backdrop
+// below covers the rest of the page while the panel is open; a click on it lands
+// here and closes the panel, the same way clicking away from a menu should.
+function pickClose(e) {
+  const d = e.currentTarget.closest('details')
+  if (d) d.removeAttribute('open')
+  selStart.set('')
+  selHover.set('')
+}
 function pickEscape(e) {
   if (e.key !== 'Escape') return
   selStart.set('')
@@ -194,6 +204,7 @@ function pickEscape(e) {
     <i class="i-hugeicons-calendar-03" aria-hidden="true"></i>
     <span>{{ summary }}</span>
   </summary>
+  <div class="drp-backdrop" @click="pickClose" aria-hidden="true"></div>
   <div class="date-popover drp" role="dialog" aria-label="Reporting period">
     <div class="drp-presets" role="list">
       <button type="button" role="listitem" :class="pickPresetClass('today')" @click="pickApply('today')">Today</button>
