@@ -54,6 +54,15 @@ let from = isAll
   : isCustom ? `${customFrom}T00:00:00.000Z` : new Date(Date.now() - days * 864e5).toISOString()
 if (isCustom)
   days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 864e5))
+// What the period control reads. A preset keeps its name and the days it resolves
+// to; 'all' has no start until loadData finds the earliest pageview, so it is
+// named alone. Dates are formatted in UTC because from/to are UTC day bounds.
+const RANGE_LABELS = { '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '1y': 'Last 365 days', 'all': 'All time' }
+const fmtDay = s => new Date(`${s.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const fmtSpan = (a, b) => a.slice(0, 4) === b.slice(0, 4)
+  ? `${fmtDay(a)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
+  : `${fmtDay(a)}, ${a.slice(0, 4)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
+const rangeLabel = isCustom ? fmtSpan(customFrom, customTo) : isAll ? 'All time' : `${RANGE_LABELS[range] ?? 'Custom'} · ${fmtSpan(from, to)}`
 // Chart bucket granularity by span: hour (<= 2d) for a real 24h curve, day (<= ~400d),
 // or month (wider, e.g. all-time) so a multi-year chart isn't thousands of points.
 // bucketLen = the LEFT(timestamp, N) prefix — 'YYYY-MM-DDTHH'(13) / 'YYYY-MM-DD'(10) /
@@ -2169,30 +2178,79 @@ summary:focus-visible {
   right: 0;
   top: calc(100% + 0.5rem);
   z-index: 40;
-  width: min(24rem, calc(100vw - 2.5rem));
-  padding: 1rem;
+  width: min(44rem, calc(100vw - 2.5rem));
+  padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--panel);
   box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 10%, transparent);
 }
-.date-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-.date-field label {
+/* Period picker: presets down the left, two months on the right. The range is
+   drawn flat with rounded ends, the way Fathom's is, on the --bar wash the KPI
+   bars already use so it reads as the same accent at the same strength. */
+.drp { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 0.75rem; }
+.drp-presets { display: flex; flex-direction: column; gap: 0.15rem; padding-right: 0.75rem; border-right: 1px solid var(--border); }
+.drp-preset {
   display: block;
-  margin-bottom: 0.35rem;
-  color: var(--text-2);
-  font: 600 0.75rem/1.2 var(--sans, ui-sans-serif);
-}
-.date-field input {
   width: 100%;
-  padding: 0.55rem 0.65rem;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 0.8125rem/1.2 var(--sans, ui-sans-serif);
+  text-align: left;
+  cursor: pointer;
+}
+.drp-preset:hover { color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); }
+.drp-preset.is-active { color: var(--accent-ink); background: var(--accent); }
+.drp-cals { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.drp-head { display: grid; grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) 2rem; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; }
+.drp-nav {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.drp-nav:hover { color: var(--text); border-color: var(--border); }
+.drp-nav svg { width: 1rem; height: 1rem; }
+.drp-nav.is-hidden { visibility: hidden; }
+.drp-sel {
+  min-width: 0;
+  height: 2rem;
+  padding: 0 0.5rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--text);
-  font: 500 0.8125rem/1 var(--mono, ui-monospace);
+  font: 600 0.8125rem/1 var(--sans, ui-sans-serif);
 }
-.date-submit { width: 100%; margin-top: 0.75rem; }
+.drp-dow, .drp-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.drp-dow span { padding: 0.25rem 0; color: var(--text-3); font: 600 0.7rem/1.2 var(--sans, ui-sans-serif); text-align: center; }
+.drp-day {
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: 500 0.8125rem/1 var(--mono, ui-monospace);
+  cursor: pointer;
+}
+.drp-day:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.drp-day.is-out { color: var(--text-3); }
+.drp-day.is-today { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.drp-day.is-range { background: var(--bar); }
+.drp-day.is-edge { background: var(--accent); color: var(--accent-ink); border-radius: 8px; }
+.drp-day.is-disabled { color: var(--text-3); opacity: 0.45; cursor: default; }
+.drp-day.is-disabled:hover { background: transparent; }
+.drp-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
 .live-status {
   display: inline-flex;
   align-items: center;
@@ -2242,7 +2300,14 @@ summary:focus-visible {
   .range-link { flex: 1 0 auto; }
   .range-actions { justify-content: flex-start; }
   .date-menu { position: static; }
-  .date-popover { left: 0; right: auto; }
+  .date-popover { left: 0; right: auto; width: calc(100vw - 2rem); max-height: calc(100dvh - 6rem); overflow-y: auto; overscroll-behavior: contain; }
+  .drp { grid-template-columns: minmax(0, 1fr); }
+  .drp-presets { flex-direction: row; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.6rem; border-right: 0; border-bottom: 1px solid var(--border); }
+  .drp-preset { width: auto; padding: 0.45rem 0.65rem; border: 1px solid var(--border); border-radius: 999px; }
+  .drp-cals { grid-template-columns: minmax(0, 1fr); }
+  .drp-cal.is-right { display: none; }
+  .drp-cal.is-left .drp-nav.is-hidden { visibility: visible; }
+  .drp-day { height: 2.5rem; }
 }
 
 /* Site switcher. Surface, border and radius come from .panel. The native menu remains
@@ -2434,29 +2499,7 @@ select.panel:hover { border-color: var(--accent); }
         </nav>
 
         <div class="range-actions">
-          <details class="date-menu">
-            <summary class="range-tool {{ isCustom ? 'is-active' : '' }}">
-              <i class="i-hugeicons-calendar-03" aria-hidden="true"></i>
-              {{ isCustom ? (customFrom + ' to ' + customTo) : 'Custom' }}
-            </summary>
-            <form method="get" class="date-popover" aria-label="Custom date range">
-              <input type="hidden" name="site" value="{{ siteId }}">
-              @if (compare)
-                <input type="hidden" name="compare" value="1">
-              @endif
-              <div class="date-grid">
-                <div class="date-field">
-                  <label for="range-from">From</label>
-                  <input id="range-from" type="date" name="from" value="{{ customFrom }}">
-                </div>
-                <div class="date-field">
-                  <label for="range-to">To</label>
-                  <input id="range-to" type="date" name="to" value="{{ customTo }}">
-                </div>
-              </div>
-              <button type="submit" class="date-submit is-active range-tool">Apply range</button>
-            </form>
-          </details>
+          <DateRangePicker :summary="rangeLabel" :active="isCustom" />
           <StxLink
             to="{{ compareToggleUrl() }}"
             title="Overlay the previous period on the chart"
