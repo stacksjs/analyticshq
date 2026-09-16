@@ -2188,6 +2188,7 @@ summary:focus-visible {
 /* Period picker: presets down the left, two months on the right. The range is
    drawn flat with rounded ends, the way Fathom's is, on the --bar wash the KPI
    bars already use so it reads as the same accent at the same strength. */
+.drp-backdrop { position: fixed; inset: 0; z-index: 39; background: transparent; cursor: default; }
 .drp { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 0.75rem; }
 .drp-presets { display: flex; flex-direction: column; gap: 0.15rem; padding-right: 0.75rem; border-right: 1px solid var(--border); }
 .drp-preset {
