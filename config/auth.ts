@@ -47,27 +47,42 @@ export default {
   password: env.AUTH_PASSWORD_FIELD || 'password',
 
   /**
-   * Access-token expiry in milliseconds (default: 1 hour).
+   * Access-token expiry in milliseconds (default: 7 days).
    *
-   * Access tokens are deliberately short-lived: a leaked bearer (logs,
-   * proxy, browser storage) is then usable for an hour, not a month. The
-   * paired refresh token (`refreshTokenExpiry`) carries the long-lived
-   * session and is rotated on use, so UX is unaffected.
+   * This value IS the browser session length, not just an API-bearer TTL.
+   * LoginAction mirrors the issued access token into the HttpOnly `auth-token`
+   * cookie (see Actions/Auth/authCookie.ts) because the dashboard is
+   * server-rendered stx with no client hydration and has no other way to know
+   * who is asking. Both the cookie's Max-Age and the
+   * `oauth_access_tokens.expires_at` row are stamped from here, and nothing
+   * extends either one - `getUserFromToken` bumps `updated_at` on every request
+   * but leaves `expires_at` alone, then deletes the row once it passes. So a
+   * signed-in operator is logged out exactly this long after login regardless
+   * of activity.
+   *
+   * This is the BASELINE only. LoginAction and VerifyTwoFactorLoginAction pass
+   * a per-login `expiresInMinutes` from the sign-in form's "remember me"
+   * checkbox (see sessionExpiryMinutes in Actions/Auth/authCookie.ts): a week
+   * unchecked, 30 days checked. This default covers the entry points that have
+   * no such checkbox - register, social sign-in, invite acceptance - so they
+   * all land on the baseline week.
+   *
+   * It was 1h before (a sane API-bearer TTL but a hostile session, patched over
+   * with a client-side refresh rotation). The uniform HQ model drops refresh
+   * and makes the long-lived cookie the session; a week baseline with an opt-in
+   * month is the "don't log me out" bar the other HQ apps already clear.
+   * AUTH_TOKEN_EXPIRY overrides it per environment without a deploy.
    */
-  // 30 days, matching loghq -- the one HQ app nobody gets logged out of.
-  //
-  // This was 24h (bughq) / 1h (analyticshq) on the reasoning below, and the
-  // reasoning is sound in the abstract: a leaked bearer is usable for the life
-  // of the token. In practice these are single-operator dashboards behind a
-  // login, the sign-out path revokes server-side, and being logged out mid-task
-  // was costing real time every day. If that trade stops being worth it, this
-  // is the one number to change -- and AUTH_TOKEN_EXPIRY overrides it per
-  // environment without a deploy.
-  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 30 * 24 * 60 * 60 * 1000,
+  tokenExpiry: env.AUTH_TOKEN_EXPIRY || 7 * 24 * 60 * 60 * 1000,
 
   /**
-   * Refresh-token expiry in milliseconds (default: 30 days). This is the
-   * long-lived credential exchanged for fresh access tokens.
+   * Refresh-token expiry in milliseconds (default: 30 days).
+   *
+   * NOT WIRED UP. The uniform HQ auth model has no refresh exchange - the
+   * long-lived `auth-token` cookie IS the session. There is no /auth/refresh
+   * route and no cookie stores a refresh token, so this value only bounds a row
+   * in `oauth_refresh_tokens` that never gets read. Session length is
+   * `tokenExpiry` above, alone.
    */
   refreshTokenExpiry: env.AUTH_REFRESH_TOKEN_EXPIRY || 30 * 24 * 60 * 60 * 1000,
 
@@ -86,30 +101,12 @@ export default {
    */
   defaultTokenName: 'auth-token',
 
-  /**
-   * The auth cookie (#33).
-   *
-   * `LoginAction` sets this server-side on sign-in and `LogoutAction` clears it,
-   * both as of stacks 0.70.369 (stacksjs/stacks#2306). Naming it here is what
-   * makes the framework's writer and this app's reader agree: the dashboard's
-   * `<script server>` block authenticates from `cookies.analyticshq_token`, and
-   * before this key existed the framework wrote a different name entirely — a
-   * cookie it wrote was never one anything read.
-   *
-   * Note `defaultTokenName` above is NOT this. It is a personal-access-token
-   * label; the framework honours it as a cookie name only for apps that had
-   * renamed it before `cookie.name` existed, and warns when the label is not a
-   * legal cookie name — which a human-readable label usually is not.
-   *
-   * The cookie is HttpOnly and the framework hardcodes that, which is the right
-   * answer and the reason this change DELETED code rather than adding it: an
-   * HttpOnly cookie cannot be written from `document.cookie`, so the session
-   * store's mirror effect and the dashboard's pre-paint bootstrap were both
-   * doing work the browser was refusing to let them do.
-   */
-  cookie: {
-    name: 'analyticshq_token',
-  },
+  // The auth cookie name is NOT overridden here. The custom auth actions
+  // (Actions/Auth/authCookie.ts) and app/Middleware/Auth.ts both resolve it
+  // from `defaultTokenName` above ('auth-token'), so writer and reader agree on
+  // one name. An app-specific `cookie: { name: ... }` override used to point the
+  // framework writer at a different name than the middleware read, so the cookie
+  // branch authenticated nothing - removed as part of the uniform-auth conversion.
 
   /**
    * Password reset configuration.

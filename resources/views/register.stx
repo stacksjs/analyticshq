@@ -8,9 +8,10 @@ useSeoMeta({
 </script>
 
 <script client>
-// Token auth via stx client directives. Uncontrolled inputs read from the submit
-// event; error/loading are signals.
-const session = useStore('session') as SessionStore
+// Uniform HQ auth. RegisterAction sets the HttpOnly `auth-token` cookie in its
+// own response, so a full navigation to /dashboard lets the SSR page read the
+// fresh cookie. No token is kept in JS - the cookie IS the session. Uncontrolled
+// inputs read from the submit event; error/loading are signals.
 const error: StxSignal<string> = state('')
 const loading: StxSignal<boolean> = state(false)
 
@@ -32,6 +33,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     const res = await fetch('/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({ name: field('name'), email, password }),
     })
     const data: AuthResponse = await res.json().catch(() => ({}))
@@ -40,41 +42,10 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       return
     }
 
-    // Sign in again with the credentials just used, and DO NOT simplify this away.
-    //
-    // The two framework actions do not return the same shape. LoginAction returns
-    // `access_token, refresh_token, token_type, expires_in, token, user`; RegisterAction
-    // returns `{ token, user }` and nothing else -- measured against both endpoints, not
-    // assumed. So a brand-new account has no refresh token, and #32 would fix every
-    // session except the one belonging to someone who just signed up: they would hit the
-    // one-hour wall once, on their first day.
-    //
-    // Exchanging the credentials we already hold for a full pair costs one request and
-    // keeps every session on one code path. The fallback matters too -- if this second
-    // call fails (rate limit, blip), the account still exists and the register token
-    // still works, so sign in with what we have rather than stranding the visitor on a
-    // form for an account that was created.
-    let pack: AuthResponse = data
-    try {
-      const pair = await fetch('/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-      if (pair.ok) {
-        const paired: AuthResponse = await pair.json().catch(() => ({}))
-        if (paired.refresh_token)
-          pack = paired
-      }
-    }
-    catch { /* keep the register token; see above */ }
-
-    // The analyticshq_token cookie the SERVER needs comes from the register response
-    // itself, the same way LoginAction sets it (#33). A freshly registered visitor
-    // used to reach the dashboard with a token the server could not see, and got the
-    // signed-out gate.
-    session.signIn(pack.token || pack.access_token || '', pack.user ?? data.user ?? null, pack.refresh_token || '')
-    navigate('/dashboard')
+    // The auth-token cookie the SERVER needs comes with the register response
+    // itself (RegisterAction sets it, baseline 7-day tier). A full navigation
+    // then lands on the owner-scoped dashboard rather than the signed-out gate.
+    window.location.assign('/dashboard')
   }
   catch {
     error.set('Something went wrong. Please try again.')

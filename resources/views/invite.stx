@@ -43,7 +43,7 @@ const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.re
 
 // Who is reading this page, if anyone. Same cookie path the dashboard uses.
 let viewer = null
-const authToken = (typeof cookies !== 'undefined' ? cookies.analyticshq_token : '') || ''
+const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
 if (authToken) {
   try {
     const { Auth } = await import('@stacksjs/auth')
@@ -97,7 +97,9 @@ defineClientPayload({ inviteCapability })
 </script>
 
 <script client>
-const session = useStore('session') as SessionStore
+// Auth is the HttpOnly auth-token cookie. The Accept button only renders when the
+// SSR block above resolved a signed-in viewer whose email matches the invite, so
+// this same-origin credentialed POST always carries a valid session.
 const busy: StxSignal<boolean> = state(false)
 const failed: StxSignal<string> = state('')
 
@@ -107,8 +109,9 @@ async function accept(): Promise<void> {
   busy.set(true)
   failed.set('')
   try {
-    const res = await session.authFetch('/api/invites/accept', {
+    const res = await fetch('/api/invites/accept', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token: inviteCapability }),
     })

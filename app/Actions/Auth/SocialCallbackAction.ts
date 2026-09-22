@@ -6,6 +6,7 @@ import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
 import { GitHubProvider, GoogleProvider } from '@stacksjs/socials'
+import { buildAuthCookie } from './authCookie'
 
 function makeDriver(provider: string): GitHubProvider | GoogleProvider | null {
   const svc = config.services as any
@@ -101,39 +102,17 @@ export default new Action({
     if (!result?.token)
       return fail('We could not sign you in.')
 
-    // Hand the token pack to the client (token auth uses localStorage). Values are
-    // embedded in the response body, never in the URL.
-    //
-    // DOUBLE stringify, and it is not a typo. The session store persists through
-    // useLocalStorage, which JSON.stringifies on write -- so the string that belongs
-    // IN localStorage under 'token' is `"abc"`, quotes included. The inner call builds
-    // that stored form; the outer one turns it into a JS string literal for this
-    // script. The previous single call emitted `setItem('token', "abc")`, which stored
-    // a bare `abc` that only survived because the store carries a migration shim for
-    // exactly this. For 'user' it was worse: `setItem('user', {"id":1,...})` passed an
-    // OBJECT to setItem, which coerces to the literal string "[object Object]" — so
-    // every social sign-in stored a broken user and session.user() was that string
-    // rather than a user. Fixed here rather than papered over downstream.
-    //
-    // escapeForScript closes the other hole: a display name containing `</script>`
-    // would otherwise terminate this block early.
-    const escapeForScript = (value: unknown): string =>
-      JSON.stringify(JSON.stringify(value)).replace(/</g, '\\u003c')
-
-    const tokenLiteral = escapeForScript(result.token)
-    // #32: without this the social path signs you in for exactly one hour.
-    const refreshLiteral = escapeForScript(result.refreshToken ?? '')
-    const userLiteral = escapeForScript({ id: userId, email, name: social.name })
-
-    return response.html(
-      `<!doctype html><meta charset="utf-8"><title>Signing you in</title>`
-      + `<script>try{`
-      + `localStorage.setItem('token', ${tokenLiteral});`
-      + `localStorage.setItem('refresh_token', ${refreshLiteral});`
-      + `localStorage.setItem('user', ${userLiteral})`
-      + `}catch(e){}`
-      + `location.replace('/account')</script>Signing you in...`,
-      200,
-    )
+    // Uniform HQ auth: mirror the issued bearer into the HttpOnly `auth-token`
+    // cookie the SSR dashboard authenticates from (buildAuthCookie), then land
+    // on /dashboard as a normal navigation so the server reads the fresh cookie.
+    // No localStorage, no bearer in the response, no `?token=` in the URL. The
+    // baseline session tier applies - the OAuth path has no "remember me" box.
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/dashboard',
+        'Set-Cookie': buildAuthCookie(result.token, result.expiresIn),
+      },
+    })
   },
 })

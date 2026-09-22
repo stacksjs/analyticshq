@@ -5,29 +5,33 @@ useSeoMeta({
   // shipping the shell default title.
   robots: 'noindex, nofollow',
 })
+
+// Server-side auth gate. An stx server block cannot 302, so resolve the viewer
+// from the HttpOnly auth-token cookie and render a signed-out panel when absent,
+// in place of the removed client pre-paint bounce. `authed` bridges to the client.
+let authed = false
+const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
+if (authToken) {
+  try {
+    const { Auth } = await import('@stacksjs/auth')
+    const viewer = await Auth.getUserFromToken(authToken)
+    authed = !!viewer
+  }
+  catch { authed = false }
+}
 </script>
 
 <script client>
 // Add-site screen. Creates an owned site via POST /api/sites, then drops into that
 // site's dashboard, where the server-rendered setup panel shows the install snippet.
 // error/loading are signals; the name/domain inputs are uncontrolled (read at submit).
+// Auth is the HttpOnly auth-token cookie; the SSR gate above walls off signed-out
+// visitors, and the POST below is a same-origin credentialed fetch.
 interface CreatedSite { id: string }
 interface CreateSiteResponse { site?: CreatedSite, error?: string }
 
-const session = useStore('session') as SessionStore
 const error: StxSignal<string> = state('')
 const loading: StxSignal<boolean> = state(false)
-
-// Pre-paint auth bounce. `replace` is deliberate so the signed-out visitor cannot land
-// back here with Back. This used to be a native window.location.replace on the grounds
-// that the router is not up yet -- but that is exactly what navigate() already does
-// when window.stxRouter is absent (signals.js:1005-1015), so the native call bought
-// nothing and only opted out of the upgrade if the ordering ever changes.
-// The cookie mirror that used to live here is gone, and so is the session store's
-// effect that replaced it (#33) -- LoginAction sets the auth cookie server-side, and
-// it is HttpOnly, so no page and no store can or needs to write it.
-if (!session.isAuthed())
-  navigate('/login', { replace: true })
 
 async function handleSubmit(e: SubmitEvent): Promise<void> {
   e.preventDefault()
@@ -43,18 +47,17 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   error.set('')
   try {
     const domain = (form.elements.namedItem('domain') as HTMLInputElement).value.trim()
-    const res = await session.authFetch('/api/sites', {
+    const res = await fetch('/api/sites', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, domain }),
     })
     const data: CreateSiteResponse = await res.json().catch(() => ({}))
     if (res.status === 401) {
-      // Reaching here now means the renewal did not rescue it -- authFetch has already
-      // tried, and already signed the visitor out if the refresh token was refused. So
-      // this covers the remaining case: no refresh token at all. Clear the stale access
-      // token so the guard above does not bounce this visitor straight back here.
-      session.signOut()
+      // The session cookie is gone or expired: leave for /login (a full navigation
+      // so the SSR gate re-resolves there too).
+      window.location.assign('/login')
       return
     }
     if (!res.ok || !data.site || !data.site.id) {
@@ -82,6 +85,14 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     <StxLink to="/dashboard" class="text-2xl wordmark">analyticshq</StxLink>
   </div>
 
+  @if (!authed)
+    {{-- Signed-out gate: the SSR cookie read found no valid session. --}}
+    <div class="text-center">
+      <h1 class="mb-2 font-semibold text-xl tracking-tight">Sign in to add a site</h1>
+      <p class="mb-6 text-sm text-text-3">Adding a site needs an account. Sign in to continue.</p>
+      <StxLink to="/login" class="inline-block px-4 py-2.5 font-semibold text-sm btn">Sign in</StxLink>
+    </div>
+  @else
   <div class="mb-8 text-center">
     <h1 class="font-semibold text-xl tracking-tight">Add a site</h1>
     <p class="mt-2 text-sm text-text-3">Each site gets its own tracking id and dashboard.</p>
@@ -109,5 +120,6 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   <p class="mt-6 text-center text-sm text-text-3">
     <StxLink to="/dashboard" class="font-medium text-accent">← Back to dashboard</StxLink>
   </p>
+  @endif
 </div>
 @endsection

@@ -1,6 +1,5 @@
 import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
-import { Auth } from '@stacksjs/auth'
 import { config } from '@stacksjs/config'
 import { getPrice } from '@stacksjs/payments'
 import { response } from '@stacksjs/router'
@@ -16,11 +15,10 @@ export default new Action({
   description: 'Create a Stripe Checkout session for the Pro plan',
   method: 'POST',
   async handle(request: RequestInstance) {
-    // Resolve the user from the bearer token directly, so this works whether or
-    // not the 'auth' middleware alias populated request.user() on the route.
-    const authHeader = ((request as any).headers?.get?.('authorization') ?? '')
-    const bearer = (request as any).bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
-    const user = bearer ? await Auth.getUserFromToken(bearer) : await request.user()
+    // The route runs the auth middleware, which stamps the user from either the
+    // auth-token cookie (the pricing page's credentialed fetch) or a bearer token
+    // (external API callers). request.user() returns whichever it resolved.
+    const user = await request.user()
     if (!user)
       return response.unauthorized('Authentication required')
 

@@ -1,6 +1,5 @@
 import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
-import { Auth } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
 import { userIsPro } from '../Analytics/entitlements'
@@ -23,9 +22,10 @@ export default new Action({
   description: 'Return the current user and their Pro status',
   method: 'GET',
   async handle(request: RequestInstance) {
-    const authHeader = ((request as any).headers?.get?.('authorization') ?? '')
-    const bearer = (request as any).bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
-    const user = bearer ? await Auth.getUserFromToken(bearer) : await request.user()
+    // The route runs the auth middleware, which stamps the user from either the
+    // `auth-token` cookie (dashboard/account credentialed fetch) or a bearer
+    // token (external API callers). request.user() returns whichever it resolved.
+    const user = await request.user()
     if (!user)
       return response.unauthorized('Authentication required')
 

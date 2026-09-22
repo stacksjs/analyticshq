@@ -5,13 +5,29 @@ useSeoMeta({
   // shipping the shell default title.
   robots: 'noindex, nofollow',
 })
+
+// Server-side auth gate. An stx server block cannot issue a 302, so instead of
+// the removed client pre-paint guard, resolve the viewer from the HttpOnly
+// `auth-token` cookie here and render a signed-out panel when it is absent or
+// invalid. `authed` bridges to the client block (inlined as a literal) so the
+// onMount /api/me fetch does not fire for a signed-out visitor.
+let authed = false
+const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
+if (authToken) {
+  try {
+    const { Auth } = await import('@stacksjs/auth')
+    const viewer = await Auth.getUserFromToken(authToken)
+    authed = !!viewer
+  }
+  catch { authed = false }
+}
 </script>
 
 <script client>
-// Account page — reactive. Fetches the current user from /api/me in onMount and
-// drives the view through signals (no imperative DOM). The pre-render guard below
-// handles the no-token redirect before paint; onMount handles an invalid token.
-const session = useStore('session') as SessionStore
+// Account page - reactive. Fetches the current user from /api/me in onMount and
+// drives the view through signals (no imperative DOM). Auth is the HttpOnly
+// `auth-token` cookie: the SSR gate above renders a signed-out panel when it is
+// absent, and this block only runs its data fetch when the server said `authed`.
 const loaded: StxSignal<boolean> = state(false)
 const name: StxSignal<string> = state('')
 const email: StxSignal<string> = state('')
@@ -33,32 +49,29 @@ function fmtDate(v: string | null | undefined): string {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
-function logout(): void {
-  // Fire-and-forget: the server revokes the token, but the visitor should not wait on
-  // it. signOut clears both stores, expires the cookie, and navigates.
-  fetch('/logout', { method: 'POST', headers: session.authHeaders() }).catch(() => {})
-  session.signOut()
+async function logout(): Promise<void> {
+  // Ask the SERVER to clear the HttpOnly auth-token cookie (only it can) and
+  // revoke the token, then navigate once that has settled so the Set-Cookie is
+  // not raced by the next document request. A failure still sends the visitor to
+  // /login rather than trapping them here.
+  try {
+    await fetch('/logout', { method: 'POST', credentials: 'same-origin' })
+  }
+  catch {}
+  window.location.assign('/login')
 }
 
 onMount(() => {
-  if (!session.isAuthed()) {
-    // navigate(..., { replace: true }) rather than location.replace: this one runs on
-    // mount, so the router IS up and this is a fragment swap instead of a document
-    // load. The pre-paint twin at the bottom of this file cannot make that trade.
-    navigate('/login', { replace: true })
+  // `authed` is bridged from the server gate. When false the signed-out panel is
+  // what rendered, so there is nothing to fetch.
+  if (!authed)
     return
-  }
-  // authFetch renews the access token and retries once before this sees a 401, which
-  // is the whole of #32 for this page: an hour into a session, /api/me used to answer
-  // 401 and the account page signed you out mid-visit.
-  session.authFetch('/api/me')
+  fetch('/api/me', { credentials: 'same-origin' })
     .then((r: Response) => {
       if (r.status === 401) {
-        // Survived the renewal, so the session really is finished. Clear everything
-        // rather than only the localStorage key, or the cookie survives and the server
-        // keeps rendering a signed-in shell. (authFetch has usually done this already
-        // when the refresh was refused; this covers the no-refresh-token case.)
-        session.signOut()
+        // The cookie is gone or expired: leave for /login (the server-cleared
+        // cookie means the SSR gate will show the signed-out panel there too).
+        window.location.assign('/login')
         return null
       }
       return r.json() as Promise<MeResponse>
@@ -113,11 +126,26 @@ onMount(() => {
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">analyticshq</StxLink>
     <div class="flex gap-2.5 items-center">
-      <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
-      <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
+      @if (authed)
+        <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
+        <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
+      @else
+        <StxLink to="/login" class="px-3.5 py-2 text-sm btn btn-ghost">Sign in</StxLink>
+      @endif
     </div>
   </header>
 
+  @if (!authed)
+    {{-- Signed-out gate. The SSR cookie read found no valid session, and a server
+        block cannot 302, so render the sign-in panel in place of the account. --}}
+    <div class="mx-auto px-5 py-16 md:px-6 max-w-3xl text-center">
+      <div class="mx-auto p-10 max-w-md card">
+        <h1 class="mb-2 font-semibold text-xl">Sign in to your account</h1>
+        <p class="mb-6 text-sm text-text-2">Your account is private. Sign in to manage your plan and settings.</p>
+        <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn btn-primary">Sign in</StxLink>
+      </div>
+    </div>
+  @else
   {{-- A div rather than another main: the layout owns the single router container. Same classes. --}}
   <div class="mx-auto px-5 py-8 md:px-6 max-w-3xl">
     <h1 class="mb-6 text-2xl wordmark">Account</h1>
@@ -173,50 +201,6 @@ onMount(() => {
       Signed in with a private token. <StxLink class="text-accent" to="/">Back to site</StxLink>
     </p>
   </div>
+  @endif
 </div>
 @endsection
-
-{{-- Pre-paint guard: bounce to /login before first paint when there is no token.
-
-    This is one of the few places that legitimately touches localStorage directly.
-    It runs before the signals runtime and the store bundle exist, so useStore is not
-    available yet; ch.8.11 lists the pre-paint auth bounce as the documented exception,
-    and `replace` is deliberate so Back cannot return here.
-
-    It MUST decode, not just test for presence. The session store persists through
-    useLocalStorage, which JSON.stringifies -- so a signed-out token is the literal
-    two-character string "" , which is truthy. Testing the raw value would let a
-    signed-out visitor straight through.
-
-    Pushed rather than left loose. Under a layout stx sweeps orphan scripts out of the
-    page and appends them to the content section, which lands this in roughly the same
-    place by accident; @stack('scripts') in app.stx puts it there on purpose. --}}
-@push('scripts')
-<script>
-;(function () {
-  // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
-  // and the composable owns the JSON decode this guard MUST perform. The session store
-  // persists through the same composable, so a signed-out token is the literal
-  // two-character string "" -- testing the raw value would let a signed-out visitor
-  // straight through.
-  //
-  // Reached through window.stx, not as a bare call: this is a plain script block, not
-  // the client-script path that gets the auto-import preamble. The runtime tag is
-  // synchronous and sits above this one, so window.stx is populated by the time this
-  // runs. (The tag name is spelled without angle brackets deliberately -- stx counts
-  // script tags across the whole file, and a literal one in a comment unbalances it.)
-  //
-  // Verified in a browser that a second instance on the same key is safe: two
-  // useLocalStorage calls on 'token' both read the stored value and neither clobbers it.
-  //
-  // navigate(..., { replace: true }) is NOT a softening of the bounce. With no router
-  // loaded -- which is the case this early -- signals.js falls straight through to
-  // window.location.replace(url), so the emitted behaviour is byte-for-byte what it
-  // replaces. What it buys is that the day this block runs with the router up, it
-  // becomes a swap on its own instead of silently staying a document load.
-  var token = window.stx.useLocalStorage('token', '')()
-  if (!token)
-    window.stx.navigate('/login', { replace: true })
-})()
-</script>
-@endpush

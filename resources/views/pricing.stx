@@ -18,7 +18,6 @@ const crumbs = [
 type BillingInterval = 'monthly' | 'yearly'
 interface CheckoutResponse { url?: string, error?: string }
 
-const session = useStore('session') as SessionStore
 const interval: StxSignal<BillingInterval> = state('monthly')
 const err: StxSignal<string> = state('')
 const loading: StxSignal<boolean> = state(false)
@@ -26,17 +25,20 @@ const loading: StxSignal<boolean> = state(false)
 function pick(v: BillingInterval): void { interval.set(v) }
 
 async function upgrade(): Promise<void> {
-  if (!session.isAuthed()) { navigate('/login'); return }
   loading.set(true)
   err.set('')
   try {
-    // authFetch, not fetch: an hour-old access token would otherwise 401 here and the
-    // visitor would be told "Checkout is not available yet" while signed in (#32).
-    const res = await session.authFetch('/payments/checkout', {
+    // Same-origin credentialed fetch: the browser sends the HttpOnly auth-token
+    // cookie automatically, and the endpoint's auth middleware resolves the user
+    // from it. A signed-out visitor gets a 401 here and is sent to /login rather
+    // than being pre-checked client-side (no token lives in JS to check).
+    const res = await fetch('/payments/checkout', {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ interval: interval() }),
     })
+    if (res.status === 401) { navigate('/login'); return }
     const data: CheckoutResponse = await res.json().catch(() => ({}))
     // Stripe is a different origin, so this is a real document load, not a routing
     // failure -- navigate(url, true) is the declared form of exactly that.

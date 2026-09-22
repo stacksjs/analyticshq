@@ -237,7 +237,7 @@ let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
 // are rendered from the current user's OWN sites, resolved server-side from the
-// analyticshq_token cookie, which LoginAction sets server-side on sign-in (#33).
+// HttpOnly auth-token cookie, which LoginAction sets server-side on sign-in.
 let user = null
 let ownedSites = []
 let activeSiteRecord = null
@@ -303,18 +303,19 @@ async function loadData() {
   // appears in any SQL string here, so the blanket rewrite is safe.
   const IS_PG = ((globalThis.process && globalThis.process.env && globalThis.process.env.DB_CONNECTION) || 'postgres') === 'postgres'
   const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
-  // Server-authenticate from the analyticshq_token cookie, so the switcher + setup
-  // panel are scoped to the caller's OWN sites. LoginAction sets that cookie in its
-  // own response (#33), so it is present on the FIRST authenticated document request
-  // -- there is no longer a window where this renders unscoped and a client block
-  // reloads to fix it.
+  // Server-authenticate from the auth-token cookie, so the switcher + setup panel
+  // are scoped to the caller's OWN sites. LoginAction sets that cookie in its own
+  // response, so it is present on the FIRST authenticated document request -- there
+  // is no longer a window where this renders unscoped and a client block reloads to
+  // fix it.
   // Read from the injected `cookies` record (serve.js:9222), not requestContext.
   // requestContext is not part of stx at all -- it is a global installed by whichever
   // server booted, and the dev and production implementations resolve it differently
   // (dev goes through AsyncLocalStorage, which only populates after the first top-level
   // await). `cookies` is written onto this render's context with no ordering rule.
-  // Still guarded, because a standalone render injects nothing.
-  const authToken = (typeof cookies !== 'undefined' ? cookies.analyticshq_token : '') || ''
+  // Still guarded, because a standalone render injects nothing. Bracket notation
+  // because the hyphen makes `cookies.auth-token` invalid.
+  const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
   if (authToken) {
     try {
       const { Auth } = await import('@stacksjs/auth')
@@ -1170,23 +1171,24 @@ const shareCopied = state(false)
 // server block; the poll stops on 401 (a share viewer has no owner token).
 const liveCount = state(typeof liveNow === 'number' ? liveNow : 0)
 
-const session = useStore('session') as SessionStore
-
-// Every authenticated call on this page goes through session.authFetch, which attaches
-// the bearer header, renews an expired access token and retries once (#32). The local
-// authHeaders() helper that used to live here only attached the header, so an hour into
-// a session this whole page 401'd: goals could not be added or deleted, share links
-// could not be minted, and the live counter stopped.
+// Uniform HQ auth: every authenticated call on this page is a same-origin fetch
+// carrying the HttpOnly auth-token cookie the browser sends automatically. No
+// bearer header, no token in JS. A 401 means the cookie is gone or expired; each
+// call handles that locally (the realtime poll pauses, mutations surface an error).
 //
 // JSON_HEADERS rather than a boolean-flag helper -- the flag existed only to decide
 // whether to add this one line.
 const JSON_HEADERS: Record<string, string> = { 'Content-Type': 'application/json' }
 
-function logout(): void {
-  // Clears the token and the user, asks the SERVER to expire the analyticshq_token
-  // cookie (it is HttpOnly, so only the server can), and navigates. signOut awaits
-  // that request before navigating so the Set-Cookie is not raced (#33).
-  session.signOut()
+async function logout(): Promise<void> {
+  // Ask the SERVER to clear the HttpOnly auth-token cookie (only it can) and revoke
+  // the token, then navigate once it settles so the Set-Cookie is not raced. A
+  // failure still sends the visitor to /login rather than trapping them here.
+  try {
+    await fetch('/logout', { method: 'POST', credentials: 'same-origin' })
+  }
+  catch {}
+  window.location.assign('/login')
 }
 
 // Theme. The store owns persistence, the prefers-color-scheme listener and the
@@ -1250,8 +1252,8 @@ async function addGoal(e: SubmitEvent): Promise<void> {
     value: form.elements.value.value,
   }
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals`, {
-      method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals`, {
+      method: 'POST', credentials: 'same-origin', headers: JSON_HEADERS, body: JSON.stringify(payload),
     })
     if (res.ok) {
       refreshFromServer()
@@ -1274,8 +1276,8 @@ async function deleteGoal(id: string | number): Promise<void> {
   if (!id || !(await stxConfirm('Delete this goal? Its conversions will be removed too.')))
     return
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals/${encodeURIComponent(id)}`, {
+      method: 'DELETE', credentials: 'same-origin',
     })
     if (res.ok)
       refreshFromServer()
@@ -1384,8 +1386,9 @@ async function importFromGa() {
     const [start, end] = chunks[i]
     gaProgress.set(`Importing ${start.slice(0, 4)}, period ${i + 1} of ${chunks.length}…`)
     try {
-      const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/ga4`, {
+      const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/ga4`, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         // `replace` only on the first chunk: it clears the whole previous import,
         // so sending it on every chunk would delete the years we just imported.
@@ -1438,8 +1441,9 @@ async function toggleRegionGeo(): Promise<void> {
   regionGeoBusy.set(true)
   regionGeoMsg.set('')
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
       method: 'PATCH',
+      credentials: 'same-origin',
       headers: JSON_HEADERS,
       body: JSON.stringify({ regionGeo: next }),
     })
@@ -1467,7 +1471,7 @@ async function toggleRegionGeo(): Promise<void> {
 // posted whole, base64 in the JSON body, and opened on the server: the browser
 // can inflate a deflate stream but cannot read the zip container around it, and
 // the code that can belongs in a real module where tsc and the test suite can
-// see it. That keeps the whole feature on the existing authFetch/jsonBody path -
+// see it. That keeps the whole feature on the existing JSON-body fetch path -
 // no multipart, no FormData, no boundary - while removing the one step the
 // customer used to perform on our behalf rather than for a reason: unzip this,
 // now pick these seven files out of the eighteen inside.
@@ -1657,8 +1661,9 @@ async function postFathom(payload: Record<string, unknown>): Promise<any> {
   // Whichever shape was chosen, sent every time - the check, the import and each
   // window all re-post it. A zip is the cheaper of the two to send repeatedly.
   const upload = fathomZip() ? { zip: fathomZip() } : { files: fathomFiles() }
-  const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/fathom`, {
+  const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/import/fathom`, {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...upload, acceptFiltered: fathomAcceptFiltered(), ...payload }),
   })
@@ -1808,7 +1813,7 @@ async function createShare() {
   // still says it is working.
   let failed = false
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST' })
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST', credentials: 'same-origin' })
     const d = await res.json().catch(() => ({}))
     if (res.ok && d.token)
       shareUrl.set(shareLinkFor(d.token))
@@ -1833,7 +1838,7 @@ async function revokeShare() {
   shareBusy.set(true)
   let failed = false
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'DELETE' })
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'DELETE', credentials: 'same-origin' })
     if (res.ok)
       shareUrl.set('')
     else
@@ -1872,8 +1877,9 @@ async function sendInvite() {
   inviteBusy.set(true)
   let message = ''
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites`, {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites`, {
       method: 'POST',
+      credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, role: inviteRole() }),
     })
@@ -1903,7 +1909,7 @@ async function revokeInvite(id: string, email: string) {
   if (!(await stxConfirm(`Revoke the invitation to ${email}? The link they were sent will stop working.`)))
     return
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/invites/${encodeURIComponent(id)}`, { method: 'DELETE', credentials: 'same-origin' })
     if (res.ok) {
       reloadTeam()
       return
@@ -1917,7 +1923,7 @@ async function removeMember(userId: string, email: string) {
   if (!(await stxConfirm(`Remove ${email} from this site? They lose access immediately.`)))
     return
   try {
-    const res = await session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/members/${encodeURIComponent(userId)}`, { method: 'DELETE', credentials: 'same-origin' })
     if (res.ok) {
       reloadTeam()
       return
@@ -2025,7 +2031,7 @@ function exportCsv() {
 // Reflect the plan: /api/me reports Pro from the local subscriptions table (kept
 // in sync by the Stripe webhook). The header swaps Upgrade -> Pro reactively.
 onMount(() => {
-  session.authFetch('/api/me')
+  fetch('/api/me', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d && d.pro) isPro.set(true) })
     .catch(() => {})
@@ -2043,10 +2049,10 @@ onMount(() => {
   // it belongs to; a `const live = useInterval(() => … live.pause() …)` reads fine only
   // because the first tick is 15s away, and that is too subtle to rely on.
   let live: { pause: () => void }
-  const tick = () => session.authFetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`)
+  const tick = () => fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`, { credentials: 'same-origin' })
     .then((r) => {
-      // 401 here means the renewal could not help: a share-link viewer holds no token
-      // at all. Stop rather than poll an endpoint that will never answer them.
+      // 401 here means no valid session cookie: a share-link viewer holds none at
+      // all. Stop rather than poll an endpoint that will never answer them.
       if (r.status === 401) { live.pause(); return null }
       return r.ok ? r.json() : null
     })
@@ -3478,9 +3484,10 @@ select.panel:hover { border-color: var(--accent); }
     </div>
 
     @else
-    {{-- Gated: no authenticated owner for this site. The client guard normally
-        redirects a signed-out visitor to /login before this shows; it remains for
-        a signed-in user who has no sites yet, and as the server-side wall that
+    {{-- Gated: no authenticated owner for this site. This is the signed-out gate
+        now that the client pre-paint guard is gone (an stx server block cannot
+        302): a signed-out visitor sees the Sign in CTA below, a signed-in user
+        with no sites yet sees the empty state, and it is the server-side wall that
         keeps a bare curl from ever seeing another tenant's data. --}}
     <div class="mt-6 p-10 text-center panel reveal">
       @if (user)
@@ -3503,36 +3510,9 @@ select.panel:hover { border-color: var(--accent); }
 </div>
 @endsection
 
-{{-- Pre-render token guard: send a signed-out visitor to /login before paint.
-
-    This USED to also mirror the localStorage token into the analyticshq_token cookie
-    and reload once, so the server script block could owner-scope the switcher and
-    setup panel. Both halves are gone (#33): stacks 0.70.369 has LoginAction set the
-    cookie in its own response, so it is present on the very first authenticated
-    document request — and the cookie is HttpOnly, so this block could not have written
-    it anyway. Every write it made was being refused by the browser.
-
-    What remains is only the redirect, which the server cannot do for us: a visitor with
-    no cookie still gets a rendered page, just without owner-scoped content.
-
-    NOT EMITTED ON A SHARE VIEW. The read gate above grants access on a valid
-    ?share= token without requiring a session, and then renders the whole
-    dashboard — but this guard ran regardless, found no token in localStorage, and
-    sent the recipient straight to /login. A read-only link handed to someone
-    outside the team was therefore unusable by exactly the people it exists for,
-    and looked like a login wall rather than a bug.
-
-    Gated server-side rather than teaching the guard about `?share=`: the server
-    has already decided, and a client-side re-read of the query string would be a
-    second implementation of the same rule, free to disagree with the first.
-
-    Pushed rather than left loose, for the same reason as the styles: stx's orphan sweep
-    would append it to the content section, which happens to be close to where it
-    belongs; @stack('scripts') in app.stx puts it there deliberately. --}}
 {{-- The country choropleth.
 
-    A plain module script tag rather than a client-script block, which is the
-    same escape hatch the sign-in guard below uses. ts-maps is a browser module
+    A plain module script tag rather than a client-script block. ts-maps is a browser module
     served from our own origin, and this is the path that can `import` one: there
     is no client bundler in this app, and a client-script block is transformed
     for signals rather than shipped as a module.
@@ -3696,27 +3676,3 @@ select.panel:hover { border-color: var(--accent); }
 </script>
 @endpush
 
-@if (!shareMode)
-@push('scripts')
-<script>
-;(function () {
-  // useLocalStorage rather than a raw read: localStorage is on stx's prohibited list,
-  // and the composable owns the decode this guard MUST perform. The session store
-  // persists through the same composable, which JSON.stringifies -- so the stored value
-  // is "abc" WITH quotes and a signed-out token is the literal two-character string "",
-  // which is truthy. Reading it raw would let a signed-out visitor through, and writing
-  // it into the cookie unparsed would hand the server a quote-wrapped token.
-  //
-  // window.stx rather than a bare call: this is a plain script block, not the
-  // client-script path that gets the auto-import preamble. The runtime tag is
-  // synchronous and above this one, so window.stx is populated by the time this runs.
-  var t = window.stx.useLocalStorage('token', '')()
-  // No router this early, so navigate() falls through to window.location.replace and
-  // emits exactly what the hand-written call did (signals.js:1005-1015) -- with the
-  // upgrade to a swap coming for free if this ever runs with the router up.
-  if (!t) { window.stx.navigate('/login', { replace: true }); return }
-})()
-</script>
-
-@endpush
-@endif
