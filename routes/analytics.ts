@@ -42,7 +42,7 @@ import { liveLocations } from '../app/Analytics/live'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
-import { getDailySalt } from '../app/Analytics/salt'
+import { clampWindowDays, getVisitorSalt } from '../app/Analytics/salt'
 import {
   cleanReferrer,
   clientIp,
@@ -55,6 +55,7 @@ import {
 } from '../app/Analytics/tracking'
 import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, regionFromIp } from '../app/Analytics/geo'
 import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
+import { listVisitors, timelinesEnabled, VISITOR_LIST_LIMIT, visitorTimeline } from '../app/Analytics/visitors'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -263,7 +264,7 @@ function clip255(v: unknown): string | null {
  * ingest nothing that region did not already.
  */
 const REGION_SITE_TTL_MS = 60_000
-const regionSites = new Map<string, { region: boolean, city: boolean, at: number }>()
+const regionSites = new Map<string, { region: boolean, city: boolean, windowDays: number, at: number }>()
 
 /** Drivers spell a Postgres boolean as `true`, `'t'` or `1`. Anything else is not a yes. */
 function pgTrue(raw: unknown): boolean {
@@ -279,21 +280,23 @@ function pgTrue(raw: unknown): boolean {
  * case of getting this wrong in one direction is a gap in a breakdown, and in
  * the other it is recording sub-country location for a site that did not ask.
  */
-async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: boolean }> {
+async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: boolean, windowDays: number }> {
   const now = Date.now()
   const hit = regionSites.get(siteId)
   if (hit && now - hit.at < REGION_SITE_TTL_MS)
     return hit
 
+  // The visitor window rides in the same row and the same cache. It fails
+  // closed the same way: anything but a readable number is 1, the daily reset.
   const rows = await pgq(
-    `SELECT region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`,
+    `SELECT region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`,
     [siteId],
-  ).catch(() => null) as Array<{ region_geo?: unknown, city_geo?: unknown }> | null
+  ).catch(() => null) as Array<{ region_geo?: unknown, city_geo?: unknown, visitor_window_days?: unknown }> | null
 
   if (rows === null)
-    return { region: false, city: false }
+    return { region: false, city: false, windowDays: 1 }
 
-  const entry = { region: pgTrue(rows[0]?.region_geo), city: pgTrue(rows[0]?.city_geo), at: now }
+  const entry = { region: pgTrue(rows[0]?.region_geo), city: pgTrue(rows[0]?.city_geo), windowDays: clampWindowDays(rows[0]?.visitor_window_days), at: now }
   regionSites.set(siteId, entry)
   return entry
 }
@@ -415,9 +418,11 @@ route.post('/collect', async (request: any) => {
     return new Response(null, { status: 204, headers: CORS })
 
   const ip = clientIp(request.headers)
-  // Per-site-per-day secret, not the UTC date (#9). Memoised per site-day, so
-  // this is a database round-trip once a day, not once a beacon.
-  const visitorId = hashVisitor(ip, ua, String(siteId), await getDailySalt(String(siteId)))
+  // Per-site secret, not the UTC date (#9). One per day, or one per fixed block
+  // of days on a site whose owner turned on visitor timelines. Memoised, so this
+  // is a database round-trip once a window, not once a beacon.
+  const { windowDays } = await siteGeoOptIns(String(siteId))
+  const visitorId = hashVisitor(ip, ua, String(siteId), await getVisitorSalt(String(siteId), windowDays))
 
   // Core Web Vitals (#41), handled here and returned early.
   //
@@ -1337,6 +1342,31 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     params.push(body.cityGeo)
   }
 
+  // Visitor timelines: keep one visitor id for a fixed block of days instead of
+  // one day (app/Analytics/salt.ts). Owner-only and refused with a 409 above the
+  // install's ceiling, on the same terms as the geo opt-ins, because it changes
+  // what the product can say about one person.
+  //
+  // Turning it OFF deletes the site's long-window salts right away, so the ids
+  // already recorded stop being linkable today rather than when the block would
+  // have ended. The daily purge would get there too, a day later.
+  let timelinesOff = false
+  if (body.visitorTimelines !== undefined) {
+    if (typeof body.visitorTimelines !== 'boolean')
+      return json({ error: 'visitorTimelines must be true or false' }, 400)
+    const notOwner = await requireSiteOwner(request, siteId)
+    if (notOwner)
+      return notOwner
+    if (body.visitorTimelines === true && privacy.maxVisitorWindowDays < 2) {
+      return json({
+        error: 'This install resets every visitor id daily. Visitor timelines have to be permitted for the whole install first. Set maxVisitorWindowDays in config/privacy.ts.',
+      }, 409)
+    }
+    sets.push('visitor_window_days = ?')
+    params.push(body.visitorTimelines ? clampWindowDays(privacy.maxVisitorWindowDays) : 1)
+    timelinesOff = body.visitorTimelines === false
+  }
+
   if (!sets.length)
     return json({ error: 'nothing to update' }, 400)
 
@@ -1344,11 +1374,13 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
   params.push(new Date().toISOString())
   params.push(String(siteId))
   await pgq(`UPDATE sites SET ${sets.join(', ')} WHERE id = ?`, params)
+  if (timelinesOff)
+    await pgq(`DELETE FROM visitor_salts WHERE site_id = ? AND salt_date < ?`, [String(siteId), new Date().toISOString().slice(0, 10)])
   // The ingest caches this site's region opt-in for a minute. Dropping the entry
   // here makes turning it OFF take effect on the next beacon rather than at the
   // end of a TTL the owner cannot see.
   resetRegionSiteCache(String(siteId))
-  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
+  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
   return json({ site: rows?.[0] ?? null })
 }).middleware('auth').skipCsrf()
 
@@ -3342,6 +3374,59 @@ route.delete('/api/sites/{siteId}/share', async (request: any) => {
 }).middleware('auth').skipCsrf()
 
 // ---------------------------------------------------------------------------
+// Visitor timelines
+// ---------------------------------------------------------------------------
+// One visitor's visits, for a site whose owner turned on "Remember returning
+// visitors" (sites.visitor_window_days > 1). Off, both answer 409 rather than a
+// one-day stub: on a daily-reset site a "visitor" is one person on one day, and
+// the aggregate reports already say everything about that. See
+// app/Analytics/visitors.ts for what the data is and is not.
+//
+// Viewer, like every other report: a teammate who can read the aggregate can
+// read how it breaks down. Share links never reach these, since they are
+// authenticated endpoints and a share link carries no user.
+
+const TIMELINES_OFF = 'Visitor timelines are off for this site. The site owner can turn on "Remember returning visitors" in site settings.'
+
+route.options('/api/sites/{siteId}/visitors', () => new Response(null, { status: 204, headers: CORS }))
+
+route.get('/api/sites/{siteId}/visitors', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  if (!(await timelinesEnabled(String(siteId))))
+    return json({ error: TIMELINES_OFF, enabled: false }, 409)
+  const { from, to } = window(request)
+  const flt = await readFiltersWithSegment(request, siteId)
+  if (flt.error)
+    return json({ error: flt.error }, flt.error === 'Segment not found' ? 404 : 400)
+  const limit = Number(request.query?.limit) || VISITOR_LIST_LIMIT
+  try {
+    return json({ visitors: await listVisitors(String(siteId), from, to, flt.sql, flt.params, limit) })
+  }
+  catch (error) {
+    const bad = invalidPatternMessage(error)
+    if (bad)
+      return json({ error: bad }, 400)
+    throw error
+  }
+}).middleware('auth')
+
+route.get('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  if (!(await timelinesEnabled(String(siteId))))
+    return json({ error: TIMELINES_OFF, enabled: false }, 409)
+  const timeline = await visitorTimeline(String(siteId), String(request.params.visitorId))
+  if (!timeline)
+    return json({ error: 'No visitor with that id on this site' }, 404)
+  return json({ visitor: timeline })
+}).middleware('auth')
+
+// ---------------------------------------------------------------------------
 // Data deletion / erasure (management API)
 // ---------------------------------------------------------------------------
 // Operator + GDPR erasure. Owner-scoped. Visitor-level analytics live in these
@@ -3393,7 +3478,7 @@ route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) =>
     ok: true,
     visitor_id: String(visitorId),
     deleted,
-    note: 'visitor_id is a 24h-rotating hash; erasure reaches only rows sharing it (typically one UTC day).',
+    note: 'visitor_id is a rotating hash; erasure reaches only rows sharing it (one UTC day, or one block of days on a site with visitor timelines on).',
   })
 }).middleware('auth').skipCsrf()
 

@@ -188,7 +188,8 @@ describe('the wiring a later edit could quietly loosen', () => {
     // Filters, operators and segments all arrive through one function. An
     // endpoint calling the bare reader would silently ignore ?segment=.
     expect(routes).toContain('readFiltersWithSegment(request, siteId)')
-    expect((routes.match(/readFiltersWithSegment\(request, siteId\)/g) ?? []).length).toBe(5)
+    // Five aggregate reports plus the visitor list.
+    expect((routes.match(/readFiltersWithSegment\(request, siteId\)/g) ?? []).length).toBe(6)
   })
 
   test('a segment from another site cannot narrow this one', () => {

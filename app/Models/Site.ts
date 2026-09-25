@@ -94,6 +94,15 @@ export default defineModel({
       factory: () => false,
     },
 
+    // Days one visitor keeps the same id (migration 57). 1, the default, is the
+    // old daily reset. The owner can lengthen it to privacy.maxVisitorWindowDays
+    // to get visitor timelines. Declared so the schema differ keeps the column.
+    visitor_window_days: {
+      fillable: true,
+      validation: { rule: schema.number().min(1).max(30).optional() },
+      factory: () => 1,
+    },
+
     owner_id: {
       fillable: true,
       validation: { rule: schema.number().optional() },

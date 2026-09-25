@@ -42,7 +42,7 @@ const leadPoints = spark
 
 const privacyChips = [
   { title: 'No cookies, no banner', text: 'Nothing is written to a visitor device, so there is no cookie prompt to show and nothing to opt out of.' },
-  { title: 'No personal data', text: 'Visitors are counted with a hash that rotates every 24 hours. No stored IP, no name, no cross-site profile.' },
+  { title: 'No personal data', text: 'Visitors are counted with a hash that rotates every 24 hours, unless you opt into 30-day visitor timelines. No stored IP, no name, no cross-site profile.' },
   { title: 'Compliant by design', text: 'GDPR, CCPA, and PECR friendly out of the box, because there is no personal data to leak, sell, or hand over.' },
   { title: 'Under 2 KB, loaded once', text: 'A single deferred first-party script. No gtag.js weight, no render blocking, no third-party fetch storm.' },
 ]

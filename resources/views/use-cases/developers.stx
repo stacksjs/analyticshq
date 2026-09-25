@@ -105,7 +105,7 @@ const crumbs = [
           <div class="split-text">
             <h3>Privacy-first without writing any privacy code.</h3>
             <p>
-              There are no cookies, no local storage, and no cross-site identifiers to reason about. Visitors are counted with a hash that rotates every 24 hours, so you ship a compliant analytics stack without a consent library or a legal review.
+              There are no cookies, no local storage, and no cross-site identifiers to reason about. Visitors are counted with a hash that rotates every 24 hours (or a fixed 30 days if you turn on visitor timelines), so you ship a compliant analytics stack without a consent library or a legal review.
             </p>
             <ul class="mini-list">
               <li><span class="dot" aria-hidden="true"></span>No cookies and no consent banner to bolt on later.</li>

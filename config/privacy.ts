@@ -74,6 +74,15 @@ export interface PrivacyConfig {
   /** Inactivity window that ends a session, in minutes. */
   sessionWindowMinutes: number
 
+  /**
+   * The longest a site may keep one visitor's id, in days. A CEILING, like
+   * `geo.granularity`: every site starts at 1 (the id resets each UTC day) and
+   * only its owner can lengthen it, up to this, by turning on visitor timelines
+   * (`sites.visitor_window_days`, see app/Analytics/salt.ts). 1 takes the option
+   * away from every site on the install.
+   */
+  maxVisitorWindowDays: number
+
   geo: {
     /**
      * The FINEST location this install will record. Not what it does record.
@@ -184,6 +193,11 @@ export default {
   saltRetentionDays: 2,
 
   sessionWindowMinutes: 30,
+
+  // What "Remember returning visitors" lengthens a site's id to. Off for every
+  // site until its owner turns it on, and the salt behind a window is deleted
+  // when the window ends, so no id outlives 30 days.
+  maxVisitorWindowDays: 30,
 
   geo: {
     // 'city' is a CEILING, not a switch: it permits site owners to opt into

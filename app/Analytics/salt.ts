@@ -21,6 +21,24 @@
  * the salt is memoised per `site:date`. The cache is small (one entry per active
  * site per day) and self-evicting.
  *
+ * ## Windows longer than a day
+ *
+ * A site whose owner turns on visitor timelines keeps one salt for a whole
+ * window instead of one day (`sites.visitor_window_days`, at most
+ * `privacy.maxVisitorWindowDays`, 30). The same visitor then hashes to the same
+ * id for the rest of that window, which is what lets the dashboard show one
+ * person's visits over several days.
+ *
+ * Windows are fixed blocks of the calendar, counted from the Unix epoch, not
+ * rolling from each visitor's first visit. So an id can never be carried past
+ * the end of its block, and every salt has a known end. The row is keyed by the
+ * block's first day, which for a 1-day window is just the day, so the ids of
+ * every site that never opted in are exactly what they were.
+ *
+ * The purge deletes a salt once its block is over, per site. Turning timelines
+ * off shortens a site's window back to 1, and the next purge then deletes the
+ * long salt, so turning it off ends the linkage rather than waiting it out.
+ *
  * ## Concurrency
  *
  * Two beacons for a new site-day race to create the salt. The insert is
@@ -32,12 +50,38 @@
 import { randomBytes } from 'node:crypto'
 import { db } from '@stacksjs/database'
 import privacy from '../../config/privacy'
+import { purgeSaltsQuery } from './salt-purge'
 
 const cache = new Map<string, string>()
+
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** UTC calendar day as `YYYY-MM-DD`. */
 export function saltDateFor(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10)
+}
+
+/**
+ * A usable window length: a whole number of days from 1 to the install's
+ * ceiling. Anything else is 1, so a bad value shortens linkage rather than
+ * lengthening it.
+ */
+export function clampWindowDays(days: unknown, max: number = privacy.maxVisitorWindowDays): number {
+  const n = Number(days)
+  if (!Number.isInteger(n) || n < 1)
+    return 1
+  return Math.min(n, Math.max(1, max))
+}
+
+/**
+ * The first day of the fixed block `date` falls in, as `YYYY-MM-DD`. Blocks are
+ * counted from the Unix epoch, so every site with the same window shares the
+ * same boundaries, and a 1-day window is just the day itself.
+ */
+export function windowStartFor(date: Date = new Date(), windowDays: number = 1): string {
+  const days = clampWindowDays(windowDays)
+  const index = Math.floor(date.getTime() / DAY_MS)
+  return saltDateFor(new Date((index - (index % days)) * DAY_MS))
 }
 
 function cacheKey(siteId: string, saltDate: string): string {
@@ -59,7 +103,16 @@ export function clearSaltCache(): void {
  * silently reinstate the oracle this exists to remove.
  */
 export async function getDailySalt(siteId: string, date: Date = new Date()): Promise<string> {
-  const saltDate = saltDateFor(date)
+  return getVisitorSalt(siteId, 1, date)
+}
+
+/**
+ * The secret salt for one site's current window, creating it on first use. A
+ * 1-day window is `getDailySalt`. Same failure behaviour: a throwaway random
+ * value, never anything derivable.
+ */
+export async function getVisitorSalt(siteId: string, windowDays: number, date: Date = new Date()): Promise<string> {
+  const saltDate = windowStartFor(date, windowDays)
   const key = cacheKey(siteId, saltDate)
 
   const cached = cache.get(key)
@@ -99,25 +152,43 @@ export async function getDailySalt(siteId: string, date: Date = new Date()): Pro
  * Drop salts past the retention window, and forget them locally.
  *
  * This is the part that makes the privacy claim true: while the row exists the
- * mapping is merely secret; once it is gone the day's hashes cannot be tied back
- * to any input at all. Two days rather than one so events that arrive just after
- * UTC midnight still hash consistently.
+ * mapping is merely secret; once it is gone the window's hashes cannot be tied
+ * back to any input at all. A salt is kept for its window plus
+ * `saltRetentionDays - 1` days, so events that arrive just after the window
+ * rolls over still hash consistently. For a 1-day window that is today and
+ * yesterday, as it always was.
+ *
+ * The window is read from each salt's site as it is NOW, so a site that turned
+ * timelines off loses its long salt on the next run. A salt whose site no
+ * longer exists is treated as a 1-day one.
  */
 export async function purgeExpiredSalts(now: Date = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - privacy.saltRetentionDays * 24 * 60 * 60 * 1000)
-  const cutoffDate = saltDateFor(cutoff)
-
+  // The local cache holds a single process's salts. Anything older than the
+  // longest possible window is dropped here, and the database is the authority
+  // for the rest: a salt deleted there is re-read on the next miss.
+  const longest = new Date(now.getTime() - (privacy.maxVisitorWindowDays - 1 + privacy.saltRetentionDays) * DAY_MS)
+  const longestCutoff = saltDateFor(longest)
+  const dailyCutoff = saltDateFor(new Date(now.getTime() - privacy.saltRetentionDays * DAY_MS))
   for (const key of [...cache.keys()]) {
     const saltDate = key.slice(key.lastIndexOf(':') + 1)
-    if (saltDate < cutoffDate)
+    if (saltDate < longestCutoff)
       cache.delete(key)
   }
 
   try {
-    await db.unsafe('DELETE FROM visitor_salts WHERE salt_date < $1', [cutoffDate])
+    const { sql, params } = purgeSaltsQuery(now, privacy.saltRetentionDays, privacy.maxVisitorWindowDays)
+    await db.unsafe(sql, params)
   }
   catch {
     return 0
+  }
+  // Every cached salt older than a day's retention belongs to a long window.
+  // Drop them too, so a site that just turned timelines off stops hashing with
+  // its long salt on this process as soon as the row is gone.
+  for (const key of [...cache.keys()]) {
+    const saltDate = key.slice(key.lastIndexOf(':') + 1)
+    if (saltDate < dailyCutoff)
+      cache.delete(key)
   }
   return 1
 }

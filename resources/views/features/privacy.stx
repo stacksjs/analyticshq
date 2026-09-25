@@ -35,7 +35,7 @@ const crumbs = [
   "d": "yoursite.com",      // domain
   "p": "/pricing",          // path
   "r": "google.com",        // referrer
-  "h": "a3f9c2...",          // hash, rotates every 24h
+  "h": "a3f9c2...",          // hash, rotates every 24h by default
   "w": 1440                 // viewport width
 }
 // no cookie, no stored IP, no name, no device id</code></pre>
@@ -58,7 +58,7 @@ const crumbs = [
             <span class="flow-num">02</span>
             <div>
               <h3>Identity is a daily hash</h3>
-              <p>A visitor is counted with a hash that rotates every 24 hours, so there is no durable profile to build or breach.</p>
+              <p>A visitor is counted with a hash that rotates every 24 hours, so there is no durable profile to build or breach. Opt into visitor timelines and it lasts a fixed 30 days instead, then its key is deleted.</p>
             </div>
           </div>
           <div class="flow-step">

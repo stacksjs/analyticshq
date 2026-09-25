@@ -1,0 +1,285 @@
+<script server>
+useSeoMeta({
+  title: 'Visitor - analyticshq',
+  robots: 'noindex, nofollow',
+})
+
+// One visitor's timeline on one site: every visit, page, event and conversion,
+// for as long as the site keeps that visitor's id (up to 30 days, only once the
+// owner turned on "Remember returning visitors"). Reached from the dashboard's
+// Visitors panel. See app/Analytics/visitors.ts for what this data is and is not.
+//
+// Gated server-side, the same way the dashboard is: the viewer's role on the
+// site is resolved from the HttpOnly auth-token cookie, and nothing is queried
+// for someone who cannot read the site's reports. A share link does not reach
+// this page at all: it carries no user.
+import { resolveSiteRole, satisfies } from '../../app/Analytics/access'
+import { timelinesEnabled, visitorTimeline } from '../../app/Analytics/visitors'
+import { channelOf, fmtDuration } from '../../app/Support/dashboard-format'
+import { money, placeLabel, plural, stamp, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
+
+// `query` is injected per render, the way the dashboard reads it. Guarded, since
+// a standalone render injects nothing.
+const queryParams = typeof query !== 'undefined' ? query : {}
+const siteParam = String(queryParams.site ?? '')
+const idParam = String(queryParams.id ?? '')
+
+let authed = false
+let view = 'forbidden'
+let role = null
+let siteName = ''
+let timeline = null
+
+const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
+if (authToken) {
+  try {
+    const { Auth } = await import('@stacksjs/auth')
+    const viewer = await Auth.getUserFromToken(authToken)
+    authed = !!viewer
+    if (viewer && siteParam) {
+      role = await resolveSiteRole(viewer.id, siteParam)
+      if (satisfies(role, 'viewer')) {
+        const { db } = await import('@stacksjs/database')
+        const site = (await db.unsafe(`SELECT name, domains FROM sites WHERE id = $1 LIMIT 1`, [siteParam]))?.[0]
+        let domain = ''
+        try {
+          domain = (JSON.parse(String(site?.domains || '[]')) || [])[0] || ''
+        }
+        catch {}
+        siteName = domain || site?.name || siteParam
+        if (!(await timelinesEnabled(siteParam)))
+          view = 'off'
+        else {
+          timeline = await visitorTimeline(siteParam, idParam)
+          view = timeline ? 'ok' : 'missing'
+        }
+      }
+    }
+  }
+  catch {
+    view = 'error'
+  }
+}
+
+const dashboardHref = `/dashboard?site=${encodeURIComponent(siteParam)}`
+const canErase = role === 'owner' && view === 'ok'
+const label = visitorLabel(idParam)
+
+// Everything the markup needs, formatted here once rather than in the template.
+const summary = timeline
+  ? {
+      firstSeen: stamp(timeline.first_seen),
+      lastSeen: `${stamp(timeline.last_seen)} (${timeAgo(timeline.last_seen)})`,
+      span: plural(timeline.days, 'day'),
+      visits: plural(timeline.totals.visits, 'visit'),
+      pageviews: plural(timeline.totals.pageviews, 'page view'),
+      events: plural(timeline.totals.events, 'event'),
+      conversions: plural(timeline.totals.conversions, 'conversion'),
+      revenue: timeline.totals.revenue_minor ? money(timeline.totals.revenue_minor, timeline.visits.flatMap(v => v.items).find(i => i.kind === 'conversion' && i.currency)?.currency) : '',
+      firstSource: timeline.visits[0]?.source || 'Direct',
+      places: [...new Set(timeline.visits.map(v => placeLabel(v.country, v.city)))].join(', '),
+      tech: [...new Set(timeline.visits.map(v => [v.device, v.browser, v.os].filter(Boolean).join(' · ')).filter(Boolean))].join(', '),
+    }
+  : null
+
+// Newest visit first: the question is usually "what did they just do".
+const visits = timeline
+  ? [...timeline.visits].reverse().map((v, i, all) => ({
+      n: all.length - i,
+      when: stamp(v.started_at),
+      source: v.source || 'Direct',
+      channel: channelOf(v.source),
+      campaign: [v.utm_source, v.utm_medium, v.utm_campaign].filter(Boolean).join(' / '),
+      place: placeLabel(v.country, v.city),
+      tech: [v.device, v.browser, v.os].filter(Boolean).join(' · '),
+      duration: v.duration ? fmtDuration(v.duration) : '',
+      items: v.items.map(item => ({
+        time: (stamp(item.at).split(', ')[1] || '').replace(' UTC', ''),
+        kind: item.kind,
+        icon: item.kind === 'pageview' ? 'i-hugeicons-file-01' : (item.kind === 'event' ? 'i-hugeicons-cursor-pointer-02' : 'i-hugeicons-target-02'),
+        text: item.kind === 'pageview'
+          ? item.path
+          : item.kind === 'event'
+            ? `${item.name}${item.path ? ` on ${item.path}` : ''}`
+            : `Converted: ${item.goal || 'goal'}${item.amount_minor ? ` (${money(item.amount_minor, item.currency)})` : ''}`,
+      })),
+    }))
+  : []
+
+const eraseSite = canErase ? siteParam : ''
+const eraseVisitor = canErase ? idParam : ''
+defineClientPayload({ dashboardHref, eraseSite, eraseVisitor })
+</script>
+
+<script client>
+// The one action on this page: an owner erasing this visitor's rows (GDPR
+// erasure). DELETE /api/sites/{id}/visitors/{vid} is owner-gated server-side,
+// so the button only saves an owner a trip through the API.
+const erasing: StxSignal<boolean> = state(false)
+const eraseMsg: StxSignal<string> = state('')
+
+async function eraseThisVisitor(): Promise<void> {
+  if (erasing() || !eraseSite || !eraseVisitor)
+    return
+  if (!(await stxConfirm('Delete everything recorded for this visitor on this site? This cannot be undone.')))
+    return
+  erasing.set(true)
+  eraseMsg.set('')
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(eraseSite)}/visitors/${encodeURIComponent(eraseVisitor)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    })
+    if (res.ok) {
+      navigate(dashboardHref)
+      return
+    }
+    const data = await res.json().catch(() => ({}))
+    eraseMsg.set(data?.error || 'That could not be deleted.')
+  }
+  catch {
+    eraseMsg.set('Could not reach the server.')
+  }
+  erasing.set(false)
+}
+</script>
+
+@extends('app')
+
+@push('styles')
+<style>
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
+.btn { border-radius: 10px; border: 1px solid var(--border); color: var(--text); font-weight: 600; transition: border-color 0.15s ease, transform 0.12s ease; }
+.btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.btn:active { transform: translateY(1px); }
+.btn-danger:hover { border-color: #d14b4b; color: #d14b4b; }
+.stat-label { color: var(--text-3); font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+.visit + .visit { margin-top: 12px; }
+.step { border-left: 1px solid var(--border); }
+.step-row { position: relative; }
+.step-row::before { content: ''; position: absolute; left: -20px; top: 11px; width: 7px; height: 7px; border-radius: 999px; background: var(--border); }
+.step-row[data-kind="conversion"]::before { background: var(--accent); }
+.step-row[data-kind="event"]::before { background: var(--text-3); }
+</style>
+@endpush
+
+@section('content')
+<div class="px-4 py-7 md:px-8 min-h-[100dvh]">
+  <div class="mx-auto max-w-4xl">
+    <header class="flex flex-wrap gap-3 items-center justify-between mb-6">
+      <div class="flex gap-3 items-baseline min-w-0">
+        <StxLink to="/dashboard" class="text-xl wordmark">analyticshq</StxLink>
+        @if (siteName)
+          <span class="text-sm text-text-3 truncate">{{ siteName }}</span>
+        @endif
+      </div>
+      <StxLink to="{{ dashboardHref }}" class="flex gap-1.5 items-center px-3 py-1.5 text-sm btn">
+        <i class="i-hugeicons-arrow-left-01" aria-hidden="true"></i>
+        Back to dashboard
+      </StxLink>
+    </header>
+
+    @if (!authed)
+      <div class="mx-auto p-10 max-w-md text-center panel">
+        <h1 class="mb-2 font-semibold text-xl">Sign in to see this visitor</h1>
+        <p class="mb-6 text-sm text-text-2">Visitor timelines are private to the people who can read this site's reports.</p>
+        <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn">Sign in</StxLink>
+      </div>
+    @elseif (view === 'forbidden')
+      <div class="p-8 text-center panel">
+        <h1 class="mb-2 font-semibold text-lg">You can't see this site</h1>
+        <p class="text-sm text-text-2">Ask the site's owner to invite you, or pick one of your own sites on the dashboard.</p>
+      </div>
+    @elseif (view === 'off')
+      <div class="p-8 text-center panel">
+        <h1 class="mb-2 font-semibold text-lg">Visitor timelines are off for this site</h1>
+        <p class="text-sm text-text-2">The site owner can turn on "Remember returning visitors" in the dashboard's site settings. Until then every visitor id resets daily, so there is no one to follow.</p>
+      </div>
+    @elseif (view === 'missing')
+      <div class="p-8 text-center panel">
+        <h1 class="mb-2 font-semibold text-lg">No visitor {{ label }} on this site</h1>
+        <p class="text-sm text-text-2">Their id may have expired: a visitor is remembered for up to 30 days, and after that their visits can't be linked any more. Their data may also have been deleted.</p>
+      </div>
+    @elseif (view === 'error')
+      <div class="p-8 text-center panel">
+        <h1 class="mb-2 font-semibold text-lg">This visitor could not be loaded</h1>
+        <p class="text-sm text-text-2">Something went wrong reading the data. Try again in a moment.</p>
+      </div>
+    @else
+      <section class="mb-6 p-6 panel" data-visitor-summary>
+        <div class="flex flex-wrap gap-4 items-start justify-between">
+          <div>
+            <div class="stat-label">Visitor</div>
+            <h1 class="mt-1 font-semibold text-2xl mono">{{ label }}</h1>
+            <p class="mt-1 text-sm text-text-2">{{ summary.places }}</p>
+            <p class="mt-0.5 text-text-3 text-xs">{{ summary.tech }}</p>
+          </div>
+          @if (canErase)
+            <button type="button" @click="eraseThisVisitor" :disabled="erasing()" class="flex gap-1.5 items-center px-3 py-1.5 text-sm btn btn-danger">
+              <i class="i-hugeicons-delete-02" aria-hidden="true"></i>
+              Delete this visitor's data
+            </button>
+          @endif
+        </div>
+        <p class="mt-3 text-sm" :show="eraseMsg()" style="display:none; color:#d14b4b">{{ eraseMsg() }}</p>
+
+        <div class="grid gap-4 grid-cols-2 md:grid-cols-4 mt-6">
+          <div>
+            <div class="stat-label">First seen</div>
+            <div class="mt-1 text-sm">{{ summary.firstSeen }}</div>
+            <div class="text-text-3 text-xs">from {{ summary.firstSource }}</div>
+          </div>
+          <div>
+            <div class="stat-label">Last seen</div>
+            <div class="mt-1 text-sm">{{ summary.lastSeen }}</div>
+          </div>
+          <div>
+            <div class="stat-label">Activity</div>
+            <div class="mt-1 text-sm">{{ summary.visits }} over {{ summary.span }}</div>
+            <div class="text-text-3 text-xs">{{ summary.pageviews }}, {{ summary.events }}</div>
+          </div>
+          <div>
+            <div class="stat-label">Conversions</div>
+            <div class="mt-1 text-sm">{{ summary.conversions }}</div>
+            @if (summary.revenue)
+              <div class="text-text-3 text-xs">{{ summary.revenue }}</div>
+            @endif
+          </div>
+        </div>
+        <p class="mt-5 text-text-3 text-xs">
+          Pseudonymous: no name, email, IP or cookie. This id lasts up to 30 days on this site only, then can't be linked to anyone again.
+        </p>
+      </section>
+
+      <h2 class="mb-3 font-semibold text-text-3 text-xs tracking-wider uppercase">Visits, newest first</h2>
+      @foreach (visits as v)
+        <article class="p-5 panel visit" data-visit>
+          <div class="flex flex-wrap gap-x-4 gap-y-1 items-baseline justify-between">
+            <div class="font-semibold text-sm">Visit {{ v.n }} <span class="font-normal text-text-3">{{ v.when }}</span></div>
+            <div class="text-text-3 text-xs">
+              {{ v.channel }}: {{ v.source }}
+              @if (v.campaign)
+                <span class="mono">({{ v.campaign }})</span>
+              @endif
+              @if (v.duration)
+                · {{ v.duration }}
+              @endif
+            </div>
+          </div>
+          <div class="mt-0.5 text-text-3 text-xs">{{ v.place }} · {{ v.tech }}</div>
+          <ol class="ml-1 mt-3 pl-4 step">
+            @foreach (v.items as item)
+              <li class="flex gap-3 items-baseline py-1 text-sm step-row" data-kind="{{ item.kind }}">
+                <span class="shrink-0 w-12 text-text-3 text-xs mono">{{ item.time }}</span>
+                <i class="{{ item.icon }} text-text-3 shrink-0" aria-hidden="true"></i>
+                <span class="{{ item.kind === 'pageview' ? 'mono text-text-2' : 'text-text' }} break-all">{{ item.text }}</span>
+              </li>
+            @endforeach
+          </ol>
+        </article>
+      @endforeach
+    @endif
+  </div>
+</div>
+@endsection

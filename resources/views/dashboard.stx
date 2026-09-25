@@ -23,6 +23,8 @@ import { liveLocations } from '../../app/Analytics/live'
 import { niceCeil, xTicks, yTicks } from '../../app/Support/chart-axis'
 import { geoPermits } from '../../app/Analytics/geo'
 import { minSegmentSizeFor } from '../../app/Analytics/segment-floor'
+import { listVisitors } from '../../app/Analytics/visitors'
+import { placeLabel, plural, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
@@ -321,6 +323,16 @@ let regionGeo = false
 const regionGeoAllowed = geoPermits(privacy.geo.granularity, 'region')
 /** Whether THIS site opted into city geo. Drives its panel and its toggle. */
 let cityGeo = false
+/**
+ * Whether THIS site keeps visitor ids across days (sites.visitor_window_days > 1),
+ * which is what makes a visitor worth clicking into. Drives the Visitors panel
+ * and its toggle. Never true in share mode: a public link shows aggregates only.
+ */
+let visitorTimelines = false
+/** Install ceiling for the window. Below 2, the toggle says the server does not allow it. */
+const visitorTimelinesAllowed = privacy.maxVisitorWindowDays >= 2
+/** Most recent visitors in range and under the active filters, for the Visitors panel. */
+let recentVisitors = []
 /** Whether this install's ceiling reaches city. Same reasoning as regionGeoAllowed. */
 const cityGeoAllowed = geoPermits(privacy.geo.granularity, 'city')
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
@@ -459,11 +471,12 @@ async function loadData() {
       // Region opt-in. Its own tiny query rather than a join onto the plan
       // resolution: this is one boolean on `sites` and planForSite answers a
       // different question about a different table.
-      const geoRow = (await pgq(`SELECT region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
+      const geoRow = (await pgq(`SELECT region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
       const rawGeo = geoRow[0]?.region_geo
       regionGeo = rawGeo === true || rawGeo === 't' || rawGeo === 1
       const rawCity = geoRow[0]?.city_geo
       cityGeo = rawCity === true || rawCity === 't' || rawCity === 1
+      visitorTimelines = Number(geoRow[0]?.visitor_window_days) > 1
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
@@ -510,6 +523,17 @@ async function loadData() {
   }
   const p = [siteId, from, to, ...filterParams]
   const filter = `site_id = ? AND timestamp >= ? AND timestamp <= ?${filterSql}`
+  // The Visitors panel, under the same range and filters as everything else, so
+  // clicking a country and then a visitor finds someone from that country. The
+  // same function GET /api/sites/{id}/visitors reads.
+  if (visitorTimelines && !shareMode) {
+    try {
+      recentVisitors = await listVisitors(String(siteId), from, to, filterSql, filterParams, 12)
+    }
+    catch {
+      recentVisitors = []
+    }
+  }
   // Entry/exit-page windows must see each session's FULL pageview history, so they use
   // sessionFilter (site + time + session-constant dims only). Applying the per-pageview
   // filters here — e.g. ?path=/x, one click from the Top pages panel — would remove
@@ -950,6 +974,21 @@ if (foldedCities.other) {
 const maxCity = cityRows.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 
 /**
+ * The Visitors panel rows. Each links to /visitor, which shows that visitor's
+ * whole timeline for as long as the site keeps its id (up to 30 days). Labelled
+ * by the start of the hash: a visitor has no name and must not look like it has.
+ */
+const visitorRows = recentVisitors.map(v => ({
+  href: `/visitor?site=${encodeURIComponent(String(siteId))}&id=${encodeURIComponent(v.visitor_id)}`,
+  label: visitorLabel(v.visitor_id),
+  place: placeLabel(v.country, v.city),
+  tech: [v.device, v.browser].filter(Boolean).join(' · '),
+  visits: plural(v.visits, 'visit'),
+  days: v.days > 1 ? `over ${plural(v.days, 'day')}` : '',
+  lastSeen: timeAgo(v.last_seen),
+}))
+
+/**
  * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
  * what `page_views.country` holds and what the map's feature ids are.
  *
@@ -1240,7 +1279,7 @@ const shareCapability = __shareToken
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, cityGeo, countryTotals, exportPayload, installOptions, liveNow, liveWhere, range, regionGeo, shareCapability })
+defineClientPayload({ activeSiteId, cityGeo, countryTotals, exportPayload, installOptions, liveNow, liveWhere, range, regionGeo, shareCapability, visitorTimelines })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1618,6 +1657,45 @@ async function toggleCityGeo(): Promise<void> {
     cityGeoMsg.set('Could not reach the server.')
   }
   cityGeoBusy.set(false)
+}
+
+// --- Visitor timelines opt-in -------------------------------------------------
+// Same rule as the geo toggles: the box follows the server's answer. On success
+// the page reloads, because the Visitors panel is server-rendered and only
+// exists once the setting is on.
+const visitorTimelinesOn: StxSignal<boolean> = state(typeof visitorTimelines === 'boolean' ? visitorTimelines : false)
+const visitorTimelinesBusy: StxSignal<boolean> = state(false)
+const visitorTimelinesMsg: StxSignal<string> = state('')
+
+async function toggleVisitorTimelines(): Promise<void> {
+  if (visitorTimelinesBusy())
+    return
+  const next = !visitorTimelinesOn()
+  visitorTimelinesBusy.set(true)
+  visitorTimelinesMsg.set('')
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ visitorTimelines: next }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      visitorTimelinesOn.set(next)
+      visitorTimelinesMsg.set(next
+        ? 'Returning visitors are remembered from the next page view. Visits already recorded keep their one-day ids.'
+        : 'Visitors are no longer remembered, and the ids already recorded can no longer be linked to new visits.')
+      refreshFromServer()
+    }
+    else {
+      visitorTimelinesMsg.set(data?.error || 'That change could not be saved.')
+    }
+  }
+  catch {
+    visitorTimelinesMsg.set('Could not reach the server.')
+  }
+  visitorTimelinesBusy.set(false)
 }
 
 // --- Fathom import (CSV upload) ----------------------------------------------
@@ -3257,6 +3335,34 @@ select.panel:hover { border-color: var(--accent); }
       <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />
     </div>
 
+    {{-- Visitors. Only for a site whose owner turned on "Remember returning
+        visitors", and never in share mode (visitorTimelines stays false there).
+        Each row opens that visitor's timeline. Under the active filters, so a
+        country click narrows this list to visitors from that country. --}}
+    @if (visitorTimelines)
+      <div class="mt-6 p-5 panel reveal" data-visitors-panel>
+        <div class="flex flex-wrap gap-2 items-baseline justify-between mb-4">
+          <h2 class="font-semibold text-text-3 text-xs tracking-wider uppercase">Recent visitors</h2>
+          <span class="text-text-3 text-xs">A visitor keeps the same id for up to 30 days, then can't be linked again.</span>
+        </div>
+        @forelse (visitorRows as v)
+          <StxLink to="{{ v.href }}" class="flex flex-wrap gap-x-4 gap-y-1 items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row" data-visitor-row>
+            <span class="flex gap-3 items-center min-w-0">
+              <span class="font-medium mono">{{ v.label }}</span>
+              <span class="text-text-2 truncate">{{ v.place }}</span>
+              <span class="hidden sm:inline text-text-3 text-xs">{{ v.tech }}</span>
+            </span>
+            <span class="flex gap-3 items-center tabular-nums text-text-3 text-xs">
+              <span>{{ v.visits }} {{ v.days }}</span>
+              <span>{{ v.lastSeen }}</span>
+            </span>
+          </StxLink>
+        @empty
+          <div class="py-8 text-center text-sm text-text-3">No visitors in this range yet.</div>
+        @endforelse
+      </div>
+    @endif
+
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Browsers --}}
       <BreakdownPanel title="Browsers" :rows="browsers" labelKey="browser" valueKey="views" :max="maxBrowser" filterKey="browser" empty="No browser data yet." />
@@ -3876,6 +3982,31 @@ select.panel:hover { border-color: var(--accent); }
           </p>
         @endif
         <p class="mt-3 text-sm text-text-2" :show="cityGeoMsg()" style="display:none">{{ cityGeoMsg() }}</p>
+      </div>
+
+      {{-- Visitor timelines (owner-only, off by default). The same shape as the
+          two geo rows above. --}}
+      <div class="p-5 panel site-settings-panel">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div style="max-width:60ch">
+            <div class="font-semibold text-sm">Remember returning visitors</div>
+            <div class="mt-0.5 text-text-3 text-xs">
+              Off by default, so a visitor's id resets every day and no one can be followed from one day to the next.
+              With it on, a visitor keeps the same id for a fixed block of up to 30 days, and you can open any visitor to see their visits, pages, sources and conversions over that time.
+              Still no cookies and nothing stored on their device. When the block ends its key is deleted and those ids can never be linked again.
+              Mention it in your privacy policy.
+            </div>
+          </div>
+          @if (visitorTimelinesAllowed)
+            <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
+              <input type="checkbox" :checked="visitorTimelinesOn()" :disabled="visitorTimelinesBusy()" @change="toggleVisitorTimelines">
+              <span>Remember visitors</span>
+            </label>
+          @else
+            <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Not enabled on this server</span>
+          @endif
+        </div>
+        <p class="mt-3 text-sm text-text-2" :show="visitorTimelinesMsg()" style="display:none">{{ visitorTimelinesMsg() }}</p>
       </div>
     @endif
 

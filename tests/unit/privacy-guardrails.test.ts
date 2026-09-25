@@ -73,7 +73,7 @@ describe('guardrail: region and city only when asked for twice', () => {
     // A query that threw must read as "off" for both, never as "on".
     const fn = analytics.slice(analytics.indexOf('async function siteGeoOptIns'), analytics.indexOf('async function siteWantsRegion'))
     expect(fn).toContain('.catch(() => null)')
-    expect(fn).toContain('return { region: false, city: false }')
+    expect(fn).toContain('return { region: false, city: false, windowDays: 1 }')
   })
 
   test('a site cannot opt in on an install that does not permit it', () => {

@@ -96,12 +96,21 @@ describe('the wiring a later edit could quietly loosen', () => {
   const routes = code('routes/analytics.ts')
 
   test('every filtered report endpoint consults the floor', () => {
-    // Five endpoints read filters; all five must check. One that does not is a
-    // way around the guard rather than an oversight in a corner.
+    // Five aggregate reports read filters; all five must check. One that does
+    // not is a way around the guard rather than an oversight in a corner.
+    //
+    // The sixth reader is the visitor list, and it is exempt on purpose: it is a
+    // per-visitor list even unfiltered, so there is no aggregate for the floor
+    // to protect, and it exists only on a site whose owner opted into visitor
+    // timelines. That route must stay the only exception.
     const reads = (routes.match(/readFiltersWithSegment\(request, siteId\)/g) ?? []).length
     const guards = (routes.match(/suppressedResponse\(siteId, from, to, flt\)/g) ?? []).length
-    expect(reads).toBe(5)
-    expect(guards).toBe(reads)
+    expect(reads).toBe(6)
+    expect(guards).toBe(reads - 1)
+    const i = routes.indexOf(`route.get('/api/sites/{siteId}/visitors'`)
+    const block = routes.slice(i, routes.indexOf('\nroute.', i + 10))
+    expect(block).toContain('readFiltersWithSegment(request, siteId)')
+    expect(block).toContain('timelinesEnabled(')
   })
 
   test('the guard runs before the report query, not after', () => {

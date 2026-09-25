@@ -75,8 +75,12 @@ describe('salt lifecycle (#9)', () => {
   test('the salt is purged, which is what makes old hashes unlinkable', () => {
     // While the row exists the mapping is only secret; deletion is what makes it
     // irreversible. If this DELETE ever goes away the privacy claim goes with it.
-    const src = readFileSync(join(ROOT, 'app/Analytics/salt.ts'), 'utf8')
+    // The statement lives in salt-purge.ts so the daily prune job and the app
+    // run the same one. Both must still call it.
+    const src = readFileSync(join(ROOT, 'app/Analytics/salt-purge.ts'), 'utf8')
     expect(src).toContain('DELETE FROM visitor_salts')
+    expect(readFileSync(join(ROOT, 'app/Analytics/salt.ts'), 'utf8')).toContain('purgeSaltsQuery(')
+    expect(readFileSync(join(ROOT, 'scripts/analytics/prune.ts'), 'utf8')).toContain('purgeSaltsQuery(')
   })
 
   test('a database failure does not degrade to a derivable salt', () => {

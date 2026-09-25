@@ -12,6 +12,8 @@
  * Timestamps are stored as ISO-8601 varchars, which sort lexicographically, so a
  * plain `"<column>" < cutoff` compare selects exactly the expired rows.
  */
+import { purgeSaltsQuery } from '../../app/Analytics/salt-purge'
+import privacy from '../../config/privacy'
 import { connect, log, parseArgs, retentionCutoff, retentionDays } from './lib'
 
 // Each table with the column that dates its rows, and whether that column holds
@@ -43,12 +45,30 @@ const dryRun = args['dry-run'] === true
 const days = retentionDays()
 const cutoff = retentionCutoff(days)
 
+const sql = connect()
+
+// Expired visitor salts go first, and whether or not event retention is on.
+// Deleting a salt is what makes the ids hashed with it unlinkable to anyone,
+// which is the privacy claim, so it cannot depend on an optional setting.
+// Nothing ran this before: production held every salt since the table existed.
+{
+  const { sql: purge, params } = purgeSaltsQuery(new Date(), privacy.saltRetentionDays, privacy.maxVisitorWindowDays)
+  if (dryRun) {
+    const rows = await sql.unsafe(`SELECT COUNT(*)::int AS n FROM visitor_salts vs WHERE ${purge.slice(purge.indexOf('vs.salt_date'))}`, params)
+    log(`[salts] would delete ${rows[0]?.n ?? 0} expired visitor salts`)
+  }
+  else {
+    const res = await sql.unsafe(`${purge} RETURNING 1`, params)
+    log(`[salts] deleted ${Array.isArray(res) ? res.length : 0} expired visitor salts`)
+  }
+}
+
 if (!cutoff) {
-  log('[retention] ANALYTICSHQ_RETENTION_DAYS unset or 0 — retention disabled, nothing pruned.')
+  log('[retention] ANALYTICSHQ_RETENTION_DAYS unset or 0 — retention disabled, no events pruned.')
+  await sql.end()
   process.exit(0)
 }
 
-const sql = connect()
 log(`[retention] keeping ${days} days; ${dryRun ? 'would delete' : 'deleting'} rows older than ${cutoff}`)
 
 let total = 0

@@ -200,7 +200,7 @@ export const competitors: Record<string, Competitor> = {
     metrics: [
       { v: 'Country', l: 'Country by default, region and city opt-in per site. No coordinates, ever.' },
       { v: 'Your Postgres', l: 'Every event lands in a database you own, not a managed store.' },
-      { v: '24h', l: 'Rotating per-site hash: no cross-day and no cross-site identity.' },
+      { v: '24h', l: 'Rotating per-site hash by default: no cross-site identity, and no cross-day identity unless a site opts into 30-day visitor timelines.' },
     ],
     related: [
       { slug: 'fathom', name: 'vs Fathom', desc: 'How the cookieless options compare.' },
@@ -316,7 +316,7 @@ export const competitors: Record<string, Competitor> = {
     ctaLink: SEE_DASHBOARD,
     rows: [
       { dim: 'What it is', them: 'Product analytics: per-user journeys, cohorts, funnels.', us: 'Web analytics: traffic, sources, and lightweight conversions.' },
-      { dim: 'Cookies and identity', them: 'Cookies and a persistent user identity across sessions.', us: 'Cookieless. A daily rotating hash, no cross-session profile.' },
+      { dim: 'Cookies and identity', them: 'Cookies and a persistent user identity across sessions.', us: 'Cookieless. A daily rotating hash by default, or an opt-in 30-day one for visitor timelines. Never a cookie, never cross-site.' },
       { dim: 'Consent banner', them: 'Personal data, so a consent banner and DPA are required.', us: 'No personal data, so no banner and nothing to consent to.' },
       { dim: 'Script weight', them: 'A full JavaScript SDK, tens of KB before you send an event.', us: 'Under 2 KB, first-party, loaded once and deferred.' },
       { dim: 'Where your data lives', them: 'In the Mixpanel cloud.', us: 'In your own PostgreSQL database, and nowhere else.' },
@@ -390,20 +390,20 @@ export const competitors: Record<string, Competitor> = {
     meta: {
       canonical: 'https://analyticshq.org/compare/umami',
       title: 'analyticshq vs Umami - aggregate-only, cookieless analytics',
-      description: 'Two open-source, cookieless analytics tools compared. Where analyticshq stays strictly aggregate — 24h rotating IDs, no session replay, no individual profiles — and Umami does not.',
+      description: 'Two open-source, cookieless analytics tools compared. Where analyticshq draws the line: 24h rotating IDs by default, opt-in visitor timelines capped at 30 days, and no session replay, heatmaps or identify().',
     },
     kicker: 'analyticshq vs Umami',
     h1: 'Open source, but strictly aggregate.',
-    intro: 'Umami and analyticshq are both open-source and cookieless. The difference is where the line is drawn: Umami v3 moved toward individual-level tracking with session replay and user profiles, while analyticshq stays aggregate-only — and rotates identity every 24 hours instead of monthly.',
+    intro: 'Umami and analyticshq are both open-source and cookieless. The difference is where the line is drawn: Umami v3 moved toward individual-level tracking with session replay and user profiles. analyticshq rotates identity every 24 hours by default instead of monthly, and its visitor timelines are opt-in, pseudonymous and end after 30 days.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Umami vs analyticshq',
     whyHeading: 'Where the two part ways.',
     ctaHeading: 'Aggregate by principle, not by default.',
     ctaLink: SEE_DASHBOARD,
     rows: [
-      { dim: 'ID rotation window', them: 'Session salt rotates monthly, visit salt hourly', us: 'Per-site hash rotates every 24 hours. No monthly linkability.' },
+      { dim: 'ID rotation window', them: 'Session salt rotates monthly, visit salt hourly', us: 'Per-site hash rotates every 24 hours by default. A site can opt into a fixed 30-day window for visitor timelines, and the key is deleted when it ends.' },
       { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
-      { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'No per-person view. Reports are aggregate, full stop.' },
+      { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'Off by default. A site owner can turn on 30-day visitor timelines: pseudonymous, per site, no cookie, no identify(), erasable per visitor.' },
       { dim: 'Cross-session identity', them: 'identify() stitches a user’s sessions across time', us: 'No identify(), no distinct-ID stitching, by design.' },
       { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country by default, region and city opt-in. Resolved locally, IP discarded.' },
       { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes — Postgres-native, self-hostable, Stacks-integrated.' },
@@ -411,11 +411,11 @@ export const competitors: Record<string, Competitor> = {
     ],
     reasons: [
       { n: '01', h: 'Both are open source — the philosophy is where they split', b: 'Umami and analyticshq are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, analyticshq refuses to build it.' },
-      { n: '02', h: 'Aggregate-only, on purpose', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. analyticshq deliberately will never add any of them — there is no per-person timeline to reconstruct.' },
-      { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. analyticshq rotates its per-site hash every 24 hours, so activity cannot be linked across days — a materially shorter linkability window.' },
+      { n: '02', h: 'Aggregate by default, bounded by design', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. analyticshq will never add replay, heatmaps or identify(). Its visitor timelines are off until a site owner turns them on, and even then an id cannot outlive 30 days.' },
+      { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. analyticshq rotates its per-site hash every 24 hours unless a site opts into timelines, so by default activity cannot be linked across days. Opted in, the window is a fixed block with its key deleted at the end.' },
     ],
     metrics: [
-      { v: '24h', l: 'ID rotation window, versus Umami’s monthly session salt.' },
+      { v: '24h', l: 'Default ID rotation window, versus Umami’s monthly session salt.' },
       { v: '0', l: 'Session recordings, heatmaps, or individual profiles — ever.' },
       { v: 'Country', l: 'Geo granularity by default. Region and city are opt-in per site.' },
     ],
