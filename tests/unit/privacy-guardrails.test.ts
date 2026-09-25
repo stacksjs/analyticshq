@@ -6,8 +6,9 @@
  * privacy contract in PRIVACY.md can't silently regress. See issue #28.
  *
  * They assert against the real tracker/ingest source and package manifest — not
- * a mock — so any PR that adds cookies, stores a raw IP, turns on city geo, or
- * pulls in a session-replay/heatmap library trips a red test.
+ * a mock — so any PR that adds cookies, stores a raw IP, records region or city
+ * for a site that did not ask, or pulls in a session-replay/heatmap library
+ * trips a red test.
  */
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -28,64 +29,86 @@ describe('guardrail: cookieless / no device storage', () => {
   })
 })
 
-describe('guardrail: no city, and region only when asked for twice', () => {
-  test('the ingest never populates a city, at any granularity', () => {
-    // This is the half of issue #7 that did not move. Region became reachable as
-    // an opt-in; city did not, and there is no setting, database read or code
-    // path that reaches one. A populated `city:` key here would take us below
-    // the line /compare/plausible and /compare/umami still claim.
-    expect(analytics).not.toMatch(/^\s*city\s*:/m)
+describe('guardrail: region and city only when asked for twice', () => {
+  test('the ingest populates city only from the gated lookup', () => {
+    // City used to be unreachable (#7). It is now an opt-in on the same terms
+    // as region, and this pins the terms: the only value ever written is the
+    // one cityFromIp returns, and only when siteWantsCity said yes.
+    expect(analytics).toMatch(/city\s*=\s*\(await siteWantsCity\([\s\S]{0,40}\?\s*cityFromIp/)
+    // And nothing else assigns the column a value.
+    for (const m of analytics.matchAll(/^\s*city\s*:\s*(.+)$/gm))
+      expect(m[1].trim()).toBe('city ?? null,')
   })
 
-  test('the schema carries no city column', () => {
-    const files = [
+  test('the city column arrives only by its own migration, and defaults off', () => {
+    // The original tables still carry no city; 0000000054 adds it alongside a
+    // per-site flag that is false for every site until its owner flips it.
+    for (const f of [
       'database/migrations/0000000003-create-page_views-table.sql',
       'database/migrations/0000000005-create-sessions-table.sql',
       'database/migrations/0000000051-add-opt-in-region-geo.sql',
-      'app/Models/PageView.ts',
-      'app/Models/Session.ts',
-    ]
-    for (const f of files) {
-      const src = read(f)
-      expect(src).not.toMatch(/["\s]city["\s]*(varchar|:)/i)
-    }
+    ])
+      expect(read(f)).not.toMatch(/["\s]city["\s]*(varchar|:)/i)
+    const sql = read('database/migrations/0000000054-add-opt-in-city-geo.sql')
+    expect(sql).toContain('"city_geo" boolean NOT NULL DEFAULT false')
+    expect(sql).not.toMatch(/UPDATE\s+"?sites"?\s+SET/i)
   })
 
   test('region is written only when the install permits it and the site asked', () => {
-    // The guardrail that replaces "no region column, ever". Two independent
-    // gates, and this pins that neither was collapsed into the other: an
-    // instance check that returns before any query, and a per-site flag.
-    expect(analytics).toMatch(/privacy\.geo\.granularity !== 'region'\s*\)?\s*\n?\s*return false/)
+    // Two independent gates, and this pins that neither was collapsed into the
+    // other: an instance check that returns before any query, and a per-site flag.
+    expect(analytics).toMatch(/!geoPermits\(privacy\.geo\.granularity, 'region'\)\)\s*\n\s*return false/)
     expect(analytics).toContain('siteWantsRegion')
     // The region value never comes from anywhere but the subdivision lookup.
     expect(analytics).toMatch(/region\s*=\s*\(await siteWantsRegion\([\s\S]{0,40}\?\s*regionFromIp/)
   })
 
+  test('city is written only when the install permits it and the site asked', () => {
+    expect(analytics).toMatch(/!geoPermits\(privacy\.geo\.granularity, 'city'\)\)\s*\n\s*return false/)
+    const fn = analytics.slice(analytics.indexOf('async function siteWantsCity'), analytics.indexOf('async function siteWantsCity') + 300)
+    expect(fn).toContain('.city')
+  })
+
+  test('the site flags are read fail-closed', () => {
+    // A query that threw must read as "off" for both, never as "on".
+    const fn = analytics.slice(analytics.indexOf('async function siteGeoOptIns'), analytics.indexOf('async function siteWantsRegion'))
+    expect(fn).toContain('.catch(() => null)')
+    expect(fn).toContain('return { region: false, city: false }')
+  })
+
   test('a site cannot opt in on an install that does not permit it', () => {
     // Refused with a 409 rather than stored: a setting that saves, reads back as
     // on and records nothing sends the owner debugging their snippet.
-    const patch = analytics.slice(analytics.indexOf('body.regionGeo !== undefined'))
-    expect(patch.slice(0, 900)).toMatch(/granularity !== 'region'[\s\S]{0,400}409/)
+    for (const [field, level] of [['regionGeo', 'region'], ['cityGeo', 'city']]) {
+      const patch = analytics.slice(analytics.indexOf(`body.${field} !== undefined`))
+      expect({ field, ok: new RegExp(`geoPermits\\(privacy\\.geo\\.granularity, '${level}'\\)[\\s\\S]{0,400}409`).test(patch.slice(0, 900)) }).toEqual({ field, ok: true })
+    }
   })
 
-  test('turning region off is not delayed by the ingest cache', () => {
+  test('turning either off is not delayed by the ingest cache', () => {
     expect(analytics).toContain('resetRegionSiteCache(String(siteId))')
   })
 
-  test('the region opt-in is the site owner\'s call, not an admin\'s', () => {
-    // The rest of PATCH /api/sites/{siteId} is admin-gated configuration. This
-    // field changes what is recorded about visitors, so it re-checks for owner.
-    const patch = analytics.slice(analytics.indexOf('body.regionGeo !== undefined'))
-    expect(patch.slice(0, 600)).toContain('requireSiteOwner(request, siteId)')
+  test('the region and city opt-ins are the site owner\'s call, not an admin\'s', () => {
+    // The rest of PATCH /api/sites/{siteId} is admin-gated configuration. These
+    // fields change what is recorded about visitors, so they re-check for owner.
+    for (const field of ['regionGeo', 'cityGeo']) {
+      const patch = analytics.slice(analytics.indexOf(`body.${field} !== undefined`))
+      expect({ field, owner: patch.slice(0, 600).includes('requireSiteOwner(request, siteId)') }).toEqual({ field, owner: true })
+    }
   })
 
-  test('geo.ts reads the first subdivision and nothing below it', () => {
-    // subdivisions[1] and beyond are counties and districts — a granularity
-    // nobody opted into, under a setting that says region.
+  test('geo.ts reads the first subdivision and the city NAME, nothing finer', () => {
+    // subdivisions[1] and beyond are counties and districts. `location` carries
+    // latitude, longitude and an accuracy radius, and `postal` a postcode. None
+    // of them is read, at any setting.
     const geo = read('app/Analytics/geo.ts')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
     expect(geo).toContain('subdivisions?.[0]')
     expect(geo).not.toMatch(/subdivisions\??\.\[[1-9]/)
-    expect(geo).not.toMatch(/\bcity\b\s*[?.]/)
+    expect(geo).toContain('city?.names?.en')
+    expect(geo).not.toMatch(/\blocation\b|latitude|longitude|accuracy_radius|\bpostal\b/)
   })
 })
 

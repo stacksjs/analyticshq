@@ -66,6 +66,14 @@ export default defineModel({
       factory: () => false,
     },
 
+    // City geolocation, the same terms one level finer: off unless the site owner
+    // turns it on and the install's geo.granularity reaches 'city'.
+    city_geo: {
+      fillable: true,
+      validation: { rule: schema.boolean().optional() },
+      factory: () => false,
+    },
+
     owner_id: {
       fillable: true,
       validation: { rule: schema.number().optional() },

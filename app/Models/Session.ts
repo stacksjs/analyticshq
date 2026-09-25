@@ -37,6 +37,8 @@ export default defineModel({
     // opted into region geo, and null everywhere else. Named here for the same
     // reason as on PageView: the schema differ works from these attributes.
     region: { fillable: true, validation: { rule: schema.string().optional().max(6) } },
+    // `US-CA:San Diego`, for a site that opted into city geo. Null everywhere else.
+    city: { fillable: true, validation: { rule: schema.string().optional().max(100) } },
     device_type: { fillable: true, validation: { rule: schema.string().optional().max(16) } },
     browser: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     os: { fillable: true, validation: { rule: schema.string().optional().max(32) } },

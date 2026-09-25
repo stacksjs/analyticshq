@@ -19,7 +19,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { normCountry } from '../../app/Analytics/country'
-import { countryFromIp, geoDbPath, geoHasRegions, regionFromIp, resetGeoCache } from '../../app/Analytics/geo'
+import { cityFromIp, countryFromIp, geoDbPath, geoHasCities, geoHasRegions, regionFromIp, resetGeoCache } from '../../app/Analytics/geo'
 import { geoCountry } from '../../app/Analytics/tracking'
 
 /** Build a Headers from a plain object, the shape `/collect` receives. */
@@ -176,19 +176,24 @@ describe('countryFromIp against the real database', () => {
     expect(performance.now() - t).toBeLessThan(2000)
   })
 
-  maybe('the DEFAULT database is the country one, not the city one', () => {
-    // Region geo is now reachable, so this no longer says "never a city file".
-    // It says the file a normal deployment loads is still the country one, which
-    // is the other half of what makes region opt-in: with this on disk, a site
-    // that ticks the box records nothing.
-    //
-    // An operator who wants regions points ANALYTICSHQ_GEO_DB at DB-IP's City
-    // Lite deliberately. That is a decision someone makes, which was always the
-    // objection (#7, #28) — not a file swap nobody noticed.
+  maybe('regions and cities resolve exactly when the installed file carries them', () => {
+    // The deploy now ships DB-IP City Lite by default (ANALYTICSHQ_GEO_CITY=false
+    // ships the country file). Whichever is on disk, the lookups have to agree
+    // with it: the city file answers all three, the country file answers
+    // country alone. A mismatch either way means the module is reading the
+    // record wrong, not that the product changed.
     const raw = readFileSync(dbPath)
     const meta = raw.subarray(raw.length - 200_000).toString('latin1')
-    expect(meta).toContain('Country')
-    expect(meta).not.toContain('DBIP-City')
+    const isCity = meta.includes('DBIP-City')
+    expect(geoHasRegions()).toBe(isCity)
+    expect(geoHasCities()).toBe(isCity)
+    if (isCity) {
+      expect(regionFromIp('8.8.8.8')).toMatch(/^US-[A-Z0-9]{1,3}$/)
+      expect(cityFromIp('8.8.8.8')).toMatch(/^US-[A-Z0-9]{1,3}:\S/)
+      // UCSD. DB-IP files it under "San Diego (La Jolla)"; the neighbourhood is
+      // dropped, which is what makes it the city and not a district.
+      expect(cityFromIp('132.239.1.1')).toBe('US-CA:San Diego')
+    }
   })
 })
 
@@ -208,17 +213,22 @@ describe('regionFromIp degrades to nothing without a city database', () => {
   // every flag says yes, because the database on disk has no subdivisions in it.
   // A regression here would mean a site that ticked the box on a country-only
   // install silently started collecting sub-country location.
+  // Only meaningful with the COUNTRY file on disk. With City Lite installed
+  // (the deploy default now) regions are supposed to resolve, and the test
+  // above covers that case.
   const dbPath = geoDbPath()
   const present = existsSync(dbPath)
-  const maybe = present ? test : test.skip
+  const isCountryFile = present && !readFileSync(dbPath).subarray(-200_000).toString('latin1').includes('DBIP-City')
+  const maybe = isCountryFile ? test : test.skip
 
-  maybe('the shipped country database yields no regions at all', () => {
+  maybe('the country database yields no regions or cities at all', () => {
     for (const ip of ['8.8.8.8', '1.1.1.1', '212.227.222.8', '2001:4860:4860::8888'])
-      expect({ ip, region: regionFromIp(ip) }).toEqual({ ip, region: null })
+      expect({ ip, region: regionFromIp(ip), city: cityFromIp(ip) }).toEqual({ ip, region: null, city: null })
   })
 
   maybe('and says so, so /api/health can report why', () => {
     expect(geoHasRegions()).toBe(false)
+    expect(geoHasCities()).toBe(false)
   })
 
   maybe('country still resolves for the same addresses', () => {
@@ -230,14 +240,16 @@ describe('regionFromIp degrades to nothing without a city database', () => {
 
   test('the addresses that never resolve a country never resolve a region', () => {
     for (const ip of ['', '0.0.0.0', '127.0.0.1', '::1', '1.2.3', 'not-an-ip', '999.1.1.1'])
-      expect({ ip, region: regionFromIp(ip) }).toEqual({ ip, region: null })
+      expect({ ip, region: regionFromIp(ip), city: cityFromIp(ip) }).toEqual({ ip, region: null, city: null })
   })
 
   test('no database at all is not an error', () => {
     process.env.ANALYTICSHQ_GEO_DB = join(import.meta.dir, 'does-not-exist.mmdb')
     resetGeoCache()
     expect(regionFromIp('8.8.8.8')).toBeNull()
+    expect(cityFromIp('8.8.8.8')).toBeNull()
     expect(geoHasRegions()).toBe(false)
+    expect(geoHasCities()).toBe(false)
   })
 })
 
@@ -271,16 +283,18 @@ describe('the public copy matches how country actually resolves', () => {
     expect(geography).toContain('CC BY 4.0')
   })
 
-  test('the no-city promise is still made, and nothing claims country-only any more', () => {
-    // What #7 and #28 protect, restated for a product where region is reachable.
+  test('city is described as opt-in, and nothing claims country-only any more', () => {
+    // What #7 and #28 protect, restated for a product where region and city
+    // are both reachable as per-site opt-ins.
     //
-    // The previous version asserted the phrase "Country only" appeared somewhere
-    // in the file. That is why it kept passing while region shipped: five other
-    // entries still said country-only about US, and one match anywhere satisfied
-    // it. So this pins the claim that is actually still true — no city, ever —
-    // and fails on any surviving country-only claim about ourselves.
+    // City used to be promised away ("never a city"). That stopped being true
+    // when city became an opt-in, and a promise the code no longer keeps is
+    // worse than no promise. So this pins the opposite: nothing claims we never
+    // record a city, the pages say city is opt-in, and no surviving line calls
+    // us country-only.
     const competitors = surfaces.find(s => s.rel.endsWith('competitors.ts'))!.src
-    expect(competitors).toMatch(/[Nn]ever (a )?city|[Nn]o city/)
+    expect(competitors).not.toMatch(/[Nn]ever (a )?city|[Nn]o city|city never|[Cc]ity is not an option/)
+    expect(competitors).toMatch(/[Cc]ity[^.'"]{0,40}opt[- ]in|opt[- ]in[^.'"]{0,60}city/)
 
     // `us:` and the marketing prose describe analyticshq. `them:` describes a
     // competitor, and Simple Analytics really is country-only — saying so is

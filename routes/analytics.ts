@@ -52,7 +52,7 @@ import {
   randomId,
   referrerSource,
 } from '../app/Analytics/tracking'
-import { countryFromIp, geoHasRegions, regionFromIp } from '../app/Analytics/geo'
+import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, regionFromIp } from '../app/Analytics/geo'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -244,7 +244,7 @@ function clip255(v: unknown): string | null {
 }
 
 /**
- * Sites that opted into region geo, cached for a minute.
+ * Sites that opted into region or city geo, cached for a minute.
  *
  * ## Why there is a cache at all
  *
@@ -256,51 +256,75 @@ function clip255(v: unknown): string | null {
  * A minute of staleness is the cost, and it is the right direction: a site
  * owner who turns regions OFF keeps recording them for up to a minute, which is
  * visible and self-correcting, while `pgq` failing means recording none.
+ *
+ * Both flags come out of one row and one query, so opting into city costs the
+ * ingest nothing that region did not already.
  */
 const REGION_SITE_TTL_MS = 60_000
-const regionSites = new Map<string, { on: boolean, at: number }>()
+const regionSites = new Map<string, { region: boolean, city: boolean, at: number }>()
+
+/** Drivers spell a Postgres boolean as `true`, `'t'` or `1`. Anything else is not a yes. */
+function pgTrue(raw: unknown): boolean {
+  return raw === true || raw === 't' || raw === 1
+}
+
+/**
+ * The site's own geo opt-ins, cached. Says nothing about the install ceiling:
+ * the callers below check that first, because it is free.
+ *
+ * FAILS CLOSED. Every path that is not an explicit `true` from the database
+ * reads as off: no row, an unreadable column, a query that threw. The worst
+ * case of getting this wrong in one direction is a gap in a breakdown, and in
+ * the other it is recording sub-country location for a site that did not ask.
+ */
+async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: boolean }> {
+  const now = Date.now()
+  const hit = regionSites.get(siteId)
+  if (hit && now - hit.at < REGION_SITE_TTL_MS)
+    return hit
+
+  const rows = await pgq(
+    `SELECT region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`,
+    [siteId],
+  ).catch(() => null) as Array<{ region_geo?: unknown, city_geo?: unknown }> | null
+
+  if (rows === null)
+    return { region: false, city: false }
+
+  const entry = { region: pgTrue(rows[0]?.region_geo), city: pgTrue(rows[0]?.city_geo), at: now }
+  regionSites.set(siteId, entry)
+  return entry
+}
 
 /**
  * Has this site asked for region, on an install that permits it?
  *
  * Both halves, in that order, and the instance half first because it is free.
+ * `geoPermits` ranks the levels, so an install whose ceiling is `'city'`
+ * permits region too — the old `=== 'region'` check would have switched regions
+ * OFF for every site the moment the ceiling was raised.
  *
- * THAT ORDERING STOPPED BEING FREE WHEN THE CEILING WAS RAISED. It used to
- * return here on every default install, because `granularity` defaulted to
- * `'country'`; the default is now `'region'`, so the common path reaches the
- * cache instead. What that costs is one `SELECT region_geo` per site per minute
- * — not per beacon — and every hit after the first inside that minute is a Map
- * lookup. An operator who wants the old zero-cost behaviour sets `granularity`
- * back to `'country'`, which also takes the option away from site owners.
- *
- * FAILS CLOSED. Every path that is not an explicit `true` from the database
- * returns false: no row, an unreadable column, a query that threw. The worst
- * case of getting this wrong in one direction is a gap in a breakdown, and in
- * the other it is recording sub-country location for a site that did not ask.
+ * A site that asked for city gets its region recorded as well. The city value
+ * already carries the region in its prefix, so recording one without the other
+ * would withhold nothing and only make the Regions panel disagree with the
+ * Cities panel beside it.
  */
 async function siteWantsRegion(siteId: string): Promise<boolean> {
-  if (privacy.geo.granularity !== 'region')
+  if (!geoPermits(privacy.geo.granularity, 'region'))
     return false
+  const want = await siteGeoOptIns(siteId)
+  return want.region || (want.city && geoPermits(privacy.geo.granularity, 'city'))
+}
 
-  const now = Date.now()
-  const hit = regionSites.get(siteId)
-  if (hit && now - hit.at < REGION_SITE_TTL_MS)
-    return hit.on
-
-  const rows = await pgq(
-    `SELECT region_geo FROM sites WHERE id = ? LIMIT 1`,
-    [siteId],
-  ).catch(() => null) as Array<{ region_geo?: unknown }> | null
-
-  if (rows === null)
+/**
+ * Has this site asked for city, on an install that permits it? The same two
+ * gates as region, one level finer, and a third that no flag can flip: the
+ * database on disk has to carry cities, or `cityFromIp` returns null.
+ */
+async function siteWantsCity(siteId: string): Promise<boolean> {
+  if (!geoPermits(privacy.geo.granularity, 'city'))
     return false
-
-  // Drivers spell a Postgres boolean as `true`, `'t'` or `1` depending on which
-  // one is in front of us. Anything else, including undefined, is not a yes.
-  const raw = rows[0]?.region_geo
-  const on = raw === true || raw === 't' || raw === 1
-  regionSites.set(siteId, { on, at: now })
-  return on
+  return (await siteGeoOptIns(siteId)).city
 }
 
 /** Forget the cached opt-ins. Called when a site's setting changes, and by tests. */
@@ -480,6 +504,10 @@ route.post('/collect', async (request: any) => {
   // site behind Cloudflare that opts in gets regions from the local database or
   // not at all.
   const region = (await siteWantsRegion(String(siteId))) ? regionFromIp(ip) : undefined
+  // City, on the same terms one level finer: the install permits it, the site
+  // asked, and the database on disk carries cities. Same IP, same request, same
+  // discard. `US-CA:San Diego`, never coordinates — see cityFromIp.
+  const city = (await siteWantsCity(String(siteId))) ? cityFromIp(ip) : undefined
   const now = new Date().toISOString()
 
   let url: URL | null = null
@@ -510,6 +538,7 @@ route.post('/collect', async (request: any) => {
     referrer_source: source,
     country: country ?? null,
     region: region ?? null,
+    city: city ?? null,
     device_type: info.deviceType,
     browser: info.browser,
     os: info.os,
@@ -538,6 +567,7 @@ route.post('/collect', async (request: any) => {
       utm_term: utmParam(body.utm_term),
       country: country ?? null,
       region: region ?? null,
+      city: city ?? null,
       device_type: info.deviceType,
       browser: info.browser,
       browser_version: null,
@@ -1283,13 +1313,30 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
     const notOwner = await requireSiteOwner(request, siteId)
     if (notOwner)
       return notOwner
-    if (body.regionGeo === true && privacy.geo.granularity !== 'region') {
+    if (body.regionGeo === true && !geoPermits(privacy.geo.granularity, 'region')) {
       return json({
         error: 'This install records country only. Region geolocation has to be permitted for the whole install before a site can turn it on. Set geo.granularity to "region" in config/privacy.ts.',
       }, 409)
     }
     sets.push('region_geo = ?')
     params.push(body.regionGeo)
+  }
+
+  // City geo, on exactly the terms region has: owner-only, refused with a 409
+  // on an install whose ceiling does not reach it, and off until asked for.
+  if (body.cityGeo !== undefined) {
+    if (typeof body.cityGeo !== 'boolean')
+      return json({ error: 'cityGeo must be true or false' }, 400)
+    const notOwner = await requireSiteOwner(request, siteId)
+    if (notOwner)
+      return notOwner
+    if (body.cityGeo === true && !geoPermits(privacy.geo.granularity, 'city')) {
+      return json({
+        error: 'This install does not record cities. City geolocation has to be permitted for the whole install before a site can turn it on. Set geo.granularity to "city" in config/privacy.ts.',
+      }, 409)
+    }
+    sets.push('city_geo = ?')
+    params.push(body.cityGeo)
   }
 
   if (!sets.length)
@@ -1303,7 +1350,7 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
   // here makes turning it OFF take effect on the next beacon rather than at the
   // end of a TTL the owner cannot see.
   resetRegionSiteCache(String(siteId))
-  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
+  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
   return json({ site: rows?.[0] ?? null })
 }).middleware('auth').skipCsrf()
 
@@ -3482,7 +3529,8 @@ function topDimension(path: string, column: string, key: string, opts: { floorRo
     // Floored dimensions are grouped in full and cut below, because the rows
     // that fall under the minimum have to be SUMMED, and a LIMIT applied first
     // would compute "Other" from the top twenty instead of from everything.
-    // Bounded either way: there are about four thousand ISO subdivisions.
+    // Bounded either way: there are about four thousand ISO subdivisions, and a
+    // site only has city rows for the towns it actually saw.
     const result = await filteredQuery(
       `SELECT ${column} AS name, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors
       FROM page_views WHERE site_id = ? AND timestamp >= ? AND timestamp <= ? AND ${column} IS NOT NULL AND ${column} <> ''${flt.sql}
@@ -3507,7 +3555,8 @@ function topDimension(path: string, column: string, key: string, opts: { floorRo
       20,
     )
     const rows: Array<Record<string, unknown>> = folded.rows.map(r => ({ name: r.region, views: r.views, visitors: r.visitors }))
-    // Cannot collide with a real value: regions are ISO codes like "US-CA".
+    // Cannot collide with a real value: regions are ISO codes like "US-CA" and
+    // cities carry one as a prefix, "US-CA:San Diego".
     if (folded.other)
       rows.push({ name: 'Other', views: folded.other.views, visitors: folded.other.visitors })
     return json({ [key]: rows })
@@ -3521,6 +3570,10 @@ topDimension('/api/sites/{siteId}/countries', 'country', 'countries')
 // visitors can hold a state with three — and it applies unchanged, because
 // `topDimension` runs every dimension through the same `suppressedResponse`.
 topDimension('/api/sites/{siteId}/regions', 'region', 'regions', { floorRows: true })
+// Cities, `US-CA:San Diego`. Floored for the same reason as regions and with
+// more cause: a town is a far smaller haystack than a state. Empty for every
+// site that has not opted in.
+topDimension('/api/sites/{siteId}/cities', 'city', 'cities', { floorRows: true })
 topDimension('/api/sites/{siteId}/devices', 'device_type', 'devices')
 topDimension('/api/sites/{siteId}/browsers', 'browser', 'browsers')
 topDimension('/api/sites/{siteId}/operating-systems', 'os', 'operating_systems')
@@ -3636,5 +3689,8 @@ route.get('/api/health', () => healthResponse({
     // regions" is otherwise unanswerable without shell access — almost always
     // this, rather than anything wrong with the site's setting.
     geoRegion: geoHasRegions(),
+    // The same question one level finer. False with the country database on
+    // disk, which is the usual answer to "I turned cities on and see none".
+    geoCity: geoHasCities(),
   },
 }))

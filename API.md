@@ -40,7 +40,7 @@ The page-view reports (`stats`, `timeseries`, `pages`, `referrers`, and the
 breakdown endpoints below) accept the same filter dimensions the dashboard uses.
 They **compose with AND**:
 
-`path`, `source`, `referrer`, `country`, `device`, `browser`, `os`,
+`path`, `source`, `referrer`, `country`, `region`, `city`, `device`, `browser`, `os`,
 `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`
 
 ```
@@ -60,6 +60,8 @@ All return JSON. `views` = pageviews, `visitors` = unique visitors (a
 | `GET /api/sites/{id}/pages` | `{ pages: [{ path, views, visitors }] }` |
 | `GET /api/sites/{id}/referrers` | `{ referrers: [{ source, views, visitors }] }` |
 | `GET /api/sites/{id}/countries` | `{ countries: [{ name, views, visitors }] }` |
+| `GET /api/sites/{id}/regions` | `{ regions: [{ name, views, visitors }] }`, names like `US-CA`; empty unless the site opted in |
+| `GET /api/sites/{id}/cities` | `{ cities: [{ name, views, visitors }] }`, names like `US-CA:San Diego`; empty unless the site opted in |
 | `GET /api/sites/{id}/devices` | `{ devices: [{ name, views, visitors }] }` |
 | `GET /api/sites/{id}/browsers` | `{ browsers: [{ name, views, visitors }] }` |
 | `GET /api/sites/{id}/operating-systems` | `{ operating_systems: [{ name, views, visitors }] }` |
@@ -71,7 +73,9 @@ All return JSON. `views` = pageviews, `visitors` = unique visitors (a
 | `GET /api/sites/{id}/exit-pages` | `{ exit_pages: [{ path, sessions, visitors }] }` |
 | `GET /api/sites/{id}/realtime` | `{ current }` — unique visitors in the last 5 min |
 
-Breakdown lists are capped at the top 20 by views. (Filters don't apply to
+Breakdown lists are capped at the top 20 by views. On `regions` and `cities`,
+rows with fewer visitors than `ANALYTICSHQ_MIN_SEGMENT_SIZE` (5) are summed into
+one `Other` row instead of being named. (Filters don't apply to
 `events`, `entry-pages`, or `exit-pages` yet — those come from other tables.)
 
 ## Site management
@@ -80,7 +84,7 @@ Breakdown lists are capped at the top 20 by views. (Filters don't apply to
 |----------|---------|
 | `GET /api/sites` | List the sites you can reach — owned and shared — each with your `role` |
 | `POST /api/sites` | Create a site — `{ name, domain? }` → `{ site }` |
-| `PATCH /api/sites/{id}` | Edit `name`, `domains`, or `timezone` (IANA); partial |
+| `PATCH /api/sites/{id}` | Edit `name`, `domains`, or `timezone` (IANA); partial. Owners can also set `regionGeo` and `cityGeo` (booleans), answered 409 when the install's `geo.granularity` does not permit the level |
 | `DELETE /api/sites/{id}` | Delete the site and cascade-erase all its data |
 
 ## Team

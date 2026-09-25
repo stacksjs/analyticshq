@@ -60,6 +60,11 @@ export default defineModel({
     // live tables against these attributes: a column the models do not name is a
     // column it proposes dropping on every deploy.
     region: { fillable: true, validation: { rule: schema.string().optional().max(6) } },
+    // `US-CA:San Diego`. Null unless the site opted into city geo AND the install
+    // permits it AND the installed database carries cities (migration
+    // 0000000054, app/Analytics/geo.ts). Named here for the schema differ, like
+    // region above.
+    city: { fillable: true, validation: { rule: schema.string().optional().max(100) } },
     device_type: { fillable: true, validation: { rule: schema.string().optional().max(16) } },
     browser: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     browser_version: { fillable: true, validation: { rule: schema.string().optional().max(32) } },

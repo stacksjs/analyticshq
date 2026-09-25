@@ -18,6 +18,8 @@ import { installTargets } from '../../app/Analytics/install'
 import { listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
 import { foldRegions, splitRegion } from '../../app/Analytics/regions'
+import { cityLabel, foldCities, splitCity } from '../../app/Analytics/cities'
+import { geoPermits } from '../../app/Analytics/geo'
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
@@ -107,6 +109,9 @@ const FILTERS = {
   // not filter -- app/Analytics/filters.ts has its own FILTER_COLUMNS map for
   // the API endpoints, and adding it there did not add it here.
   region: { col: 'region', label: 'Region' },
+  // `US-CA:San Diego`. The Top cities panel links its rows here, the same way
+  // the regions panel does, and app/Analytics/filters.ts carries the API twin.
+  city: { col: 'city', label: 'City' },
   device: { col: 'device_type', label: 'Device' },
   browser: { col: 'browser', label: 'Browser' },
   os: { col: 'os', label: 'OS' },
@@ -133,7 +138,8 @@ const filterParams = []
 // `region` belongs here for the same reason `country` does: it is resolved once
 // per visit from one address, so it is identical on every page_view of a
 // session and safe inside the entry/exit-page window subqueries.
-const SESSION_DIMENSIONS = new Set(['country', 'region', 'device', 'browser', 'os'])
+// City too: resolved from the same one address, once per visit.
+const SESSION_DIMENSIONS = new Set(['country', 'region', 'city', 'device', 'browser', 'os'])
 let sessionFilterSql = ''
 const sessionFilterParams = []
 for (const key of Object.keys(FILTERS)) {
@@ -201,6 +207,7 @@ let referrerUrls = []
 let countries = []
 let countryMap = []
 let regions = []
+let cities = []
 let devices = []
 let browsers = []
 let systems = []
@@ -284,7 +291,11 @@ let regionGeo = false
  * server does not allow this" instead of offering a switch the endpoint answers
  * 409 to. `privacy` is already imported for the retention copy below.
  */
-const regionGeoAllowed = privacy.geo.granularity === 'region'
+const regionGeoAllowed = geoPermits(privacy.geo.granularity, 'region')
+/** Whether THIS site opted into city geo. Drives its panel and its toggle. */
+let cityGeo = false
+/** Whether this install's ceiling reaches city. Same reasoning as regionGeoAllowed. */
+const cityGeoAllowed = geoPermits(privacy.geo.granularity, 'city')
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
 let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
@@ -424,9 +435,11 @@ async function loadData() {
       // Region opt-in. Its own tiny query rather than a join onto the plan
       // resolution: this is one boolean on `sites` and planForSite answers a
       // different question about a different table.
-      const geoRow = (await pgq(`SELECT region_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
+      const geoRow = (await pgq(`SELECT region_geo, city_geo FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
       const rawGeo = geoRow[0]?.region_geo
       regionGeo = rawGeo === true || rawGeo === 't' || rawGeo === 1
+      const rawCity = geoRow[0]?.city_geo
+      cityGeo = rawCity === true || rawCity === 't' || rawCity === 1
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
@@ -609,6 +622,12 @@ async function loadData() {
   // for.
   regions = (await pgq(
     `SELECT region, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY views DESC`, p)) ?? []
+  // Cities, unlimited in SQL for the same reason as regions: every row under the
+  // floor has to reach the "Other" sum. Bounded by the towns this site actually
+  // saw in the range. Empty, and the panel hidden, on every site that has not
+  // opted in.
+  cities = (await pgq(
+    `SELECT city, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND city IS NOT NULL AND city != '' GROUP BY city ORDER BY views DESC`, p)) ?? []
   devices = (await pgq(
     `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p)) ?? []
   browsers = (await pgq(
@@ -864,6 +883,35 @@ if (foldedRegions.other) {
   })
 }
 const maxRegion = regionRows.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
+
+/**
+ * Top cities, on the same floor as regions and from the same fold.
+ *
+ * Labelled `San Diego, CA` with the flag in front, and the flag dropped inside a
+ * country filter like the regions panel does. Filtering by a region (clicking a
+ * row in Top regions) narrows this panel to that state's cities on its own,
+ * because both queries are built from the same `filter`.
+ */
+const foldedCities = foldCities(cities, REGION_FLOOR, 8)
+const cityTitle = regionCountry
+  ? `Cities in ${countryName(regionCountry)}`
+  : 'Top cities'
+const cityRows = foldedCities.rows.map((r) => {
+  const parts = splitCity(r.city)
+  if (!parts)
+    return { ...r, label: r.city }
+  return { ...r, label: regionCountry ? cityLabel(r.city) : `${flag(parts.country)} ${cityLabel(r.city)}` }
+})
+if (foldedCities.other) {
+  cityRows.push({
+    // Empty, so clicking it filters to nothing rather than to a town.
+    city: '',
+    label: `Other (under ${REGION_FLOOR} visitors)`,
+    views: foldedCities.other.views,
+    visitors: foldedCities.other.visitors,
+  })
+}
+const maxCity = cityRows.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0) || 1
 
 /**
  * `{ US: 1204, GB: 340 }` for the choropleth — keyed by ISO alpha-2, which is
@@ -1129,7 +1177,7 @@ const exportPayload = {
  * shape of exportPayload rather than guessing, and a name that stops existing
  * becomes an error instead of a runtime undefined.
  *
- * These six and no more. Everything else the server block computes stays
+ * These and no more. Everything else the server block computes stays
  * server-side, which is the other half of what this call is for — it is the list
  * of what crosses, not a convenience export. `installOptions` earns its place
  * because the snippets are built from server config but can only be *finished*
@@ -1139,7 +1187,12 @@ const exportPayload = {
 // UI so it can display the existing share link. The underlying server binding
 // stays private and only this exact scalar crosses the bridge.
 const shareCapability = __shareToken
-defineClientPayload({ activeSiteId, countryTotals, exportPayload, installOptions, liveNow, range, shareCapability })
+// regionGeo and cityGeo seed the two geo toggles. They were missing from this
+// list for regions, and a declared payload bridges ONLY what it names, so
+// `typeof regionGeo` was 'undefined' in the client block and the box always
+// loaded unticked on a site that had regions on -- one click then sent `true`
+// again rather than turning it off.
+defineClientPayload({ activeSiteId, cityGeo, countryTotals, exportPayload, installOptions, liveNow, range, regionGeo, shareCapability })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1464,6 +1517,43 @@ async function toggleRegionGeo(): Promise<void> {
     regionGeoMsg.set('Could not reach the server.')
   }
   regionGeoBusy.set(false)
+}
+
+// --- City geolocation opt-in -------------------------------------------------
+// The region toggle's twin, with the same rule: the box follows the server's
+// answer and never leads it.
+const cityGeoOn: StxSignal<boolean> = state(typeof cityGeo === 'boolean' ? cityGeo : false)
+const cityGeoBusy: StxSignal<boolean> = state(false)
+const cityGeoMsg: StxSignal<string> = state('')
+
+async function toggleCityGeo(): Promise<void> {
+  if (cityGeoBusy())
+    return
+  const next = !cityGeoOn()
+  cityGeoBusy.set(true)
+  cityGeoMsg.set('')
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ cityGeo: next }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      cityGeoOn.set(next)
+      cityGeoMsg.set(next
+        ? 'Cities will be recorded from the next page view, along with the state or province. Visits already recorded keep the location they have.'
+        : 'Cities are no longer recorded. The ones already recorded are still in your reports; delete this site\'s data to remove them.')
+    }
+    else {
+      cityGeoMsg.set(data?.error || 'That change could not be saved.')
+    }
+  }
+  catch {
+    cityGeoMsg.set('Could not reach the server.')
+  }
+  cityGeoBusy.set(false)
 }
 
 // --- Fathom import (CSV upload) ----------------------------------------------
@@ -2919,8 +3009,8 @@ select.panel:hover { border-color: var(--accent); }
           <div style="max-width:60ch">
             <div class="font-semibold text-sm">Record state and province</div>
             <div class="mt-0.5 text-text-3 text-xs">
-              Off by default. With it on, this site records the state or province a visit came from, never a city and
-              never coordinates. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
+              Off by default. With it on, this site records the state or province a visit came from, never coordinates.
+              The city is a separate setting below. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
               quiet region cannot be narrowed down to a person.
             </div>
           </div>
@@ -2941,6 +3031,37 @@ select.panel:hover { border-color: var(--accent); }
           </p>
         @endif
         <p class="mt-3 text-sm text-text-2" :show="regionGeoMsg()" style="display:none">{{ regionGeoMsg() }}</p>
+      </div>
+
+      {{-- City geolocation (owner-only, off by default). Same shape and the same
+          rules as the region row above: two server @ifs, :checked + @change. --}}
+      <div class="p-5 panel site-settings-panel">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div style="max-width:60ch">
+            <div class="font-semibold text-sm">Record city</div>
+            <div class="mt-0.5 text-text-3 text-xs">
+              Off by default. With it on, this site records the city a visit came from, along with its state or province.
+              The city's name only, never coordinates or a postcode, and the IP is still discarded. Cities with fewer than
+              {{ REGION_FLOOR }} visitors are reported together as "Other", so a small town cannot be narrowed down to a person.
+            </div>
+          </div>
+          @if (cityGeoAllowed)
+            <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
+              <input type="checkbox" :checked="cityGeoOn()" :disabled="cityGeoBusy()" @change="toggleCityGeo">
+              <span>Record cities</span>
+            </label>
+          @else
+            <span class="px-2 py-0.5 text-[11px] rounded-full mono" style="border: 1px solid var(--border); color: var(--text-3)">Not enabled on this server</span>
+          @endif
+        </div>
+        @if (!cityGeoAllowed)
+          <p class="mt-3 text-text-3 text-xs">
+            This server does not record cities. Whoever runs it can allow them by setting <span class="mono">geo.granularity</span>
+            to <span class="mono">'city'</span> in <span class="mono">config/privacy.ts</span> and installing a geolocation database that
+            carries cities, such as DB-IP City Lite.
+          </p>
+        @endif
+        <p class="mt-3 text-sm text-text-2" :show="cityGeoMsg()" style="display:none">{{ cityGeoMsg() }}</p>
       </div>
     @endif
 
@@ -3301,8 +3422,16 @@ select.panel:hover { border-color: var(--accent); }
           row filters the whole dashboard by it exactly as a country does. The
           "Other" row carries an empty `region`, so it filters to nothing rather
           than to a state — which is the point of it. --}}
-      @if (regionGeo)
+      @if (regionGeo || cityGeo)
         <BreakdownPanel :title="regionTitle" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
+      @endif
+
+      {{-- Top cities. Server-side @if for the same reason as regions: a site that
+          never opted in has no city values and should not grow an empty card.
+          `filterKey="city"` matches the FILTERS entry, and the "Other" row
+          carries an empty city so it filters to nothing. --}}
+      @if (cityGeo)
+        <BreakdownPanel :title="cityTitle" :rows="cityRows" labelKey="city" displayKey="label" valueKey="views" :max="maxCity" filterKey="city" empty="No city data yet. If this stays empty, your server is running the country-level geo database, which carries no cities." />
       @endif
 
       {{-- Devices --}}

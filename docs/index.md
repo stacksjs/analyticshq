@@ -15,7 +15,7 @@ hero:
       link: /privacy
 features:
   - title: Privacy-first collection
-    details: No cookies, no persistent cross-day visitor identity, no raw IP storage, and no city tracking.
+    details: No cookies, no persistent cross-day visitor identity, no raw IP storage, and no location finer than country unless a site opts in.
   - title: Useful product analytics
     details: Pages, sources, campaigns, events, goals, funnels, revenue, realtime traffic, and Web Vitals.
   - title: Portable by design

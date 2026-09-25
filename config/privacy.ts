@@ -17,11 +17,11 @@
  * These are not neutral knobs. The defaults here are the privacy posture the
  * comparison pages claim, so changing one is a change to what we tell visitors:
  *
- * - `geo.granularity: 'country'` — `/compare/umami` and `/compare/plausible`
- *   both say country by default, region only if a site turns it on, and never
- *   city. Raising this to `'region'` does not make those false — it lets site
- *   owners opt in, which is what they already describe — but lowering the
- *   DEFAULT, or reaching city, would.
+ * - `geo.granularity` — the RECORDED default is country for every site. The
+ *   ceiling permits region and city, but each is a per-site opt-in
+ *   (`sites.region_geo`, `sites.city_geo`) that is off until the site's owner
+ *   turns it on. The comparison pages say exactly that; lowering the per-site
+ *   defaults would make them false.
  * - `respectDnt: true` — `/compare/simple-analytics` credits them for honoring
  *   DNT and now claims parity.
  * - `collect.pageTitle` / `collect.screenSize` — both false, and both were
@@ -79,8 +79,10 @@ export interface PrivacyConfig {
      * The FINEST location this install will record. Not what it does record.
      *
      * - `'none'` — no location at all.
-     * - `'country'` — country, and the IP is discarded. The default.
+     * - `'country'` — country, and the IP is discarded.
      * - `'region'` — country, plus state or province for the sites that ask.
+     * - `'city'` — country, plus region and/or city for the sites that ask.
+     *   The default.
      *
      * Resolution is local: a CDN edge header when one is present, otherwise a
      * database on this machine (`app/Analytics/geo.ts`). It used to be CDN
@@ -88,26 +90,27 @@ export interface PrivacyConfig {
      * host without a CDN in front of it — including this one, for the entire
      * life of the product.
      *
-     * ## `'region'` is a ceiling, not a switch
+     * ## This is a ceiling, not a switch
      *
-     * Setting this to `'region'` turns nothing on by itself. It permits site
-     * owners to opt in (`sites.region_geo`, default false), and each of them has
-     * to. An operator hosting analyticshq for other people holds the whole
-     * instance at `'country'` by leaving this alone, which is a decision a
-     * per-site setting could not express on its own.
+     * Setting `'region'` or `'city'` turns nothing on by itself. It permits site
+     * owners to opt in (`sites.region_geo`, `sites.city_geo`, both default
+     * false), and each of them has to. An operator hosting analyticshq for other
+     * people holds the whole instance at `'country'` (or `'region'`) by setting
+     * it here, which is a decision a per-site setting could not express on its
+     * own. Ranked, so `'city'` also permits region: see `geoPermits`.
      *
-     * It also does nothing without a database that carries subdivisions — the
-     * default DB-IP country file does not. Both halves are deliberate: a flag
-     * flipped by accident, on either side, records no regions.
+     * It also does nothing without a database that carries subdivisions and
+     * cities — DB-IP's country file does not. The deploy workflow fetches City
+     * Lite unless told otherwise.
      *
-     * ## There is still no city
+     * ## City is a name, and nothing finer
      *
-     * Not as a value here and not anywhere below it. City was removed in #10/#7
-     * along with page titles and screen sizes, and `regionFromIp` reads the
-     * first subdivision and has no path to a city name. `/compare/plausible`
-     * and `/compare/umami` still say so.
+     * No coordinates, no postcode, no accuracy radius: `cityFromIp` reads the
+     * city's English name and never the record's location block. City rows get
+     * the same per-row disclosure floor as regions (`minSegmentSize`), so a
+     * town with a handful of visitors is folded into "Other" rather than named.
      */
-    granularity: 'none' | 'country' | 'region'
+    granularity: 'none' | 'country' | 'region' | 'city'
   }
 
   /**
@@ -183,15 +186,16 @@ export default {
   sessionWindowMinutes: 30,
 
   geo: {
-    // 'region' is a CEILING, not a switch: it permits site owners to opt in, and
-    // every site is off until its owner does (sites.region_geo defaults to
-    // false). So the location this product actually records by default is still
-    // the country, which is what the comparison pages and PRIVACY.md claim.
+    // 'city' is a CEILING, not a switch: it permits site owners to opt into
+    // region and city, and every site is off until its owner does
+    // (sites.region_geo and sites.city_geo both default to false). So the
+    // location this product actually records by default is still the country,
+    // which is what the comparison pages and PRIVACY.md say.
     //
-    // Set to 'country' to take the option away from site owners entirely, or to
-    // 'none' to record no location at all. Neither is needed to keep a site at
-    // country — that is already where every site starts.
-    granularity: 'region',
+    // Set to 'region' to take city away from site owners, 'country' to take
+    // both, or 'none' to record no location at all. None of those is needed to
+    // keep a site at country: that is already where every site starts.
+    granularity: 'city',
   },
 
   respectDnt: true,

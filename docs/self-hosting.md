@@ -31,7 +31,7 @@ At minimum, configure the application URL and key, PostgreSQL connection, mail d
 
 ## Geolocation database
 
-The deploy workflow can install the DB-IP Country Lite database. Set `ANALYTICSHQ_GEO_DB` to override its location. Region collection requires the City Lite database format and the installation's explicit region setting.
+The deploy workflow installs the DB-IP City Lite database, falling back to Country Lite if it cannot be fetched. Set the `ANALYTICSHQ_GEO_CITY` repository variable to `false` to ship Country Lite instead, and `ANALYTICSHQ_GEO_DB` to override the file's location. Region and city collection require City Lite, a `geo.granularity` that permits them, and each site's own opt-in. `/api/health` reports `geoRegion` and `geoCity` so you can confirm what the installed file can answer.
 
 ## Processes
 

@@ -126,11 +126,11 @@ export const competitors: Record<string, Competitor> = {
     meta: {
       canonical: 'https://analyticshq.org/compare/fathom',
       title: 'analyticshq vs Fathom Analytics - two cookieless tools compared',
-      description: 'Both privacy-first and cookieless. Where analyticshq differs from Fathom: open source, self-hostable on your own PostgreSQL, and geo that stops at country by default and never reaches a city.',
+      description: 'Both privacy-first and cookieless. Where analyticshq differs from Fathom: open source, self-hostable on your own PostgreSQL, and geo that stops at country by default, with region and city only for the sites that opt in.',
     },
     kicker: 'analyticshq vs Fathom',
     h1: 'Two cookieless tools. One you can host yourself.',
-    intro: 'Fathom is a respected, privacy-first analytics product: cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and geo you set yourself: country by default, state and province only if you ask, and never a city.',
+    intro: 'Fathom is a respected, privacy-first analytics product: cookieless, exact, and easy on the eye. analyticshq shares those foundations and adds open source, full data ownership in your own PostgreSQL, and geo you set yourself: country by default, with state, province and city only if you ask, per site.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Fathom vs analyticshq',
     whyHeading: 'Where analyticshq goes further.',
@@ -139,7 +139,7 @@ export const competitors: Record<string, Competitor> = {
     rows: [
       { dim: 'Source', them: 'Closed-source SaaS', us: 'Open source, and you can read every line.' },
       { dim: 'Where your data lives', them: 'Fathom’s infrastructure, reports handed back to you', us: 'Your own PostgreSQL — you hold the raw events, not just charts.' },
-      { dim: 'Geography', them: 'City-level location', us: 'Country by default, regions opt-in per site, never city.' },
+      { dim: 'Geography', them: 'City-level location', us: 'Country by default. Region and city opt-in per site, never coordinates.' },
       { dim: 'Cookies and consent', them: 'Cookieless, no banner', us: 'Cookieless, no banner — same footing here.' },
       { dim: 'Revenue tracking', them: 'Per-event value with currency', us: 'Goals and events today; per-event revenue on the roadmap.' },
       { dim: 'Hosting and EU', them: 'Managed SaaS with EU Isolation for EU visitors', us: 'Self-host anywhere, or run it in the region you choose.' },
@@ -147,12 +147,12 @@ export const competitors: Record<string, Competitor> = {
     ],
     reasons: [
       { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
-      { n: '02', h: 'Country by default, never city', b: 'Fathom resolves visitors to city level. analyticshq resolves country on your own server and stops there unless you turn on state and province yourself, per site. City is not an option at any setting.' },
+      { n: '02', h: 'Country by default, city only if you ask', b: 'Fathom resolves every visitor to city level. analyticshq resolves country on your own server and stops there unless you turn on state and province, or city, yourself, per site. Even then it records a place name, never coordinates, and small towns are folded into Other so nobody can be singled out.' },
       { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; analyticshq trades that polish for openness and full data ownership.' },
     ],
     metrics: [
       { v: 'Open', l: 'Source you can read and self-host, versus a closed SaaS.' },
-      { v: 'Country', l: 'Geo stops at country unless you opt a site into regions. Never city.' },
+      { v: 'Country', l: 'Geo stops at country unless you opt a site into region or city. Never coordinates.' },
       { v: 'Your DB', l: 'Raw events land in your PostgreSQL, not a vendor’s.' },
     ],
     related: [
@@ -168,7 +168,7 @@ export const competitors: Record<string, Competitor> = {
     meta: {
       canonical: 'https://analyticshq.org/compare/plausible',
       title: 'analyticshq vs Plausible - privacy-first analytics, compared',
-      description: 'Two cookieless, privacy-first analytics tools compared. Where analyticshq goes further: your own PostgreSQL database, and geolocation that stops at country by default and never reaches a city.',
+      description: 'Two cookieless, privacy-first analytics tools compared. Where analyticshq goes further: your own PostgreSQL database, and geolocation that stops at country by default, with region and city opt-in per site.',
     },
     kicker: 'analyticshq vs Plausible',
     h1: 'Two privacy-first tools. One keeps your data in your database.',
@@ -186,7 +186,7 @@ export const competitors: Record<string, Competitor> = {
     rows: [
       { dim: 'Cookies and consent', them: 'Cookieless, no banner — genuinely privacy-first', us: 'Cookieless, no banner — the same baseline.' },
       { dim: 'Where your data lives', them: 'Plausible Cloud hosts it on their EU servers', us: 'Your own PostgreSQL database, wherever you run it.' },
-      { dim: 'Geolocation', them: 'Resolves to city level', us: 'Country by default. State and province only if you switch it on. Never city.' },
+      { dim: 'Geolocation', them: 'Resolves to city level', us: 'Country by default. State, province and city only if you switch them on, per site.' },
       { dim: 'Accuracy', them: 'Exact, no sampling', us: 'Exact, no sampling — the same.' },
       { dim: 'Visitor identity', them: '24-hour rotating salt', us: '24-hour rotating, per-site hash — the same.' },
       { dim: 'Ecosystem', them: 'Standalone SaaS, self-hostable', us: 'Native to the Stacks toolchain: Postgres, queues, deploy.' },
@@ -194,11 +194,11 @@ export const competitors: Record<string, Competitor> = {
     ],
     reasons: [
       { n: '01', h: 'Your data, in your own database', b: 'Plausible is a great cookieless tool, but on Plausible Cloud your analytics live on their servers. analyticshq writes every event to a PostgreSQL table you own and can query directly — no separate store to trust.' },
-      { n: '02', h: 'You decide how precise, and city is not on the menu', b: 'Plausible now resolves visitor location to city level, for everyone. analyticshq resolves country by default and lets a site owner opt in to state and province if they need it, a decision you make per site and one that stays off until you make it. Neither setting reaches a city.' },
+      { n: '02', h: 'You decide how precise', b: 'Plausible resolves visitor location to city level, for everyone. analyticshq resolves country by default and lets a site owner opt in to state and province, or city, if they need it: a decision you make per site and one that stays off until you make it. Cities with only a handful of visitors are reported together as Other.' },
       { n: '03', h: 'Part of your stack, not another service', b: 'analyticshq runs inside the Stacks toolchain, on the same Postgres, queue, and deploy you already operate. There is no extra analytics service to run alongside your app.' },
     ],
     metrics: [
-      { v: 'Country', l: 'Country by default, regions opt-in per site. No city or coordinates, ever.' },
+      { v: 'Country', l: 'Country by default, region and city opt-in per site. No coordinates, ever.' },
       { v: 'Your Postgres', l: 'Every event lands in a database you own, not a managed store.' },
       { v: '24h', l: 'Rotating per-site hash: no cross-day and no cross-site identity.' },
     ],
@@ -361,7 +361,7 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Bounce rate', them: 'Not reported', us: 'Bounce rate on every page and entry point' },
       { dim: 'Entry and exit pages', them: 'Not reported', us: 'Entry and exit paths, per session' },
       { dim: 'Goals and conversions', them: 'Events, but no funnels or conversion value', us: 'One-line analyticshq() goals with conversion rate and value' },
-      { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country resolved on your own server, with regions opt-in per site' },
+      { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country resolved on your own server, with region and city opt-in per site' },
       // Was "DNT respect is on the roadmap" until #8 shipped. Kept honest in
       // both directions: they still deserve the credit for doing it first.
       { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Honored too, by default — DNT and Global Privacy Control' },
@@ -405,7 +405,7 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
       { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'No per-person view. Reports are aggregate, full stop.' },
       { dim: 'Cross-session identity', them: 'identify() stitches a user’s sessions across time', us: 'No identify(), no distinct-ID stitching, by design.' },
-      { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country by default, regions opt-in, never city. Resolved locally, IP discarded.' },
+      { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country by default, region and city opt-in. Resolved locally, IP discarded.' },
       { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes — Postgres-native, self-hostable, Stacks-integrated.' },
       { dim: 'Cookies & consent', them: 'Cookieless, no banner needed', us: 'Cookieless, no banner needed.' },
     ],
@@ -417,7 +417,7 @@ export const competitors: Record<string, Competitor> = {
     metrics: [
       { v: '24h', l: 'ID rotation window, versus Umami’s monthly session salt.' },
       { v: '0', l: 'Session recordings, heatmaps, or individual profiles — ever.' },
-      { v: 'Country', l: 'Geo granularity by default. Regions are opt-in per site, city never.' },
+      { v: 'Country', l: 'Geo granularity by default. Region and city are opt-in per site.' },
     ],
     related: [
       { slug: 'plausible', name: 'vs Plausible', desc: 'Two aggregate-first tools, side by side.' },

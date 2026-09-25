@@ -15,9 +15,9 @@ The browser tracker records page paths, referrers, campaign parameters, device a
 
 ## What it does not collect
 
-AnalyticsHQ does not set analytics cookies. It does not store raw IP addresses, page titles, screen dimensions, or city names. A visitor identifier is hashed with a site-specific daily salt, which prevents durable cross-day profiles.
+AnalyticsHQ does not set analytics cookies. It does not store raw IP addresses, page titles, screen dimensions, or coordinates. A visitor identifier is hashed with a site-specific daily salt, which prevents durable cross-day profiles.
 
-Region tracking is optional. The installation operator must permit it, the site owner must enable it, and the local geolocation database must contain subdivision data. City tracking has no supported path.
+Region and city tracking are optional. The installation operator must permit them, the site owner must enable them per site, and the local geolocation database must contain subdivision and city data. Cities with fewer visitors than the disclosure floor are reported together as Other.
 
 ## Main concepts
 

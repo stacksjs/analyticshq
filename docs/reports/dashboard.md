@@ -21,9 +21,9 @@ Referrers and campaign reports cover source, medium, campaign, term, and content
 
 ## Technology and geography
 
-Device, browser, operating system, and country are derived without storing raw user-agent strings or IP addresses. Region rows appear only when both the installation and the site have enabled region collection.
+Device, browser, operating system, and country are derived without storing raw user-agent strings or IP addresses. Region rows appear only when both the installation and the site have enabled region collection, and city rows (`San Diego, CA`) only when they have enabled city collection. Clicking a region narrows the cities panel to that state.
 
-Selecting the United States on the country map applies `country=US`; the region panel then narrows to US states automatically.
+Selecting the United States on the country map applies `country=US`; the region and city panels then narrow to the US automatically.
 
 ## Realtime
 

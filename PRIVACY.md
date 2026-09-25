@@ -21,7 +21,7 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   date, the id **rotates every 24h** — activity cannot be linked across days.
   Because `siteId` is in the hash, the id is **per-site** — the same person on
   two sites gets two unrelated ids, so there is **no cross-site identity**.
-- **Country geolocation by default, region only if you turn it on, city never.**
+- **Country geolocation by default. Region and city only if you turn them on.**
   Country is resolved on your own server, by an IP-to-country database held on
   that machine, and the IP is discarded in the same breath it is hashed into the
   visitor id. Nothing is sent to a third party to ask where a visitor is. (If
@@ -31,24 +31,29 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   product whose own production host has nothing upstream of it.)
 
   A site owner may opt that site into **region** (state or province, ISO 3166-2)
-  and nothing finer. **It is off for every site until that site's owner turns it
-  on**, which is what makes country the location this product records by default.
+  and, separately, into **city** (the city's name, stored with its region as
+  `US-CA:San Diego`). **Both are off for every site until that site's owner turns
+  them on**, which is what makes country the location this product records by
+  default. A site that opts into city records its region too, since the city
+  value already names it.
 
-  The install has to permit it as well (`geo.granularity` in
-  `config/privacy.ts`, which allows region by default and can be set to
-  `'country'` to take the choice away from site owners, or `'none'` to record no
-  location at all), and the server has to be running a geolocation database that
-  carries subdivisions. The default database does not, so a default install
-  records no regions whatever a site's setting says.
+  The install has to permit them as well (`geo.granularity` in
+  `config/privacy.ts`, which allows city, and therefore region, by default; set
+  it to `'region'` to take city away from site owners, `'country'` to take both,
+  or `'none'` to record no location at all), and the server has to be running a
+  geolocation database that carries subdivisions and cities. DB-IP's country
+  file does not; the deploy workflow ships City Lite unless
+  `ANALYTICSHQ_GEO_CITY=false`.
 
-  Region rows are subject to the disclosure floor: any state with fewer than
-  `minSegmentSize` visitors (5 by default) is reported as "Other" rather than
-  named.
+  Region and city rows are subject to the disclosure floor: any state or city
+  with fewer than `minSegmentSize` visitors (5 by default) is reported as
+  "Other" rather than named.
 
-  **City and precise coordinates are never collected, at any setting.** There is
-  no configuration value, database read, or code path that reaches one. This is
-  still *stricter* than Plausible/Fathom, which resolve every visitor to city
-  level with no way to turn it down.
+  **Precise coordinates are never collected, at any setting.** City is a place
+  name and nothing finer: no latitude or longitude, no accuracy radius, no
+  postcode. `cityFromIp` reads the city's English name and never the record's
+  location block. This remains stricter than Plausible/Fathom, which resolve
+  every visitor to city level with no way to turn it down.
 - **No URL query strings or fragments** are collected from tracked pages.
 
 ## What we will never build
@@ -62,8 +67,8 @@ changed first.
 - **Heatmaps**
 - **Individual visitor profiles / per-person session timelines**
 - **`identify()` / distinct-user IDs / cross-session identity stitching**
-- **City / precise geolocation / coordinates**: the geo line stops at region
-  (state or province), and region itself is off unless a site owner opts in
+- **Precise geolocation / coordinates / postcodes**: the geo line stops at the
+  city's name, and region and city are each off unless a site owner opts in
 - **Any cookie, `localStorage`, or device-persistent identifier**
 - **Retargeting, ad-network, or cross-site tracking**
 
@@ -73,7 +78,8 @@ changed first.
 real tracker/ingest source and the dependency manifest:
 
 - the tracker contains no cookie/storage APIs,
-- the ingest populates `country` only (never city/region),
+- the ingest populates `region` and `city` only through their gated lookups,
+  and only for a site that opted in on an install that permits it,
 - no session-replay / heatmap / fingerprint / profiling library is declared,
 - the visitor hash rotates daily, is per-site, and never leaks the raw IP/UA.
 

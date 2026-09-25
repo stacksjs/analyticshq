@@ -82,50 +82,62 @@ jobs:
       # Two months are tried because the file is published on the 1st: a deploy
       # in the first hours of a month can 404 on the current one.
       #
-      # WHICH DATABASE IS FETCHED IS WHAT DECIDES WHETHER REGIONS CAN BE
-      # RECORDED AT ALL. The country file carries no subdivisions, so with it in
-      # place a site that opted into region geo records nothing, whatever its
-      # setting says — that is the third gate described in app/Analytics/geo.ts,
-      # and it is the one no flag can flip by accident.
+      # WHICH DATABASE IS FETCHED IS WHAT DECIDES WHETHER REGIONS AND CITIES
+      # CAN BE RECORDED AT ALL. The country file carries neither, so with it in
+      # place a site that opted into region or city geo records nothing,
+      # whatever its setting says. That is the third gate described in
+      # app/Analytics/geo.ts.
       #
-      # Set the ANALYTICSHQ_GEO_CITY repository variable to "true" to fetch
-      # DB-IP's City Lite instead. Only do that alongside geo.granularity:
-      # 'region' in config/privacy.ts — on its own it changes nothing, since a
-      # site still has to opt in and the install still has to permit it.
+      # City Lite is fetched BY DEFAULT. It answers country exactly as the
+      # country file does, and it is what lets a site owner who ticks "Record
+      # regions" or "Record cities" actually get data. It records nothing extra
+      # on its own: every site is off until its owner opts in (sites.region_geo,
+      # sites.city_geo), and config/privacy.ts caps the whole install.
       #
-      # The City file is a much larger download on a monthly cadence, which is
-      # why it is opt-in rather than always fetched: every deploy would pay for
-      # it, and the default product does not use it.
+      # Set the ANALYTICSHQ_GEO_CITY repository variable to "false" to ship the
+      # smaller country file instead. The City file is a larger download (tens
+      # of MB compressed) and a larger resident database per process, which is
+      # the cost of having it available.
       - name: Fetch the IP geolocation database
         continue-on-error: true
         run: |
           set -uo pipefail
           mkdir -p storage/geo
-          if [ "${{ vars.ANALYTICSHQ_GEO_CITY }}" = "true" ]; then
-            slug=dbip-city-lite
-            # Same path the app reads by default, so nothing has to know which
-            # of the two is on disk. ANALYTICSHQ_GEO_DB can still override it.
-            echo "Fetching the CITY database — regions can be recorded on this install."
+          # Candidates in order of preference. The country file is always the
+          # last resort: a City Lite outage should cost regions and cities, not
+          # country as well.
+          if [ "${{ vars.ANALYTICSHQ_GEO_CITY }}" = "false" ]; then
+            slugs="dbip-country-lite"
+            echo "ANALYTICSHQ_GEO_CITY=false: fetching the COUNTRY database. No region or city can be recorded on this install."
           else
-            slug=dbip-country-lite
+            slugs="dbip-city-lite dbip-country-lite"
+            echo "Fetching the CITY database. Regions and cities can be recorded for the sites that opt in."
           fi
+          # Same path the app reads by default whichever file lands, so nothing
+          # has to know which one is on disk. ANALYTICSHQ_GEO_DB can still
+          # override it.
           dest=storage/geo/dbip-country-lite.mmdb
-          for month in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
-            url="https://download.db-ip.com/free/${slug}-${month}.mmdb.gz"
-            echo "Trying ${url}"
-            # Staged through a temp file so a mid-stream failure cannot leave a
-            # truncated database in place looking like a successful fetch. The
-            # size floor catches an error page served with a 200.
-            if curl -fsSL --max-time 300 "$url" -o /tmp/dbip.mmdb.gz && gunzip -f /tmp/dbip.mmdb.gz; then
-              if [ "$(wc -c < /tmp/dbip.mmdb)" -gt 1000000 ]; then
-                mv /tmp/dbip.mmdb "$dest"
-                ls -la "$dest"
-                exit 0
+          for slug in $slugs; do
+            for month in "$(date -u +%Y-%m)" "$(date -u -d '1 month ago' +%Y-%m)"; do
+              url="https://download.db-ip.com/free/${slug}-${month}.mmdb.gz"
+              echo "Trying ${url}"
+              # Staged through a temp file so a mid-stream failure cannot leave a
+              # truncated database in place looking like a successful fetch. The
+              # size floor catches an error page served with a 200.
+              if curl -fsSL --max-time 600 "$url" -o /tmp/dbip.mmdb.gz && gunzip -f /tmp/dbip.mmdb.gz; then
+                if [ "$(wc -c < /tmp/dbip.mmdb)" -gt 1000000 ]; then
+                  mv /tmp/dbip.mmdb "$dest"
+                  ls -la "$dest"
+                  if [ "$slug" != "dbip-city-lite" ] && [ "${{ vars.ANALYTICSHQ_GEO_CITY }}" != "false" ]; then
+                    echo "::warning::Could not fetch DB-IP City Lite; shipped the country database. Regions and cities will be empty until the next deploy."
+                  fi
+                  exit 0
+                fi
               fi
-            fi
-            rm -f /tmp/dbip.mmdb /tmp/dbip.mmdb.gz
+              rm -f /tmp/dbip.mmdb /tmp/dbip.mmdb.gz
+            done
           done
-          echo "::warning::Could not fetch the DB-IP ${slug} database; country will be empty for new pageviews."
+          echo "::warning::Could not fetch any DB-IP database; country will be empty for new pageviews."
           rm -f "$dest"
 
       # Attach deploys over SSH to the shared box (same DEPLOY_SSH_KEY authorized

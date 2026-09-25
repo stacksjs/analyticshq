@@ -19,7 +19,7 @@ Treat a share link as public information. Disable sharing when the intended audi
 
 ## Ownership
 
-Only the owner can change privacy-sensitive settings such as region collection, manage custom domains, delete the site's stored analytics, or delete the site itself.
+Only the owner can change privacy-sensitive settings such as region and city collection, manage custom domains, delete the site's stored analytics, or delete the site itself.
 
 ## Data deletion
 

@@ -24,8 +24,8 @@ describe('the defaults are the posture the comparison pages claim (#11)', () => 
   test('no site records anything finer than country without its owner acting', () => {
     // The claim on the comparison pages is about what is RECORDED, and that is
     // still country. What enforces it moved: `granularity` is the ceiling and
-    // now permits region, so the guarantee rests entirely on sites.region_geo
-    // defaulting to false. If that default ever flips, this test is the one that
+    // now permits region and city, so the guarantee rests entirely on
+    // sites.region_geo and sites.city_geo defaulting to false. If that default ever flips, this test is the one that
     // should stop the commit, not the config value above it.
     expect(privacy.geo.granularity).not.toBe('none')
     const migration = read('database/migrations/0000000051-add-opt-in-region-geo.sql')
@@ -53,26 +53,27 @@ describe('the defaults are the posture the comparison pages claim (#11)', () => 
     expect(privacy.retentionDays).toBe(0)
   })
 
-  test('there is no city option, by construction', () => {
-    // City is the line that does not move. Region became reachable — opt-in per
-    // site, off by default — but /compare/plausible and /compare/umami still
-    // contrast us with their city-level data, and nothing may make that false.
+  test('the ceiling is a declared level, and city is its finest', () => {
+    // City became reachable as an opt-in per site. The type still has to name
+    // every level, so a typo in the default cannot widen what an install permits.
     //
     // Comments are stripped FIRST, and that is the whole point of this test
-    // rather than a detail of it: the previous version sliced from the raw
-    // source at `indexOf('granularity:')`, which landed on the mention inside
-    // the docblock at the top of the file instead of on the type. It read sixty
-    // characters of prose and asserted they were not the word "region", so it
-    // passed no matter what the type said.
+    // rather than a detail of it: an earlier version sliced from the raw source
+    // at `indexOf('granularity:')`, which landed on the mention inside the
+    // docblock at the top of the file instead of on the type, so it read prose
+    // and passed no matter what the type said.
     const src = read('config/privacy.ts')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '')
     const decl = src.slice(src.indexOf('granularity:'), src.indexOf('granularity:') + 60)
-    expect(decl).toContain('granularity:')
-    expect(decl).not.toContain('city')
-    // Proves the slice is the type and not prose, so the assertion above is
-    // looking at something that could have failed.
-    expect(decl).toContain('region')
+    expect(decl).toContain("'none' | 'country' | 'region' | 'city'")
+  })
+
+  test('city needs its own per-site opt-in, off by default', () => {
+    // The recorded default is still country. What enforces that for city is the
+    // site column, exactly as for region.
+    const migration = read('database/migrations/0000000054-add-opt-in-city-geo.sql')
+    expect(migration).toContain('"city_geo" boolean NOT NULL DEFAULT false')
   })
 })
 
@@ -98,20 +99,24 @@ describe('the call sites read the config, not a literal (#11)', () => {
 
   test('region needs the install to permit it AND the site to ask', () => {
     // Either half alone must record nothing. The instance check comes first and
-    // returns before any query, so a default install pays nothing for a feature
-    // it has not enabled.
-    expect(routes).toContain("privacy.geo.granularity !== 'region'")
+    // returns before any query, so an install that does not permit it pays
+    // nothing for a feature it has not enabled.
+    expect(routes).toContain("geoPermits(privacy.geo.granularity, 'region')")
     expect(routes).toMatch(/siteWantsRegion\([\s\S]{0,40}\?\s*regionFromIp/)
   })
 
-  test('the ceiling permits region and the per-site default withholds it', () => {
-    // Raising the ceiling was deliberate: it lets a site owner turn regions on
-    // without an operator editing config first. It changes nothing on its own,
-    // and the two things that still have to be true are asserted elsewhere —
-    // the site's own flag (privacy-guardrails.test.ts) and a geolocation
-    // database that carries subdivisions (geo.test.ts).
-    expect(privacy.geo.granularity).toBe('region')
-    expect(routes).toContain("privacy.geo.granularity !== 'region'")
+  test('city needs the install to permit it AND the site to ask', () => {
+    expect(routes).toContain("geoPermits(privacy.geo.granularity, 'city')")
+    expect(routes).toMatch(/siteWantsCity\([\s\S]{0,40}\?\s*cityFromIp/)
+  })
+
+  test('the ceiling permits city and the per-site defaults withhold it', () => {
+    // Raising the ceiling was deliberate: it lets a site owner turn regions or
+    // cities on without an operator editing config first. It changes nothing on
+    // its own, and the two things that still have to be true are asserted
+    // elsewhere: the site's own flag (privacy-guardrails.test.ts) and a
+    // geolocation database that carries them (geo.test.ts).
+    expect(privacy.geo.granularity).toBe('city')
   })
 
   test('salt purging uses the configured window', () => {

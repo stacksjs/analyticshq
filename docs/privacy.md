@@ -14,8 +14,8 @@ Privacy behavior is declared centrally in `config/privacy.ts`. The defaults are 
 - Visitor hashes rotate with a site-specific daily salt.
 - Do Not Track and Global Privacy Control are respected.
 - Page titles and screen dimensions are not collected.
-- Geography is country-level unless a site explicitly opts into an installation that permits regions.
-- City data is not collected.
+- Geography is country-level unless a site explicitly opts into region or city on an installation that permits it.
+- Coordinates, postcodes and accuracy radii are never collected.
 
 ## Visitor identity
 
@@ -25,13 +25,13 @@ The collector uses request information only long enough to derive a daily, site-
 
 Location is resolved locally from a trusted CDN country header when present or from the configured DB-IP database. The IP is discarded after lookup.
 
-Region collection has three gates:
+Region and city collection each have three gates:
 
-1. `geo.granularity` must permit `region`.
-2. The site owner must enable `region_geo`.
-3. The configured database must contain subdivision data.
+1. `geo.granularity` must permit the level (`region`, or `city`, which also permits region).
+2. The site owner must enable `region_geo` or `city_geo`.
+3. The configured database must contain subdivision and city data (DB-IP City Lite).
 
-The default country database satisfies only country lookup. Small region rows are combined into `Other`.
+The country database satisfies only country lookup. A city is stored as its name with its region, for example `US-CA:San Diego`. Small region and city rows are combined into `Other`.
 
 ## Filter disclosure control
 

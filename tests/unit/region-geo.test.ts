@@ -3,8 +3,9 @@
  *
  * Country-only was an unconditional invariant (#7). Region is now reachable, and
  * everything that made loosening it acceptable is asserted here or in
- * `privacy-guardrails.test.ts`: three independent gates, a per-row floor that
- * the country breakdown does not need, and a city that is still unreachable.
+ * `privacy-guardrails.test.ts`: three independent gates and a per-row floor that
+ * the country breakdown does not need. City follows the same rules and is
+ * covered in `city-geo.test.ts`.
  *
  * The fold is tested as a real imported function rather than through either of
  * its callers. It used to be written twice — once in the endpoint, once in the
@@ -136,9 +137,10 @@ describe('both callers apply the same floor, from the same place', () => {
 
   test('the endpoint asks for regions with the floor switched on', () => {
     expect(routes).toContain("topDimension('/api/sites/{siteId}/regions', 'region', 'regions', { floorRows: true })")
-    // And no other dimension does: country deliberately has no per-row floor.
-    const others = [...routes.matchAll(/topDimension\('[^']+', '(\w+)'[^)]*floorRows/g)].map(m => m[1])
-    expect(others).toEqual(['region'])
+    // And only the sub-country dimensions do: country deliberately has no
+    // per-row floor, and city is floored for the same reason region is.
+    const floored = [...routes.matchAll(/topDimension\('[^']+', '(\w+)'[^)]*floorRows/g)].map(m => m[1])
+    expect(floored).toEqual(['region', 'city'])
   })
 })
 
@@ -148,8 +150,11 @@ describe('the dashboard panel is off until a site turns it on', () => {
   test('the panel is behind a server @if on the site setting', () => {
     // Not a :show. A site that never opted in has no region values at all and
     // should not grow a permanently empty card.
-    expect(view).toContain('@if (regionGeo)')
-    expect(view).toMatch(/@if \(regionGeo\)[\s\S]{0,400}<BreakdownPanel :title="regionTitle"/)
+    // Shown for a city opt-in too: a site recording cities records their
+    // region as well, and a Regions panel missing beside the Cities one would
+    // hide data the site is already collecting.
+    expect(view).toContain('@if (regionGeo || cityGeo)')
+    expect(view).toMatch(/@if \(regionGeo \|\| cityGeo\)[\s\S]{0,400}<BreakdownPanel :title="regionTitle"/)
   })
 
   test('clicking a country on the map narrows the regions panel to it', () => {
@@ -202,7 +207,7 @@ describe('the dashboard panel is off until a site turns it on', () => {
 
   test('the copy tells the truth about what the floor does', () => {
     const panel = view.slice(view.indexOf('Record state and province'), view.indexOf('Share this dashboard'))
-    expect(panel).toContain('never a city')
+    expect(panel).toContain('never coordinates')
     expect(panel).toContain('REGION_FLOOR')
   })
 })
@@ -210,10 +215,10 @@ describe('the dashboard panel is off until a site turns it on', () => {
 describe('the default posture is unchanged for everyone who does nothing', () => {
   test('the ceiling permits region, and a site still has to ask', () => {
     // "Default" is two settings here and only one of them moved. The install
-    // permits region so a site owner can switch it on unaided; the site itself
-    // is off until they do, which is why the recorded default is still country
-    // and why the comparison pages did not have to change again.
-    expect(privacy.geo.granularity).toBe('region')
+    // permits region (and city) so a site owner can switch it on unaided; the
+    // site itself is off until they do, which is why the recorded default is
+    // still country.
+    expect(['region', 'city']).toContain(privacy.geo.granularity)
     const sql = read('database/migrations/0000000051-add-opt-in-region-geo.sql')
     expect(sql).toContain('"region_geo" boolean NOT NULL DEFAULT false')
     // Nothing backfills the flag onto sites that already exist.

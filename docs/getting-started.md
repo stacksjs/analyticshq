@@ -41,7 +41,7 @@ curl https://analyticshq.org/api/health
 - Create a [goal](/reports/goals-funnels) for a success page or custom event.
 - Add campaign parameters to acquisition links.
 - Enable revenue collection only where you have a meaningful transaction value.
-- Review [privacy controls](/privacy) before enabling optional region data.
+- Review [privacy controls](/privacy) before enabling optional region or city data.
 
 ## Troubleshooting
 

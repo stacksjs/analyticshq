@@ -24,25 +24,29 @@
  * so this is *stricter* than the CDN-header story it replaces: that one required
  * a CDN to be terminating your traffic and seeing every visitor.
  *
- * ## Country by default, region only if asked for twice
+ * ## Country by default, region and city only if asked for twice
  *
  * Country-only WAS an unconditional invariant here (issue #7, migration
  * `0000000011` which dropped the region and city columns). It is now the
- * default rather than the ceiling: a site owner can opt into region — state or
- * province, never city — and everything else stays where it was.
+ * default rather than the ceiling: a site owner can opt into region (state or
+ * province) and, separately, into city. Neither is on for any site until its
+ * owner turns it on.
  *
- * Two independent things have to be true before a single region is recorded,
- * which is the point:
+ * Two independent things have to be true before a single region or city is
+ * recorded, which is the point:
  *
- *  1. The site has `region_geo` on. Off for every site that exists, and off for
- *     every site created after this, because the column defaults to false.
- *  2. The operator installed a database that HAS subdivisions. The default file
- *     is still DB-IP's country-level one, which carries none, so a flag flipped
- *     without a deliberate change to the deployment records nothing.
+ *  1. The site has `region_geo` (or `city_geo`) on, and the install's
+ *     `geo.granularity` ceiling reaches that level. Both columns default to
+ *     false, for every site that exists and every site created after.
+ *  2. The operator installed a database that HAS subdivisions and cities. DB-IP's
+ *     country-level file carries neither, so a flag flipped on an install
+ *     running it records nothing.
  *
- * City is not reachable from either. `regionFromIp` reads `subdivisions[0]` and
- * nothing else, `tests/unit/privacy-guardrails.test.ts` still fails CI if a
- * `city` column reappears, and the comparison pages still say no city, ever.
+ * City is the name of the place only: never coordinates, never a postcode, and
+ * never anything below the city. `cityFromIp` reads `city.names.en` and nothing
+ * else from the record, and a city row is subject to the same per-row disclosure
+ * floor as a region (`app/Analytics/cities.ts`), because a town with two
+ * visitors is a smaller haystack than any state.
  *
  * ## The database file
  *
@@ -54,9 +58,11 @@
  * overrides the path.
  *
  * DB-IP's City Lite file is the same format and license and is a drop-in for it:
- * point `ANALYTICSHQ_GEO_DB` at that instead and `regionFromIp` starts
- * answering. It is a much larger download, which is why it is not the default
- * and why fetching it is opt-in in the deploy workflow.
+ * with that file on disk `regionFromIp` and `cityFromIp` start answering, and
+ * `countryFromIp` keeps working unchanged. The deploy workflow fetches City Lite
+ * by default (`ANALYTICSHQ_GEO_CITY=false` falls back to the country file), so
+ * a site owner who turns regions or cities on gets data without an operator
+ * having to find a setting first.
  *
  * Attribution is required by the license and is rendered on /features/geography.
  */
@@ -67,6 +73,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { Reader } from 'mmdb-lib'
 import { normCountry } from './country'
+import SUBDIVISIONS from './subdivisions.json'
 
 /**
  * Shape we read out of whichever database is installed. Everything else is
@@ -82,8 +89,36 @@ import { normCountry } from './country'
 interface GeoRecord {
   country?: { iso_code?: string }
   registered_country?: { iso_code?: string }
-  /** ISO 3166-2 subdivisions, most general first. Only the first is read. */
+  /**
+   * Subdivisions, most general first. Only the first is read.
+   *
+   * `iso_code` is there in MaxMind's files and ABSENT from DB-IP's: a DB-IP City
+   * Lite record says `[{ names: { en: 'California' } }]` and nothing else. See
+   * `regionOf` for what that cost and how the name is turned into a code.
+   */
   subdivisions?: Array<{ iso_code?: string, names?: { en?: string } }>
+  /** The city. Only its English name is read; `location` is never touched. */
+  city?: { names?: { en?: string } }
+}
+
+/**
+ * Location granularities, coarsest first. `config/privacy.ts` sets the finest
+ * one an install permits; a site then opts into region or city on its own.
+ */
+export const GEO_LEVELS = ['none', 'country', 'region', 'city'] as const
+export type GeoLevel = typeof GEO_LEVELS[number]
+
+/**
+ * Does an install whose ceiling is `ceiling` permit recording at `level`?
+ *
+ * By rank rather than by equality, which is what the old `=== 'region'` checks
+ * became wrong about the moment a finer level existed: an install that permits
+ * city permits region too. An unknown ceiling permits nothing finer than
+ * `'none'` — a typo in config must fail closed.
+ */
+export function geoPermits(ceiling: string, level: GeoLevel): boolean {
+  const have = (GEO_LEVELS as readonly string[]).indexOf(ceiling)
+  return have >= 0 && have >= GEO_LEVELS.indexOf(level)
 }
 
 /**
@@ -135,6 +170,16 @@ export function resetGeoCache(): void {
 }
 
 /**
+ * Swap in a reader. Tests only: the real database is a monthly download that CI
+ * does not have, and the city path needs a record with a city in it to be
+ * exercised at all. Anything with a `get(ip)` returning DB-IP's record shape
+ * will do. `resetGeoCache()` puts the file-backed reader back.
+ */
+export function setGeoReaderForTests(r: { get: (ip: string) => GeoRecord | null } | null): void {
+  cached = r ? (r as unknown as MmdbReader<GeoRecord>) : false
+}
+
+/**
  * Is this a syntactically complete address?
  *
  * Worth checking explicitly, because the reader is lenient in a way that
@@ -166,8 +211,38 @@ function isWellFormed(addr: string): boolean {
  * input. None of them are errors worth distinguishing at the call site — they
  * all mean "no country recorded".
  */
+/**
+ * The bare address out of the spellings proxies actually send.
+ *
+ * `x-forwarded-for` and `x-real-ip` are not always a bare address. Seen in the
+ * wild: an IPv4-mapped IPv6 address (`::ffff:203.0.113.7`, which is what a
+ * dual-stack socket reports for a v4 peer), a v4 address with the port still on
+ * it (`203.0.113.7:51234`), and a bracketed v6 address with a port
+ * (`[2001:db8::1]:443`). Each of those used to fail `isWellFormed` or miss the
+ * database, and every one of them is a real visitor recorded with no location.
+ *
+ * Anything that does not match one of those shapes is returned as it came, for
+ * `isWellFormed` to accept or refuse.
+ */
+export function normalizeIp(ip: string): string {
+  let addr = (ip || '').trim()
+  // [v6]:port or [v6]
+  const bracketed = /^\[([0-9a-f:.]+)\](?::\d+)?$/i.exec(addr)
+  if (bracketed)
+    addr = bracketed[1]
+  // v4:port — exactly one colon, so a v6 address is never mistaken for it.
+  const v4port = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(addr)
+  if (v4port)
+    addr = v4port[1]
+  // ::ffff:a.b.c.d — the v4 address a dual-stack listener wraps it in.
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(addr)
+  if (mapped)
+    addr = mapped[1]
+  return addr
+}
+
 function lookup(ip: string): GeoRecord | null {
-  const addr = (ip || '').trim()
+  const addr = normalizeIp(ip)
   // The pre-rpx-0.11.46 sentinel, and what a same-box request genuinely is.
   // Skipped before touching the database so a misconfigured proxy shows up as
   // no data rather than as a plausible-looking country.
@@ -189,11 +264,7 @@ function lookup(ip: string): GeoRecord | null {
 }
 
 export function countryFromIp(ip: string): string | null {
-  const found = lookup(ip)
-  // `registered_country` is the fallback the format provides for addresses
-  // whose assignment is known but whose location is not.
-  const iso = found?.country?.iso_code ?? found?.registered_country?.iso_code
-  return iso ? normCountry(iso) : null
+  return countryOf(lookup(ip))
 }
 
 /**
@@ -225,13 +296,48 @@ export function countryFromIp(ip: string): string | null {
  * comparison pages say region, and a county is neither.
  */
 export function regionFromIp(ip: string): string | null {
-  const found = lookup(ip)
+  return regionOf(lookup(ip))
+}
+
+/**
+ * The country out of a record, normalized, or null. `registered_country` is the
+ * fallback the format provides for addresses whose assignment is known but whose
+ * location is not.
+ */
+function countryOf(found: GeoRecord | null): string | null {
   const iso = found?.country?.iso_code ?? found?.registered_country?.iso_code
-  const country = iso ? normCountry(iso) : null
+  return iso ? normCountry(iso) : null
+}
+
+/**
+ * DB-IP subdivision name -> ISO 3166-2 subdivision code, per country.
+ * Generated by `scripts/geo/build-subdivisions.ts` from the City Lite file.
+ */
+const SUBDIVISION_CODES = SUBDIVISIONS as Record<string, Record<string, string>>
+
+/**
+ * `US-CA` out of a record, or null. The body of `regionFromIp`.
+ *
+ * ## The code, or the name looked up
+ *
+ * This used to read `subdivisions[0].iso_code` and nothing else. DB-IP's City
+ * Lite, the only database the deploy fetches and the one the docs point at,
+ * does not carry that field: its subdivisions have an English name and no code.
+ * So region geo returned null for every address with every database this
+ * product ships, and a site that opted in recorded no states at all.
+ *
+ * Now the code is used when the file has one (MaxMind's GeoLite2 does), and
+ * otherwise the English name is looked up in a table generated from the City
+ * Lite file itself. A name the table does not know is null, never a guess.
+ */
+function regionOf(found: GeoRecord | null): string | null {
+  const country = countryOf(found)
   if (!country)
     return null
 
-  const sub = found?.subdivisions?.[0]?.iso_code?.trim()
+  const first = found?.subdivisions?.[0]
+  const name = first?.names?.en?.trim()
+  const sub = first?.iso_code?.trim() || (name ? SUBDIVISION_CODES[country]?.[name] : undefined)
   if (!sub)
     return null
   // Upper case and A-Z0-9 only: ISO 3166-2 subdivision codes are one to three
@@ -244,6 +350,66 @@ export function regionFromIp(ip: string): string | null {
   return `${country}-${code}`
 }
 
+/** Longest city name kept. The column is varchar(100); the prefix takes seven. */
+export const CITY_NAME_MAX = 80
+
+/**
+ * The city an IP resolves to, as `US-CA:San Diego` — or `null`.
+ *
+ * ## Why the compound value
+ *
+ * A bare city name is ambiguous in exactly the way a bare subdivision code is:
+ * there are Springfields in a dozen states and a Paris in Texas. Prefixing the
+ * region (or, where the database has no subdivision for that country, the
+ * country alone: `SG:Singapore`) makes the value globally unique, so grouping
+ * by the column cannot merge two places, and a filter on one row cannot match
+ * another town of the same name. It also keeps the flag and the state on the
+ * row without a second column.
+ *
+ * ## Null is still the normal answer
+ *
+ * Every case `countryFromIp` returns null for, the country-level database (no
+ * `city` in any record), and addresses DB-IP places in a country but no city.
+ *
+ * ## What is read, and what is not
+ *
+ * `city.names.en`, trimmed, with control characters and the `:` separator
+ * removed, capped at {@link CITY_NAME_MAX}.
+ *
+ * A trailing parenthetical is dropped, and that is a privacy rule as much as a
+ * tidy one. DB-IP writes a NEIGHBOURHOOD there on about a fifth of its city
+ * names: "San Diego (La Jolla)", "Seattle (South Lake Union)", "Singapore
+ * (Orchard)". Kept, the setting called city would record districts, and one
+ * city would split into a hundred rows (San Diego alone appears under more than
+ * a hundred) that each fall under the disclosure floor. Dropped, every one of
+ * them is "San Diego". The record's `location` (latitude,
+ * longitude, accuracy radius) and `postal` are never read: the finest thing this
+ * product records is the name of a city.
+ */
+export function cityFromIp(ip: string): string | null {
+  const found = lookup(ip)
+  const place = regionOf(found) ?? countryOf(found)
+  if (!place)
+    return null
+
+  const raw = found?.city?.names?.en
+  if (typeof raw !== 'string')
+    return null
+  const name = raw
+    // The neighbourhood: "San Diego (La Jolla)" -> "San Diego".
+    .replace(/\s*\([^()]*\)\s*$/, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CITY_NAME_MAX)
+    .trim()
+  if (!name)
+    return null
+
+  return `${place}:${name}`
+}
+
 /**
  * Can the installed database answer region queries at all?
  *
@@ -253,4 +419,13 @@ export function regionFromIp(ip: string): string | null {
  */
 export function geoHasRegions(): boolean {
   return regionFromIp('8.8.8.8') !== null
+}
+
+/**
+ * Can the installed database answer city queries at all? `/api/health` reports
+ * it next to `geoRegion`, for the same reason: "I turned cities on and see none"
+ * is almost always the country database still being on disk.
+ */
+export function geoHasCities(): boolean {
+  return cityFromIp('8.8.8.8') !== null
 }
