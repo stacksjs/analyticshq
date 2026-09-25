@@ -56,7 +56,8 @@ import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, reg
 import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
 import { tzCookie, validTimeZone } from '../app/Support/timezone'
 import { listVisitors, timelinesEnabled, VISITOR_LIST_LIMIT, visitorTimeline } from '../app/Analytics/visitors'
-import { openLiveStream, pokeLive, sharedSnapshot } from '../app/Analytics/realtime'
+import { liveStats, maxStreams, openLiveStream, pokeLive, sharedSnapshot } from '../app/Analytics/realtime'
+import { capacityReport, coreCount, cpuLoadCheck, dbConnectionsCheck, disk, diskCheck, gatewayMemory, gatewayMemoryCheck, hostMemoryCheck, liveStreamsCheck, load15, loopbackConnections, loopbackPortsCheck, meminfo, portRangeSize } from '../app/Analytics/capacity'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -3779,6 +3780,39 @@ route.get('/api/sites/{siteId}/live', async (request: any) => {
 // because an optional lookup table went stale would be the wrong call. It stays
 // in the body so the answer is one request away when someone asks why country
 // is empty.
+// ---------------------------------------------------------------------------
+// Capacity (for StatusHQ)
+// ---------------------------------------------------------------------------
+// Whether it is time to add a server or a bigger one, in the Oh Dear health
+// schema that StatusHQ reads (app/Analytics/capacity.ts). The check names and
+// numbers describe the infrastructure, so it answers only to StatusHQ's
+// `oh-dear-health-check-secret` header (tokensMatch, constant time), and is off
+// (404) until ANALYTICSHQ_HEALTH_SECRET is set.
+route.get('/api/health/capacity', async (request: any) => {
+  const secret = String(process.env.ANALYTICSHQ_HEALTH_SECRET ?? '')
+  if (!secret)
+    return json({ error: 'Not found' }, 404)
+  if (!tokensMatch(String(request.headers?.get('oh-dear-health-check-secret') ?? ''), secret))
+    return json({ error: 'Forbidden' }, 403)
+
+  const mem = meminfo()
+  const gw = gatewayMemory()
+  const du = disk('/')
+  const report = await capacityReport([
+    () => liveStreamsCheck(liveStats().streams, maxStreams()),
+    () => loopbackPortsCheck(loopbackConnections() ?? 0, portRangeSize() ?? 28232),
+    () => gatewayMemoryCheck(gw.current, gw.high),
+    () => hostMemoryCheck(mem.totalKb, mem.availableKb),
+    () => cpuLoadCheck(load15(), coreCount()),
+    () => diskCheck(du.usedPct, du.freeGb),
+    async () => {
+      const row = (await pgq(`SELECT current_setting('max_connections')::int AS max, (SELECT count(*) FROM pg_stat_activity) AS used`, []))?.[0]
+      return dbConnectionsCheck(row ? Number(row.used) : null, row ? Number(row.max) : null)
+    },
+  ])
+  return new Response(JSON.stringify(report), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } })
+})
+
 // ---------------------------------------------------------------------------
 // Viewer preferences
 // ---------------------------------------------------------------------------
