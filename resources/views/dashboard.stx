@@ -2329,10 +2329,11 @@ onMount(() => {
   // server feeds as page views arrive (app/Analytics/realtime.ts), so a new
   // visitor shows up here within about a second rather than on the next poll.
   //
-  // Polling every 10s is the fallback, never the plan: for a browser without
-  // EventSource, a stream the server refused (a share-link viewer has no session,
-  // so the stream answers 401 and EventSource gives up), or a stream that went
-  // quiet. The server sends a `ping` every 8s, so 20s of silence means something
+  // Polling every 5s is the fallback, never the plan: for a browser without
+  // EventSource, a stream the server refused (a share-link viewer has no session
+  // and gets 401, and a server at its stream cap answers 503; EventSource gives
+  // up on both), or a stream that went quiet. Polls read a snapshot shared by
+  // everyone polling the site, so they stay cheap however many there are. The server sends a `ping` every 8s, so 20s of silence means something
   // in between is buffering or has dropped it, and polling at least keeps the
   // number moving.
   //
@@ -2358,7 +2359,7 @@ onMount(() => {
   const startPolling = () => {
     if (poll)
       return
-    poll = useInterval(tick, 10000)
+    poll = useInterval(tick, 5000)
     tick()
   }
 

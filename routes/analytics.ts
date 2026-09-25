@@ -56,7 +56,7 @@ import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, reg
 import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
 import { tzCookie, validTimeZone } from '../app/Support/timezone'
 import { listVisitors, timelinesEnabled, VISITOR_LIST_LIMIT, visitorTimeline } from '../app/Analytics/visitors'
-import { liveSnapshot, openLiveStream, pokeLive } from '../app/Analytics/realtime'
+import { openLiveStream, pokeLive, sharedSnapshot } from '../app/Analytics/realtime'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -3730,7 +3730,7 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
   // The polling fallback for a browser that cannot hold the stream below. The
   // same snapshot the stream sends (app/Analytics/realtime.ts), so switching
   // between them never changes the numbers.
-  return json(await liveSnapshot(String(siteId)))
+  return json(await sharedSnapshot(String(siteId)))
 }).middleware('auth')
 
 // Live visitors as Server-Sent Events: one long-lived response per open

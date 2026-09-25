@@ -34,6 +34,8 @@
  * - **No reconnect stampede.** Each stream asks the browser to wait a
  *   different 2 to 10 seconds before reconnecting, so a deploy that drops
  *   every stream does not bring them all back in the same instant.
+ * - **Capped, with a cheap fallback.** See maxStreams: past the cap a
+ *   dashboard polls a snapshot shared by everyone polling that site.
  * - **Kept open through proxies.** A `ping` event every HEARTBEAT_MS keeps
  *   the stream under Bun's idle timeout and the gateway's.
  *
@@ -50,6 +52,7 @@
  * coarsest location the product records, and every report already shows it.
  */
 
+import process from 'node:process'
 import { db } from '@stacksjs/database'
 import privacy from '../../config/privacy'
 import type { LiveLocations, LivePlaceRow } from './live'
@@ -64,6 +67,30 @@ const HEARTBEAT_MS = 8000
 const MAX_QUEUED = 32
 const SITES_PER_QUERY = 500
 const FLOOR_TTL_MS = 60_000
+/** How long a polled snapshot is shared between pollers of the same site. */
+const POLL_TTL_MS = 2000
+
+/**
+ * The most streams one process holds open, from ANALYTICSHQ_LIVE_MAX_STREAMS
+ * (default 100).
+ *
+ * Why a cap exists at all: in production a stream does not reach this process
+ * directly. It passes through the rpx gateway and the views server's API
+ * proxy, and each of those pools its upstream connections (256 by default:
+ * RPX_MAX_UPSTREAM_CONNS, and Bun's BUN_CONFIG_MAX_HTTP_REQUESTS for fetch). A
+ * stream holds one of those connections for as long as the dashboard is open,
+ * so past the pool size every other request to the site, the tracker's
+ * /collect included, would queue behind open dashboards. The cap keeps streams
+ * well inside the pool. A dashboard over it gets a 503, and the client falls
+ * back to polling the shared snapshot, which costs a pooled connection for
+ * milliseconds rather than for the whole visit.
+ *
+ * Raise it together with those pool sizes, never on its own.
+ */
+export function maxStreams(env: Record<string, string | undefined> = process.env): number {
+  const n = Number(env.ANALYTICSHQ_LIVE_MAX_STREAMS)
+  return Number.isInteger(n) && n >= 0 ? n : 100
+}
 
 export interface LiveSnapshot {
   current: number
@@ -99,6 +126,7 @@ function retryLine(): Uint8Array {
 }
 
 const watched = new Map<string, Watched>()
+const polled = new Map<string, { at: number, snapshot: Promise<LiveSnapshot> }>()
 const floors = new Map<string, { floor: number, at: number }>()
 const poked = new Set<string>()
 let ticker: ReturnType<typeof setInterval> | null = null
@@ -201,9 +229,39 @@ export async function liveSnapshots(siteIds: string[], now: Date = new Date()): 
   return out
 }
 
-/** One snapshot, for a single site. */
+const EMPTY: LiveSnapshot = { current: 0, where: { locations: [], more: 0, unknown: 0 }, countries: [] }
+
+/** One snapshot, for a single site, straight from the database. */
 export async function liveSnapshot(siteId: string): Promise<LiveSnapshot> {
-  return (await liveSnapshots([siteId])).get(String(siteId)) ?? { current: 0, where: { locations: [], more: 0, unknown: 0 }, countries: [] }
+  return (await liveSnapshots([siteId])).get(String(siteId)) ?? EMPTY
+}
+
+/**
+ * A snapshot for the polling fallback, shared between everyone polling the
+ * same site. Within POLL_TTL_MS every poll gets the same answer, and polls
+ * that arrive while it is being fetched wait on that one fetch instead of
+ * starting their own, so ten thousand pollers of one site cost one query pair
+ * every two seconds. A site that also has streams is answered from the
+ * stream's last snapshot, which the ticker keeps current.
+ */
+export async function sharedSnapshot(siteId: string): Promise<LiveSnapshot> {
+  const id = String(siteId)
+  const streamed = watched.get(id)?.last
+  if (streamed)
+    return JSON.parse(streamed) as LiveSnapshot
+  const now = Date.now()
+  const hit = polled.get(id)
+  if (hit && now - hit.at < POLL_TTL_MS)
+    return hit.snapshot
+  const snapshot = liveSnapshot(id).catch(() => EMPTY)
+  polled.set(id, { at: now, snapshot })
+  if (polled.size > 10_000) {
+    for (const [key, entry] of polled) {
+      if (now - entry.at >= POLL_TTL_MS)
+        polled.delete(key)
+    }
+  }
+  return snapshot
 }
 
 function send(stream: Stream, bytes: Uint8Array, siteId: string): void {
@@ -337,6 +395,13 @@ export function liveStats(): { sites: number, streams: number } {
  */
 export function openLiveStream(siteId: string): Response {
   const id = String(siteId)
+  if (liveStats().streams >= maxStreams()) {
+    // Over the cap: refuse fast, and the client polls sharedSnapshot instead.
+    return new Response('Too many live streams on this server. Polling instead.', {
+      status: 503,
+      headers: { 'Retry-After': '60', 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  }
   let stream: Stream | null = null
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -377,6 +442,7 @@ export function resetLiveHub(): void {
   }
   watched.clear()
   floors.clear()
+  polled.clear()
   poked.clear()
   if (pokeTimer)
     clearTimeout(pokeTimer)

@@ -7,10 +7,11 @@
  * What is pinned here is the stream lifecycle and the wiring a later edit
  * could quietly turn back into per-viewer work.
  */
+import process from 'node:process'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { liveStats, openLiveStream, pokeLive, resetLiveHub } from '../../app/Analytics/realtime'
+import { liveStats, maxStreams, openLiveStream, pokeLive, resetLiveHub } from '../../app/Analytics/realtime'
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -48,10 +49,36 @@ describe('the stream', () => {
   })
 
   test('many watchers of one site are one watched site', () => {
-    for (let i = 0; i < 1000; i++)
-      openLiveStream('busy-site')
-    openLiveStream('quiet-site')
-    expect(liveStats()).toEqual({ sites: 2, streams: 1001 })
+    process.env.ANALYTICSHQ_LIVE_MAX_STREAMS = '5000'
+    try {
+      for (let i = 0; i < 1000; i++)
+        openLiveStream('busy-site')
+      openLiveStream('quiet-site')
+      expect(liveStats()).toEqual({ sites: 2, streams: 1001 })
+    }
+    finally {
+      delete process.env.ANALYTICSHQ_LIVE_MAX_STREAMS
+    }
+  })
+
+  test('past the cap a stream is refused fast, so the client polls instead', () => {
+    // Each stream holds a pooled proxy connection in production. Unbounded, open
+    // dashboards would starve every other request to the site of connections.
+    process.env.ANALYTICSHQ_LIVE_MAX_STREAMS = '3'
+    try {
+      const codes = Array.from({ length: 5 }, () => openLiveStream('capped').status)
+      expect(codes).toEqual([200, 200, 200, 503, 503])
+      expect(liveStats().streams).toBe(3)
+    }
+    finally {
+      delete process.env.ANALYTICSHQ_LIVE_MAX_STREAMS
+    }
+  })
+
+  test('the cap defaults well inside a 256-connection proxy pool', () => {
+    expect(maxStreams({})).toBe(100)
+    expect(maxStreams({ ANALYTICSHQ_LIVE_MAX_STREAMS: 'lots' })).toBe(100)
+    expect(maxStreams({ ANALYTICSHQ_LIVE_MAX_STREAMS: '20000' })).toBe(20000)
   })
 
   test('closing the last watcher forgets the site', async () => {
@@ -79,6 +106,11 @@ describe('the wiring', () => {
     expect(hub).toContain('for (const stream of entry.streams)\n    send(stream, entry.lastBytes, siteId)')
   })
 
+  test('polls share one snapshot per site', () => {
+    expect(routes).toContain('return json(await sharedSnapshot(String(siteId)))')
+    expect(hub).toContain('if (hit && now - hit.at < POLL_TTL_MS)')
+  })
+
   test('slow readers are dropped rather than buffered', () => {
     expect(hub).toMatch(/desiredSize \?\? 0\) < -MAX_QUEUED/)
   })
@@ -92,7 +124,7 @@ describe('the wiring', () => {
 
   test('the dashboard streams, and polls only as a fallback', () => {
     expect(view).toContain('new EventSource(`/api/sites/${encodeURIComponent(activeSiteId)}/live`)')
-    expect(view).toContain('poll = useInterval(tick, 10000)')
+    expect(view).toContain('poll = useInterval(tick, 5000)')
     // The fallback is reached only from the stream failing or going quiet.
     expect(view.indexOf('startPolling()')).toBeGreaterThan(view.indexOf('new EventSource('))
     expect(view).toContain('Date.now() - heard > 20000')

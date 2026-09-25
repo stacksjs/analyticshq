@@ -102,7 +102,7 @@ describe('live now', () => {
     // Three ways to read "who is here now", one function behind all of them,
     // so the first push after load cannot change what the page just drew.
     expect(view).toContain('const live = await liveSnapshot(String(siteId))')
-    expect(routes).toContain('return json(await liveSnapshot(String(siteId)))')
+    expect(routes).toContain('return json(await sharedSnapshot(String(siteId)))')
     expect(routes).toContain('return openLiveStream(String(siteId))')
   })
 
