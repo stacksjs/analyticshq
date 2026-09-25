@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ASSIGNABLE_ROLES, isAssignableRole, satisfies } from '../../app/Analytics/access'
+import { ASSIGNABLE_ROLES, effectiveRole, isAssignableRole, satisfies } from '../../app/Analytics/access'
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -62,10 +62,19 @@ describe('the endpoints ask for the right rank', () => {
   test('the site list returns shared sites, not just owned ones', () => {
     // Before #19 this was `WHERE owner_id = ?`, so an invited member authenticated
     // successfully, held a real role, and still saw an empty switcher.
+    const access = read('app/Analytics/access.ts')
+    const i = access.indexOf('export async function listReachableSites')
+    const block = access.slice(i, access.indexOf('\n}\n', i))
+    expect(block).toContain('LEFT JOIN site_members')
+    expect(block).toMatch(/WHERE s\.owner_id = \$1 OR m\.user_id IS NOT NULL/)
+  })
+
+  test('the API and the dashboard switcher read the same site list', () => {
+    // Two copies of this query that disagreed is what #19 was.
     const i = analytics.indexOf(`route.get('/api/sites'`)
     const block = analytics.slice(i, analytics.indexOf('\nroute.', i + 10))
-    expect(block).toContain('LEFT JOIN site_members')
-    expect(block).toMatch(/WHERE s\.owner_id = \? OR m\.user_id IS NOT NULL/)
+    expect(block).toContain('listReachableSites(uid)')
+    expect(read('resources/views/dashboard.stx')).toContain('listReachableSites(user.id)')
   })
 
   test('listing members needs only viewer', () => {
@@ -88,5 +97,68 @@ describe('the endpoints ask for the right rank', () => {
     // how invite flows turn into account-takeover flows. Until a real invite
     // exists, an unknown address is a 404.
     expect(analytics).toContain('No account with that email address')
+  })
+})
+
+describe('platform admins', () => {
+  const access = read('app/Analytics/access.ts')
+
+  test('an admin holds admin on every site, and never owner of one that is not theirs', () => {
+    expect(effectiveRole({ owner: false, member: null, platformAdmin: true })).toBe('admin')
+    expect(effectiveRole({ owner: false, member: 'viewer', platformAdmin: true })).toBe('admin')
+    // Deleting a customer's site still takes the customer.
+    expect(satisfies(effectiveRole({ owner: false, member: null, platformAdmin: true }), 'owner')).toBe(false)
+    expect(effectiveRole({ owner: true, member: null, platformAdmin: true })).toBe('owner')
+  })
+
+  test('everyone else keeps exactly the rank they had', () => {
+    expect(effectiveRole({ owner: false, member: null, platformAdmin: false })).toBe(null)
+    expect(effectiveRole({ owner: false, member: 'viewer', platformAdmin: false })).toBe('viewer')
+    expect(effectiveRole({ owner: false, member: 'admin', platformAdmin: false })).toBe('admin')
+    expect(effectiveRole({ owner: true, member: 'viewer', platformAdmin: false })).toBe('owner')
+  })
+
+  test('admin is a flag on the row, never an email match', () => {
+    // Registration does not verify addresses. An email rule would make the
+    // install belong to whoever registers the address first.
+    for (const file of ['app/Analytics/access.ts', 'routes/analytics.ts', 'resources/views/dashboard.stx', 'app/Gates.ts']) {
+      const code = read(file).replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')
+      expect({ file, emailRule: /stacksjs\.(com|org)/.test(code) }).toEqual({ file, emailRule: false })
+    }
+    expect(access).toContain('SELECT is_platform_admin FROM users WHERE id = $1')
+  })
+
+  test('no request can set the flag', () => {
+    const user = read('app/Models/User.ts')
+    const i = user.indexOf('is_platform_admin:')
+    const block = user.slice(i, user.indexOf('},', i))
+    expect(block).toContain('fillable: false')
+    expect(block).toContain('guarded: true')
+  })
+
+  test('the migration grants it to exactly one address', () => {
+    const sql = read('database/migrations/0000000056-add-platform-admin.sql')
+    expect(sql).toContain('"is_platform_admin" boolean NOT NULL DEFAULT false')
+    expect(sql).toContain(`WHERE lower("email") = 'cloud@stacksjs.com'`)
+  })
+
+  test('only an admin\'s list is unfiltered, and only it names owners', () => {
+    const i = access.indexOf('export async function listReachableSites')
+    const block = access.slice(i, access.indexOf('\n}\n', i))
+    const [adminBranch, memberBranch] = block.split(': await db.unsafe(')
+    expect(adminBranch).toContain('platformAdmin')
+    expect(adminBranch).toContain('owner_email')
+    expect(adminBranch).not.toContain('WHERE')
+    expect(memberBranch).not.toContain('owner_email')
+    expect(memberBranch).toContain('WHERE s.owner_id = $1 OR m.user_id IS NOT NULL')
+  })
+
+  test('a missing flag column cannot lock an owner out', () => {
+    // resolveSiteRole asks about the flag separately, so an owner's access never
+    // depends on the users column existing.
+    const i = access.indexOf('export async function resolveSiteRole')
+    const block = access.slice(i, access.indexOf('\n}\n', i))
+    expect(block).not.toContain('JOIN users')
+    expect(block).toContain('!owner && member !== \'admin\' && await isPlatformAdmin(uid)')
   })
 })

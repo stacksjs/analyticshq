@@ -17,7 +17,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app/Analytics/badge'
-import { ASSIGNABLE_ROLES, isAssignableRole, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
+import { ASSIGNABLE_ROLES, isAssignableRole, listReachableSites, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
 import { serializeEventProperties } from '../app/Analytics/event-properties'
@@ -815,20 +815,16 @@ route.get('/api/sites', async (request: any) => {
   // Owned sites AND sites shared with this user (#19). Before memberships this
   // was `WHERE owner_id = ?`, which is why an invited member could authenticate,
   // hold a valid role, and still see an empty site list — the switcher reads this.
+  // A platform admin gets every site on the install, each naming its owner.
   //
   // `role` comes back with each row so the dashboard can hide controls the user
   // cannot use. It is a convenience for the UI, never the check: every endpoint
   // re-resolves the role server-side.
-  const rows = await pgq(
-    `SELECT s.id, s.name, s.domains, s.timezone, s.currency, s.is_active, s.created_at,
-            CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
-     FROM sites s
-     LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
-     WHERE s.owner_id = ? OR m.user_id IS NOT NULL
-     ORDER BY s.created_at DESC`,
-    [Number(uid), Number(uid), Number(uid)],
-  )
-  return json({ sites: rows ?? [] })
+  //
+  // listReachableSites is the same function the dashboard's switcher reads, so
+  // the two cannot give different answers to "which sites can I reach".
+  const { platformAdmin, sites } = await listReachableSites(uid)
+  return json({ sites, platformAdmin })
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------

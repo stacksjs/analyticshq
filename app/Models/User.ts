@@ -71,6 +71,19 @@ export default defineModel({
       },
       factory: () => 'password123',
     },
+
+    // Runs the install: `admin` on every site and an unfiltered site list (see
+    // app/Analytics/access.ts). Declared so the schema differ keeps the column
+    // migration 56 adds. Guarded and not fillable, so no request body, sign-up
+    // or profile update can set it. Only that migration and
+    // `scripts/account.ts --grant-admin` write it.
+    is_platform_admin: {
+      fillable: false,
+      guarded: true,
+      hidden: true,
+      validation: { rule: schema.boolean().optional() },
+      factory: () => false,
+    },
   },
 
   set: {

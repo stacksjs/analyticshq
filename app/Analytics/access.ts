@@ -16,6 +16,21 @@
  * A user's effective rank is the higher of "owner of this site" and "their
  * membership row", so granting the owner an admin membership cannot demote them.
  *
+ * ## Platform admins
+ *
+ * One more source of rank, and it is not per site: `users.is_platform_admin`.
+ * A platform admin runs the install. They hold `admin` on every site, owned or
+ * not, and the site list shows them every site rather than the ones they were
+ * invited to. They do not hold `owner` on sites that are not theirs, so deleting
+ * a customer's site or its data still takes the customer.
+ *
+ * The flag is a column, never an email match. Registration does not verify
+ * addresses, so "whoever signs up as cloud@stacksjs.com is an admin" would hand
+ * the install to the first person to type it. Migration 56 grants the flag to
+ * the account that already holds that address, and `scripts/account.ts
+ * --grant-admin` is the only other way to set it. The User model does not list
+ * it as fillable, so no request body can.
+ *
  * ## The rule this file exists to enforce
  *
  * Site ids are public. They ride in the tracking snippet on every page of a
@@ -41,6 +56,36 @@ export function isAssignableRole(value: unknown): value is SiteRole {
 /** Does `role` meet `required`? */
 export function satisfies(role: SiteRole | null, required: SiteRole): boolean {
   return role != null && RANK[role] >= RANK[required]
+}
+
+/** Postgres hands booleans back as `true`, but a raw driver may say `'t'` or `1`. */
+function pgTrue(value: unknown): boolean {
+  return value === true || value === 't' || value === 1 || value === '1'
+}
+
+/**
+ * The rank a user holds from all three sources, highest first.
+ *
+ * Pure, so the ordering is tested without a database. An owner stays owner
+ * whatever else is true. A platform admin with a viewer membership is still
+ * an admin, and one with no membership at all is too.
+ */
+export function effectiveRole(input: { owner: boolean, member: SiteRole | null, platformAdmin: boolean }): SiteRole | null {
+  if (input.owner)
+    return 'owner'
+  if (input.platformAdmin)
+    return 'admin'
+  return input.member
+}
+
+/** Whether this user runs the install and so reaches every site. */
+export async function isPlatformAdmin(userId: string | number | null | undefined): Promise<boolean> {
+  const uid = Number(userId)
+  if (userId == null || !Number.isFinite(uid))
+    return false
+  const rows = await db.unsafe(`SELECT is_platform_admin FROM users WHERE id = $1 LIMIT 1`, [uid])
+    .catch(() => []) as Array<{ is_platform_admin: unknown }>
+  return pgTrue(rows?.[0]?.is_platform_admin)
 }
 
 /**
@@ -70,12 +115,70 @@ export async function resolveSiteRole(userId: string | number, siteId: string): 
 
   const owner = row.owner_id != null && Number(row.owner_id) === uid
   const member = isAssignableRole(row.role) ? row.role : null
+  // Asked separately rather than joined in, and only when it could change the
+  // answer. A join would make every owner's access depend on the users column
+  // existing, so one missed migration would lock every customer out of their
+  // own site. This way the worst a missing column does is fail closed for admins.
+  const platformAdmin = !owner && member !== 'admin' && await isPlatformAdmin(uid)
 
-  // The higher of the two. An owner who also holds a viewer membership row is
-  // still the owner.
-  if (owner)
-    return 'owner'
-  return member
+  return effectiveRole({ owner, member, platformAdmin })
+}
+
+/** One row of a user's site list. `owner_email` is filled in for platform admins only. */
+export interface ReachableSite {
+  id: string
+  name: string
+  domains: unknown
+  timezone: string | null
+  currency: string | null
+  is_active: unknown
+  created_at: unknown
+  role: SiteRole
+  owner_email?: string | null
+}
+
+/**
+ * Every site this user can open, with their role on each, newest first.
+ *
+ * The one answer to "which sites can I reach". GET /api/sites and the
+ * dashboard's switcher both read it, because two copies of this query that
+ * disagreed is how an invited member once authenticated fine and still saw an
+ * empty switcher (#19).
+ *
+ * A platform admin gets every site on the install with no filter, including
+ * sites nobody has claimed yet (rows /collect registered on first sight of an
+ * id), and each row names its owner so the list is readable. Everyone else gets
+ * the sites they own or were invited to and never learns who owns the others.
+ */
+export async function listReachableSites(userId: string | number): Promise<{ platformAdmin: boolean, sites: ReachableSite[] }> {
+  const uid = Number(userId)
+  if (!Number.isFinite(uid))
+    return { platformAdmin: false, sites: [] }
+
+  const platformAdmin = await isPlatformAdmin(uid)
+  const columns = `s.id, s.name, s.domains, s.timezone, s.currency, s.is_active, s.created_at`
+
+  const rows = platformAdmin
+    ? await db.unsafe(
+        `SELECT ${columns},
+                CASE WHEN s.owner_id = $1 THEN 'owner' ELSE 'admin' END AS role,
+                o.email AS owner_email
+         FROM sites s
+         LEFT JOIN users o ON o.id = s.owner_id
+         ORDER BY (s.owner_id IS NULL), s.created_at DESC NULLS LAST, s.id`,
+        [uid],
+      )
+    : await db.unsafe(
+        `SELECT ${columns},
+                CASE WHEN s.owner_id = $1 THEN 'owner' ELSE m.role END AS role
+         FROM sites s
+         LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = $1
+         WHERE s.owner_id = $1 OR m.user_id IS NOT NULL
+         ORDER BY s.created_at DESC NULLS LAST, s.id`,
+        [uid],
+      )
+
+  return { platformAdmin, sites: (rows ?? []) as ReachableSite[] }
 }
 
 /** Whether a site row exists at all, for callers that need to answer 404 vs 403. */

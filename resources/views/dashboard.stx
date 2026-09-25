@@ -15,7 +15,7 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUr
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
 import { installTargets } from '../../app/Analytics/install'
-import { listSiteMembers } from '../../app/Analytics/access'
+import { listReachableSites, listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
 import { foldRegions, splitRegion } from '../../app/Analytics/regions'
 import { cityLabel, foldCities, splitCity } from '../../app/Analytics/cities'
@@ -248,6 +248,8 @@ let live = false
 let user = null
 let ownedSites = []
 let activeSiteRecord = null
+// Runs the install: the switcher lists every site, not only this user's.
+let platformAdmin = false
 
 function siteDomains(site) {
   if (!site?.domains)
@@ -264,7 +266,12 @@ function siteDomains(site) {
 }
 
 function siteLabel(site) {
-  return siteDomains(site)[0] || site?.name || site?.id || 'Untitled site'
+  const label = siteDomains(site)[0] || site?.name || site?.id || 'Untitled site'
+  // A platform admin's list holds everyone's sites, several of them with the
+  // same name, so each says whose it is. Nobody else ever gets owner_email.
+  if (!platformAdmin || site?.role === 'owner')
+    return label
+  return `${label} (${site?.owner_email || 'unclaimed'})`
 }
 // Read gate: the dashboard only exposes a site's data to someone this site is
 // actually reachable by — its owner, an invited member, OR anyone holding a valid
@@ -342,16 +349,11 @@ async function loadData() {
     // memberships. #19 fixed exactly this shape of bug in GET /api/sites and the
     // fix never reached the view, so sharing a site did not actually share it.
     //
-    // Mirrors routes/analytics.ts GET /api/sites deliberately: two answers to
-    // "which sites can I reach" that disagree is what produced this.
-    ownedSites = (await pgq(
-      `SELECT s.id, s.name, s.domains, CASE WHEN s.owner_id = ? THEN 'owner' ELSE m.role END AS role
-       FROM sites s
-       LEFT JOIN site_members m ON m.site_id = s.id AND m.user_id = ?
-       WHERE s.owner_id = ? OR m.user_id IS NOT NULL
-       ORDER BY s.created_at DESC NULLS LAST, s.id`,
-      [Number(user.id), Number(user.id), Number(user.id)],
-    )) ?? []
+    // So both now read one function. A platform admin gets every site on the
+    // install, unfiltered, and each option names its owner.
+    const reachable = await listReachableSites(user.id)
+    ownedSites = reachable.sites
+    platformAdmin = reachable.platformAdmin
   }
   // Tolerant read of a site's settings JSON (holds the share token).
   const readSettings = async (id) => {

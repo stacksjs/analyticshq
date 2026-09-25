@@ -1,4 +1,5 @@
 import type { UserModel } from '@stacksjs/orm'
+import { isPlatformAdmin } from './Analytics/access'
 
 /**
  * Authorization Gates Configuration
@@ -25,10 +26,13 @@ import type { UserModel } from '@stacksjs/orm'
  */
 export const gates = {
   /**
-   * Check if user can access admin area
+   * Check if user can access admin area.
+   *
+   * The platform-admin flag, not an email domain. Registration does not verify
+   * addresses, so `endsWith('@stacksjs.org')` let anyone who typed one in pass.
    */
-  'access-admin': (user: UserModel | null) => {
-    return user?.email?.endsWith('@stacksjs.org') ?? false
+  'access-admin': async (user: UserModel | null) => {
+    return isPlatformAdmin((user as any)?.id)
   },
 
   /**

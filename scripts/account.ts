@@ -8,6 +8,8 @@
  *   bun scripts/account.ts --attach --site=zig-utils --email=you@example.com
  *   bun scripts/account.ts --create-site --email=you@example.com --name="Mario Adrion" --domain=marioadrion.com
  *   bun scripts/account.ts --revoke-tokens --email=you@example.com
+ *   bun scripts/account.ts --grant-admin --email=cloud@stacksjs.com
+ *   bun scripts/account.ts --revoke-admin --email=someone@example.com
  *
  * Run it on the box (or with `DB_*` pointed at it) — it talks to Postgres
  * directly, like the other scripts here, because the framework's database
@@ -62,12 +64,12 @@ async function revokeTokens(userId: number): Promise<number> {
 }
 
 if (args.list) {
-  const users = await sql`SELECT id, email, name, password_changed_at FROM users ORDER BY id`
+  const users = await sql`SELECT id, email, name, password_changed_at, is_platform_admin FROM users ORDER BY id`
   if (users.length === 0)
     log('no users')
   for (const u of users) {
     const sites = await sql`SELECT id FROM sites WHERE owner_id = ${u.id} ORDER BY id`
-    log(`#${u.id}  ${u.email}  (${u.name})  sites: ${sites.map((s: any) => s.id).join(', ') || '—'}`)
+    log(`#${u.id}  ${u.email}  (${u.name})${u.is_platform_admin ? '  [platform admin]' : ''}  sites: ${sites.map((s: any) => s.id).join(', ') || '—'}`)
   }
   const orphans = await sql`SELECT id FROM sites WHERE owner_id IS NULL ORDER BY id`
   if (orphans.length > 0)
@@ -164,6 +166,20 @@ else if (args['revoke-tokens']) {
   log(`revoked ${await revokeTokens(user.id)} token(s) for ${email}`)
 }
 
+else if (args['grant-admin'] || args['revoke-admin']) {
+  // The only writer of users.is_platform_admin besides migration 56. A platform
+  // admin sees and manages every site on the install (app/Analytics/access.ts).
+  const grant = Boolean(args['grant-admin'])
+  const email = requireArg(args, 'email')
+  const user = await findUser(email)
+  if (!user) {
+    log(`error: no user with email ${email}`)
+    process.exit(1)
+  }
+  await sql`UPDATE users SET is_platform_admin = ${grant} WHERE id = ${user.id}`
+  log(`#${user.id} ${email} is ${grant ? 'now' : 'no longer'} a platform admin`)
+}
+
 else {
   log(`usage:
   --list                                    users, their sites, and any unowned sites
@@ -172,7 +188,9 @@ else {
   --attach --site= --email=                 make a user the owner of a site
   --create-site --email= --name= [--domain=] [--timezone=]
                                             create a site for a user; prints its snippet
-  --revoke-tokens --email=                  sign a user out everywhere`)
+  --revoke-tokens --email=                  sign a user out everywhere
+  --grant-admin --email=                    let a user see and manage every site
+  --revoke-admin --email=                   take that back`)
   process.exit(1)
 }
 

@@ -2,6 +2,7 @@ import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
+import { isPlatformAdmin } from '../Analytics/access'
 import { userIsPro } from '../Analytics/entitlements'
 
 /**
@@ -30,6 +31,9 @@ export default new Action({
       return response.unauthorized('Authentication required')
 
     const pro = await userIsPro((user as any).id)
+    // Whether the site list this user gets is the whole install. Display only:
+    // every site endpoint resolves it again for itself.
+    const platformAdmin = await isPlatformAdmin((user as any).id)
 
     // Enrich with profile fields the account page shows (avatar + which
     // provider the account signed in with). Tolerate columns not existing yet.
@@ -55,6 +59,7 @@ export default new Action({
       },
       pro,
       plan: pro ? 'pro' : 'free',
+      platformAdmin,
     })
   },
 })
