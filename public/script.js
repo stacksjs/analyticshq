@@ -15,6 +15,9 @@
  *
  * Embed with:
  *   <script defer src="https://analyticshq.org/script.js" data-site="SITE_ID"></script>
+ *
+ * Custom events: window.analyticshq('Signup', { plan: 'pro' }), or in markup,
+ *   <a data-analyticshq-event="Signup" data-analyticshq-plan="pro">
  */
 (function () {
   const d = document
@@ -211,11 +214,36 @@
     w.addEventListener('pagehide', flush)
   }
 
+  // Custom events from markup, for sites that cannot call window.analyticshq
+  // (a template language that keeps script out of markup, a CMS field):
+  //
+  //   <a href="..." data-analyticshq-event="Ticket click" data-analyticshq-city="Phoenix">
+  //
+  // Every other data-analyticshq-* attribute becomes a property, named by
+  // what follows the prefix. A tagged link reports its own event INSTEAD of
+  // Outbound Link / File Download: one click, one event, and the named one
+  // carries more. Its URL rides along as `url` unless the markup names one.
+  function tagged(t) {
+    const el = t && t.closest ? t.closest('[data-analyticshq-event]') : null
+    if (!el) return false
+    const props = {}
+    for (let i = 0; i < el.attributes.length; i++) {
+      const attr = el.attributes[i]
+      if (attr.name.indexOf('data-analyticshq-') !== 0 || attr.name === 'data-analyticshq-event') continue
+      props[attr.name.slice('data-analyticshq-'.length)] = attr.value
+    }
+    const link = el.closest('a')
+    if (link && link.href && props.url === undefined) props.url = link.href
+    send(el.getAttribute('data-analyticshq-event'), props)
+    return true
+  }
+
   const DLRE = /\.(pdf|zip|dmg|exe|csv|xlsx?|docx?|pptx?|mp3|mp4|pkg|rar|gz|tar|wav|avi|mov|mkv|txt|svg)$/i
   function onLink(ev) {
     if (ev.type === 'auxclick' && ev.button !== 1) return
     try {
       const t = ev.target
+      if (tagged(t)) return
       const a = t && t.closest ? t.closest('a') : null
       if (!a) return
       const href = a.getAttribute('href')
