@@ -26,6 +26,13 @@ export default defineModel({
     visitor_id: { fillable: true, validation: { rule: schema.string().required().max(64) } },
     session_id: { fillable: true, validation: { rule: schema.string().required().max(64) } },
     value: { fillable: true, validation: { rule: schema.number().optional() } },
+    // Revenue (#22, migration 0000000045). Declared because the schema differ
+    // drops any live column the models do not name: these were missing, so a
+    // deploy dropped them from production and every query naming them failed.
+    // bigint: minor units can exceed 32 bits, and a max past 2^31 is how the
+    // differ is told so.
+    amount_minor: { fillable: true, validation: { rule: schema.number().optional().max(Number.MAX_SAFE_INTEGER) } },
+    currency: { fillable: true, validation: { rule: schema.string().optional().max(3) } },
     path: { fillable: true, validation: { rule: schema.string().optional() } },
     referrer_source: { fillable: true, validation: { rule: schema.string().optional().max(128) } },
     utm_source: { fillable: true, validation: { rule: schema.string().optional().max(128) } },

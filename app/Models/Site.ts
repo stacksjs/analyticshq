@@ -55,6 +55,26 @@ export default defineModel({
       factory: () => true,
     },
 
+    // Default currency for revenue events that name none (#22, migration
+    // 0000000045). Missing from this model, so the schema differ dropped it in
+    // production and GET /api/sites, which selects it, answered 500.
+    currency: {
+      fillable: true,
+      validation: { rule: schema.string().optional().max(3) },
+    },
+
+    // Custom tracking domain (migration 0000000046). Missing for the same
+    // reason and dropped the same way.
+    custom_domain: {
+      fillable: true,
+      validation: { rule: schema.string().optional().max(255) },
+    },
+
+    custom_domain_verified_at: {
+      fillable: true,
+      validation: { rule: schema.string().optional().max(32) },
+    },
+
     // Region (state/province) geolocation, off unless the site owner turns it on
     // and the install permits it (config/privacy.ts). Declared here because the
     // schema differ compares the live tables against these attributes, and a
