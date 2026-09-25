@@ -31,6 +31,7 @@ const READ_ENDPOINTS = [
   '/api/sites/{siteId}/entry-pages',
   '/api/sites/{siteId}/exit-pages',
   '/api/sites/{siteId}/realtime',
+  '/api/sites/{siteId}/live',
 ]
 
 // The page_views breakdowns are registered through one shared helper.

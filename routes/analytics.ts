@@ -38,7 +38,6 @@ import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, sea
 import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
 import { readFathomZip } from '../app/Analytics/fathom-zip'
 import { foldRegions } from '../app/Analytics/regions'
-import { liveLocations } from '../app/Analytics/live'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -57,6 +56,7 @@ import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, reg
 import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
 import { tzCookie, validTimeZone } from '../app/Support/timezone'
 import { listVisitors, timelinesEnabled, VISITOR_LIST_LIMIT, visitorTimeline } from '../app/Analytics/visitors'
+import { liveSnapshot, openLiveStream, pokeLive } from '../app/Analytics/realtime'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -589,6 +589,10 @@ route.post('/collect', async (request: any) => {
       is_bounce: false,
       timestamp: now,
     }).execute()
+    // Open dashboards on this site see the visitor within a few hundred
+    // milliseconds (app/Analytics/realtime.ts). A map lookup when nobody is
+    // watching, which is almost always.
+    pokeLive(String(siteId))
   }
   else {
     // Reserved auto-tracked events carry only their canonical URL, so grouping
@@ -3723,25 +3727,22 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
     return denied
-  const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
-  const row = (await pgq(
-    `SELECT COUNT(DISTINCT visitor_id) AS current FROM page_views WHERE site_id = ? AND timestamp >= ?`,
-    [siteId, since],
-  ))?.[0]
-  const current = Number(row?.current ?? 0)
-  // Where they are, for the dashboard's Live now strip, under this site's floor:
-  // a place finer than a country is named only when it clears it, and rolls up
-  // into its country otherwise. The dashboard's first render calls the same
-  // function (app/Analytics/live.ts), so the strip never changes shape on a poll.
-  let where = { locations: [], more: 0, unknown: 0 } as ReturnType<typeof liveLocations>
-  if (current > 0) {
-    const places = (await pgq(
-      `SELECT country, region, city, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE site_id = ? AND timestamp >= ? GROUP BY country, region, city`,
-      [siteId, since],
-    )) ?? []
-    where = liveLocations(places as never, await minSegmentSizeFor(String(siteId)), current)
-  }
-  return json({ current, where })
+  // The polling fallback for a browser that cannot hold the stream below. The
+  // same snapshot the stream sends (app/Analytics/realtime.ts), so switching
+  // between them never changes the numbers.
+  return json(await liveSnapshot(String(siteId)))
+}).middleware('auth')
+
+// Live visitors as Server-Sent Events: one long-lived response per open
+// dashboard, fed by a single per-process ticker and by /collect as page views
+// arrive. See app/Analytics/realtime.ts for why this scales with watched sites
+// rather than with watchers. The role is checked once, when the stream opens.
+route.get('/api/sites/{siteId}/live', async (request: any) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'viewer')
+  if (denied)
+    return denied
+  return openLiveStream(String(siteId))
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------

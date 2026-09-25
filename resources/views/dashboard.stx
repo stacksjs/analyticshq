@@ -19,7 +19,7 @@ import { listReachableSites, listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
 import { foldRegions, splitRegion } from '../../app/Analytics/regions'
 import { cityLabel, foldCities, splitCity } from '../../app/Analytics/cities'
-import { liveLocations } from '../../app/Analytics/live'
+import { liveSnapshot } from '../../app/Analytics/realtime'
 import { niceCeil, xTicks, yTicks } from '../../app/Support/chart-axis'
 import { geoPermits } from '../../app/Analytics/geo'
 import { minSegmentSizeFor } from '../../app/Analytics/segment-floor'
@@ -250,6 +250,8 @@ let prevAvgDuration = 0
 let liveNow = 0
 // Where the live visitors are, for the Live now strip. See app/Analytics/live.ts.
 let liveWhere = { locations: [], more: 0, unknown: 0 }
+/** Live visitors per country, for the pulsing dots on the map. */
+let liveCountries = []
 let goals = []
 let events = []
 let outboundLinks = []
@@ -745,21 +747,16 @@ async function loadData() {
       FROM page_views WHERE ${filterPrev} GROUP BY session_id
     ) t`, pp))?.[0]
   prevAvgDuration = Math.round(Number(pad?.avg_dur ?? 0))
-  // Unique visitors in the last ~5 minutes, SITE-WIDE. It used to carry the
-  // active filters, which the 15-second poll (/api/sites/{id}/realtime) does
-  // not, so a filtered page showed one live count on load and a different one a
-  // quarter of a minute later. "Who is on the site right now" is not a question
-  // a report filter changes, so both now answer it the same way.
-  const lv = (await pgq(
-    `SELECT COUNT(DISTINCT visitor_id) AS current FROM page_views WHERE site_id = ? AND timestamp >= ?`,
-    [siteId, liveFrom]))?.[0]
-  liveNow = Number(lv?.current ?? 0)
-  // And where they are, under the site's disclosure floor (app/Analytics/live.ts).
-  if (liveNow > 0) {
-    const places = (await pgq(
-      `SELECT country, region, city, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE site_id = ? AND timestamp >= ? GROUP BY country, region, city`,
-      [siteId, liveFrom])) ?? []
-    liveWhere = liveLocations(places, siteFloor, liveNow)
+  // Who is on the site right now, SITE-WIDE: "on the site" is not a question a
+  // report filter changes. The same snapshot the live stream and its polling
+  // fallback send (app/Analytics/realtime.ts), so the first push after load can
+  // never change the strip's shape or numbers. Places are under the site's
+  // disclosure floor (app/Analytics/live.ts); countries feed the map's dots.
+  {
+    const live = await liveSnapshot(String(siteId))
+    liveNow = live.current
+    liveWhere = live.where
+    liveCountries = live.countries
   }
   // Goals for this site: per active goal, conversions in [from,to], distinct
   // converting visitors, and total value. LEFT JOIN so goals with zero in-range
@@ -1316,7 +1313,7 @@ const shareCapability = __shareToken
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveCountries, liveNow, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1350,6 +1347,9 @@ const liveCount = state(typeof liveNow === 'number' ? liveNow : 0)
 // The places behind that count, refreshed by the same poll. liveWhere is bridged
 // from the server block like liveNow.
 const liveSpots = state(typeof liveWhere === 'object' && liveWhere ? liveWhere : { locations: [], more: 0, unknown: 0 })
+// Live visitors per country. The map script reads them off a data attribute
+// (it is a plain module, outside this block), so a push moves the dots too.
+const liveMap = state(JSON.stringify(Array.isArray(liveCountries) ? liveCountries : []))
 
 // Uniform HQ auth: every authenticated call on this page is a same-origin fetch
 // carrying the HttpOnly auth-token cookie the browser sends automatically. No
@@ -2325,39 +2325,85 @@ onMount(() => {
       .catch(() => {})
   }
 
-  // Refresh the live visitor count every 15s.
+  // Live visitors, pushed. One EventSource on /api/sites/:id/live, which the
+  // server feeds as page views arrive (app/Analytics/realtime.ts), so a new
+  // visitor shows up here within about a second rather than on the next poll.
   //
-  // useInterval, not setInterval, and this is a bug fix rather than a style change.
-  // useInterval registers an onDestroy hook, and stx drains those on `stx:load` --
-  // which fires on SPA navigation. The hand-rolled timer relied solely on the teardown
-  // returned from onMount, and a full-document swap never runs it, so navigating away
-  // from the dashboard left the poll hitting /api/sites/:id/realtime every 15 seconds,
-  // forever, for a page nobody was looking at.
+  // Polling every 10s is the fallback, never the plan: for a browser without
+  // EventSource, a stream the server refused (a share-link viewer has no session,
+  // so the stream answers 401 and EventSource gives up), or a stream that went
+  // quiet. The server sends a `ping` every 8s, so 20s of silence means something
+  // in between is buffering or has dropped it, and polling at least keeps the
+  // number moving.
   //
-  // Declared with `let` + a separate assignment because the callback pauses the timer
-  // it belongs to; a `const live = useInterval(() => … live.pause() …)` reads fine only
-  // because the first tick is 15s away, and that is too subtle to rely on.
-  let live: { pause: () => void }
+  // useInterval rather than setInterval: it registers an onDestroy hook, which
+  // stx drains on SPA navigation, so leaving the dashboard stops the timers.
+  const apply = (d) => {
+    if (d && typeof d.current === 'number')
+      liveCount.set(d.current)
+    if (d && d.where && Array.isArray(d.where.locations))
+      liveSpots.set(d.where)
+    if (d && Array.isArray(d.countries))
+      liveMap.set(JSON.stringify(d.countries))
+  }
+  let poll: { pause: () => void } | null = null
   const tick = () => fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`, { credentials: 'same-origin' })
     .then((r) => {
-      // 401 here means no valid session cookie: a share-link viewer holds none at
-      // all. Stop rather than poll an endpoint that will never answer them.
-      if (r.status === 401) { live.pause(); return null }
+      // 401 means no session cookie at all: a share-link viewer. Stop.
+      if (r.status === 401) { poll?.pause(); return null }
       return r.ok ? r.json() : null
     })
-    .then((d) => {
-      if (d && typeof d.current === 'number')
-        liveCount.set(d.current)
-      if (d && d.where && Array.isArray(d.where.locations))
-        liveSpots.set(d.where)
-    })
+    .then(apply)
     .catch(() => {})
+  const startPolling = () => {
+    if (poll)
+      return
+    poll = useInterval(tick, 10000)
+    tick()
+  }
 
-  live = useInterval(tick, 15000)
+  let stream: EventSource | null = null
+  let watchdog: { pause: () => void } | null = null
+  const closeStream = () => {
+    stream?.close()
+    stream = null
+    watchdog?.pause()
+  }
+  if (typeof EventSource === 'function') {
+    let heard = Date.now()
+    stream = new EventSource(`/api/sites/${encodeURIComponent(activeSiteId)}/live`)
+    stream.onmessage = (e: MessageEvent) => {
+      heard = Date.now()
+      try { apply(JSON.parse(e.data)) }
+      catch {}
+    }
+    stream.addEventListener('ping', () => { heard = Date.now() })
+    // EventSource reconnects by itself after a dropped connection. CLOSED means
+    // it will not (the server refused it), so fall back.
+    stream.onerror = () => {
+      if (stream && stream.readyState === 2) {
+        closeStream()
+        startPolling()
+      }
+    }
+    watchdog = useInterval(() => {
+      if (stream && Date.now() - heard > 20000) {
+        closeStream()
+        startPolling()
+      }
+    }, 5000)
+    onDestroy(closeStream)
+  }
+  else {
+    startPolling()
+  }
 
-  // Kept as well as the onDestroy hook: this one fires on the fragment-swap path, the
-  // hook covers the document-swap path. Neither covers both.
-  return () => live.pause()
+  // Kept as well as the onDestroy hooks: this one fires on the fragment-swap
+  // path, the hooks cover the document-swap path. Neither covers both.
+  return () => {
+    closeStream()
+    poll?.pause()
+  }
 })
 </script>
 
@@ -2768,6 +2814,13 @@ select.panel:hover { border-color: var(--accent); }
 @keyframes livepulse { 0% { transform: scale(1); opacity: 0.55; } 100% { transform: scale(2.8); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .live-dot::after { animation: none; opacity: 0; } }
 
+/* Live visitors on the map: one dot per country with someone online, the same
+   halo as the badge above. Sized by the map script, centred by DivIcon's anchor. */
+#country-map .live-pin { position: absolute; pointer-events: auto; }
+#country-map .live-pin i { position: absolute; inset: 0; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); }
+#country-map .live-pin i::after { content: ''; position: absolute; inset: 0; border-radius: 999px; background: var(--accent); animation: livepulse 2s cubic-bezier(0.16,1,0.3,1) infinite; }
+@media (prefers-reduced-motion: reduce) { #country-map .live-pin i::after { animation: none; opacity: 0; } }
+
 /* Timeseries area+line chart: CSS-only hover tooltips + markers. Columns are transparent
   full-height hover targets; dots align to the SVG line via the same (i+0.5)/n center fraction. */
 .ga-col:hover::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--border); pointer-events: none; }
@@ -2973,7 +3026,7 @@ select.panel:hover { border-color: var(--accent); }
           <span :class="liveCount() ? 'live-dot' : ''" class="live-dot-base" :style="`background: ${liveCount() ? 'var(--accent)' : 'var(--text-3)'};`"></span>
           <strong class="mono" aria-live="polite">{{ liveCount() }}</strong>
           <span>{{ liveCount() === 1 ? 'visitor online now' : 'visitors online now' }}</span>
-          <span class="live-muted" :show="!liveCount()" style="display:none">· updates every 15 seconds</span>
+          <span class="live-muted" :show="!liveCount()" style="display:none">· updates live</span>
         </div>
         <ul class="live-places" aria-label="Where they are">
           <li x-for="loc in liveSpots().locations" class="live-place">
@@ -3352,6 +3405,9 @@ select.panel:hover { border-color: var(--accent); }
             blob inside a script body is the shape that has broken this file
             before, and stx forbids @json there for exactly that reason. --}}
         <div hidden data-country-totals="{{ JSON.stringify(countryTotals) }}" data-country-names="{{ JSON.stringify(countryNames) }}"></div>
+        {{-- Live visitors per country, kept current by the stream in the client
+            block. The map script watches this attribute and moves its dots. --}}
+        <div hidden data-live-countries="{{ JSON.stringify(liveCountries) }}" :data-live-countries="liveMap()"></div>
         {{-- Filled by the map script when a country has traffic but no polygon
             to shade. Natural Earth's 110m boundaries omit city-states — Singapore
             and Hong Kong among them — and those are ordinary traffic sources for
@@ -4137,7 +4193,7 @@ select.panel:hover { border-color: var(--accent); }
   if (!values.length) return
   const max = Math.max.apply(null, values)
 
-  let TsMap, GeoJSON, EPSG4326, world
+  let TsMap, GeoJSON, EPSG4326, Marker, DivIcon, LayerGroup, world
   try {
     // Loaded in parallel: 340KB of engine and 170KB of geometry, neither of
     // which blocks anything else on the page.
@@ -4145,7 +4201,7 @@ select.panel:hover { border-color: var(--accent); }
       import('/vendor/ts-maps.js'),
       fetch('/vendor/world-countries.geojson').then(r => r.json()),
     ])
-    ;({ TsMap, GeoJSON, EPSG4326 } = mod)
+    ;({ TsMap, GeoJSON, EPSG4326, Marker, DivIcon, LayerGroup } = mod)
     world = geo
   }
   catch (_) { return }
@@ -4234,6 +4290,79 @@ select.panel:hover { border-color: var(--accent); }
       })
     }
   })
+
+  // Live visitors: a pulsing dot on each country someone is on the site from
+  // right now. Country, because that is the finest location every report is
+  // allowed to show, and the product never stores coordinates to place a city
+  // with. The dot sits at the centroid of the country's largest landmass,
+  // weighted by cos(latitude) so the US dot lands in the lower 48 rather than
+  // in Alaska, which an equirectangular map draws oversized.
+  //
+  // The client block keeps [data-live-countries] current from the live stream;
+  // this only watches it, so a new visitor's dot appears within about a second.
+  const LIVE_FALLBACK = { SG: [1.35, 103.82], HK: [22.32, 114.17], MT: [35.9, 14.45], MC: [43.74, 7.42], BH: [26.07, 50.56], MO: [22.2, 113.55], LU: [49.61, 6.13], AD: [42.51, 1.52], LI: [47.16, 9.55], SM: [43.94, 12.46] }
+  const centroids = {}
+  for (const f of world.features) {
+    const g = f.geometry
+    if (!g)
+      continue
+    const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
+    let best = null
+    let bestArea = 0
+    for (const poly of polys) {
+      const ring = poly[0] || []
+      let a = 0
+      let cx = 0
+      let cy = 0
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1]
+        a += cross
+        cx += (ring[j][0] + ring[i][0]) * cross
+        cy += (ring[j][1] + ring[i][1]) * cross
+      }
+      if (!a)
+        continue
+      const lat = cy / (3 * a)
+      const weighted = Math.abs(a / 2) * Math.cos((lat * Math.PI) / 180)
+      if (weighted > bestArea) {
+        bestArea = weighted
+        best = [lat, cx / (3 * a)]
+      }
+    }
+    if (best)
+      centroids[f.id] = best
+  }
+
+  const liveEl = document.querySelector('[data-live-countries]')
+  const dots = LayerGroup ? new LayerGroup().addTo(map) : null
+  function drawLive() {
+    if (!dots || !Marker || !DivIcon)
+      return
+    let live = []
+    try { live = JSON.parse(liveEl?.getAttribute('data-live-countries') || '[]') }
+    catch (_) { live = [] }
+    dots.clearLayers()
+    const top = Math.max(1, ...live.map(l => Number(l.visitors) || 0))
+    for (const l of live) {
+      const at = centroids[l.country] || LIVE_FALLBACK[l.country]
+      if (!at)
+        continue
+      const size = Math.round(9 + 7 * Math.sqrt((Number(l.visitors) || 0) / top))
+      const who = `${names[l.country] || serverNames[l.country] || l.country}: ${l.visitors} online now`
+      const pin = new Marker(at, {
+        icon: new DivIcon({ className: 'live-pin', html: '<i></i>', iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+        keyboard: false,
+        title: who,
+        alt: who,
+      })
+      if (pin.bindTooltip)
+        pin.bindTooltip(who)
+      dots.addLayer(pin)
+    }
+  }
+  drawLive()
+  if (liveEl)
+    new MutationObserver(drawLive).observe(liveEl, { attributes: true, attributeFilter: ['data-live-countries'] })
 
   // Countries with traffic that the 110m boundaries cannot draw (Singapore,
   // Hong Kong, Malta, Monaco, Bahrain, Macau — city-states omitted at this

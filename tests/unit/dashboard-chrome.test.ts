@@ -90,7 +90,7 @@ describe('site settings has one home', () => {
 })
 
 describe('live now', () => {
-  test('the strip is under the header, with places from the poll', () => {
+  test('the strip is under the header, with places from the stream', () => {
     const stripAt = template.indexOf('id="live-now"')
     expect(stripAt).toBeGreaterThan(template.indexOf('</header>'))
     expect(stripAt).toBeLessThan(template.indexOf('aria-label="Key metrics"'))
@@ -98,15 +98,17 @@ describe('live now', () => {
     expect(view).toContain('liveSpots.set(d.where)')
   })
 
-  test('the render and the poll use one function and one floor', () => {
-    expect(view).toContain('liveLocations(places, siteFloor, liveNow)')
-    expect(routes).toContain('liveLocations(places as never, await minSegmentSizeFor(String(siteId)), current)')
-    expect(routes).toContain('return json({ current, where })')
+  test('the render, the stream and the poll send one snapshot', () => {
+    // Three ways to read "who is here now", one function behind all of them,
+    // so the first push after load cannot change what the page just drew.
+    expect(view).toContain('const live = await liveSnapshot(String(siteId))')
+    expect(routes).toContain('return json(await liveSnapshot(String(siteId)))')
+    expect(routes).toContain('return openLiveStream(String(siteId))')
   })
 
-  test('the live count is site-wide, like the poll that replaces it', () => {
-    const q = view.slice(view.indexOf('const lv = (await pgq('), view.indexOf('liveNow = Number(lv?.current'))
-    expect(q).not.toContain('filterSql')
+  test('the live count is site-wide, whatever the filters', () => {
+    const block = view.slice(view.indexOf('const live = await liveSnapshot('), view.indexOf('liveCountries = live.countries'))
+    expect(block).not.toContain('filterSql')
   })
 })
 
