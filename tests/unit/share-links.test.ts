@@ -43,28 +43,26 @@ describe('a share view does not demand a sign-in', () => {
     expect(branch).not.toMatch(/requireAuth|middleware\('auth'\)|session\./)
   })
 
-  test('the pre-paint /login redirect is not emitted on a share view', () => {
-    // The regression that made the feature unusable. The guard is correct on an
-    // owner view; it must simply not exist on a shared one.
-    const guard = dashboard.indexOf('window.stx.navigate(\'/login\'')
-    expect(guard).toBeGreaterThan(-1)
+  test('nothing on the page sends a visitor to /login before they ask to leave', () => {
+    // The regression that made the feature unusable was a pre-paint client
+    // guard that read localStorage, found no token and redirected. The uniform
+    // HQ cookie-session auth (4c3b9c8) removed that guard outright: access is
+    // decided on the server, which already granted the share view. So the
+    // property is now stronger than "wrapped in @if (!shareMode)": no client
+    // redirect to /login exists except the one the Log out button runs.
+    expect(dashboard).not.toMatch(/navigate\(\s*['"]\/login['"]/)
 
-    const before = dashboard.slice(0, guard)
-    const conditional = before.lastIndexOf('@if (!shareMode)')
-    const push = before.lastIndexOf('@push(\'scripts\')')
-
-    expect(conditional, 'the redirect is no longer wrapped in @if (!shareMode)').toBeGreaterThan(-1)
-    // The condition must WRAP the push, not sit somewhere earlier in the file.
-    expect(conditional).toBeLessThan(push)
-    // …and close after the guard.
-    expect(dashboard.slice(guard)).toContain('@endif')
+    const logout = dashboard.indexOf('async function logout(')
+    expect(logout, 'the logout handler is gone').toBeGreaterThan(-1)
+    const logoutEnd = dashboard.indexOf('\n}', logout)
+    for (const match of dashboard.matchAll(/location\.(?:assign|replace|href\s*=)\s*\(?\s*['"]\/login['"]/g))
+      expect(match.index! > logout && match.index! < logoutEnd, `a /login redirect outside logout() at offset ${match.index}`).toBe(true)
   })
 
   test('the gate is server-side, not a client re-read of the query string', () => {
     // A client-side `?share=` check would be a second implementation of the same
     // rule, free to disagree with the first. The server has already decided.
-    const guardBlock = dashboard.slice(dashboard.indexOf('@if (!shareMode)'))
-    expect(guardBlock).not.toMatch(/location\.search|URLSearchParams/)
+    expect(dashboard).not.toMatch(/URLSearchParams\(\s*(?:window\.)?location\.search\s*\)\.get\(\s*['"]share['"]/)
   })
 })
 
