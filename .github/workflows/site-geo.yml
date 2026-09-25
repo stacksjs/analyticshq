@@ -1,0 +1,123 @@
+name: Site geo setting
+
+# Turn a site's region or city geolocation on or off in PRODUCTION, from the
+# Actions tab, without signing in to the dashboard.
+#
+# The dashboard toggle (Settings -> Record regions / Record cities) is the
+# normal way to do this, and it is owner-only. This is the operator's way: it
+# runs as whoever can dispatch workflows on this repository, under the same
+# `production` environment and the same DEPLOY_SSH_KEY the deploy uses, so it
+# grants nothing the deploy did not already hold.
+#
+# It writes exactly the two columns the dashboard toggles, for exactly one
+# site, and fails unless exactly one row changed. The install ceiling in
+# config/privacy.ts still applies at ingest: a flag set here on an install that
+# does not permit the level records nothing, the same as through the API.
+# The ingest caches these flags for up to a minute, so a change takes effect
+# within one.
+on:
+  workflow_dispatch:
+    inputs:
+      site_id:
+        description: Site id (the data-site value in the tracking snippet)
+        required: true
+        type: string
+      city_geo:
+        description: Record cities (also records the state/province)
+        required: true
+        type: choice
+        options: ['true', 'false']
+        default: 'true'
+      region_geo:
+        description: Record state/province
+        required: true
+        type: choice
+        options: ['unchanged', 'true', 'false']
+        default: 'unchanged'
+
+concurrency:
+  group: site-geo
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+    steps:
+      - name: Validate inputs
+        env:
+          SITE_ID: ${{ inputs.site_id }}
+        run: |
+          # The id reaches SQL only as a psql variable (quoted by psql), but it
+          # is still refused here if it is not the shape of a site id.
+          if ! printf '%s' "$SITE_ID" | grep -Eq '^[A-Za-z0-9_-]{1,64}$'; then
+            echo "::error::site_id must be 1-64 characters of A-Z, a-z, 0-9, _ or -"
+            exit 1
+          fi
+
+      - name: Add deploy SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::error::DEPLOY_SSH_KEY is not available to this workflow"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Apply and read back
+        env:
+          SITE_ID: ${{ inputs.site_id }}
+          CITY_GEO: ${{ inputs.city_geo }}
+          REGION_GEO: ${{ inputs.region_geo }}
+          # The shared box analyticshq deploys onto. Its apex A record points
+          # here, which is the same box `buddy deploy` attaches to.
+          HOST: analyticshq.org
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=accept-new -o BatchMode=yes "root@${HOST}" \
+            SITE_ID="$SITE_ID" CITY_GEO="$CITY_GEO" REGION_GEO="$REGION_GEO" bash -s <<'REMOTE'
+          set -euo pipefail
+          # Postgres is provisioned on this box; its superuser reaches the app
+          # database over the local socket, so no app credential is needed.
+          PSQL_BIN=$(command -v psql || ls /usr/lib/postgresql/*/bin/psql 2>/dev/null | tail -n 1 || true)
+          if [ -z "$PSQL_BIN" ] || ! id postgres >/dev/null 2>&1; then
+            echo "::error::No psql binary or postgres user on this box. Diagnostics:"
+            ps -eo user,cmd | grep -i '[p]ostgres' | head -n 5 || true
+            exit 1
+          fi
+          PSQL=(runuser -u postgres -- "$PSQL_BIN" -X -v ON_ERROR_STOP=1 -d analyticshq)
+          show() { "${PSQL[@]}" -c "SELECT id, name, region_geo, city_geo FROM sites WHERE id = '$SITE_ID'"; }
+
+          echo "Before:"; show
+
+          # region_geo: 'unchanged' leaves the column as it is.
+          if [ "$REGION_GEO" = "unchanged" ]; then REGION_SQL='region_geo'; else REGION_SQL=":'region'::boolean"; fi
+          # One statement, so it commits or does nothing. The id is the primary
+          # key, so RETURNING gives back this id or nothing at all, and nothing
+          # means a mistyped id, which must fail rather than quietly succeed.
+          changed=$("${PSQL[@]}" -qAt -v site="$SITE_ID" -v city="$CITY_GEO" -v region="$REGION_GEO" <<SQL
+          UPDATE sites SET city_geo = :'city'::boolean, region_geo = ${REGION_SQL} WHERE id = :'site' RETURNING id;
+          SQL
+          )
+          if [ "$changed" != "$SITE_ID" ]; then
+            echo "::error::No site with id $SITE_ID, nothing was changed."
+            exit 1
+          fi
+
+          echo "After:"; show
+          REMOTE
+
+      - name: Confirm the server can resolve cities
+        run: |
+          # geoCity is false when the country-level database is on disk, in
+          # which case the flag above records nothing until the next deploy
+          # ships City Lite.
+          body=$(curl -fsS --max-time 30 https://analyticshq.org/api/health)
+          echo "$body"
+          echo "$body" | grep -q '"geoCity":true' || echo "::warning::/api/health does not report geoCity:true, so cities cannot be resolved yet."
