@@ -161,7 +161,10 @@ jobs:
           # which renders only when the site has city_geo on.
           page=$(curl -fsS --max-time 60 "$ORIGIN/dashboard?site=$SITE_ID" -H "cookie: auth-token=$token")
           for want in 'Record cities' 'Top cities'; do
-            if printf '%s' "$page" | grep -q "$want"; then echo "dashboard: found \"$want\""; else echo "::error::dashboard: \"$want\" missing"; missing=1; fi
+            # A here-string, not a pipe: `grep -q` stops reading at its first
+            # match, so under pipefail a piped printf dies of SIGPIPE and a string
+            # that WAS found reports as missing.
+            if grep -qF "$want" <<< "$page"; then echo "dashboard: found \"$want\""; else echo "::error::dashboard: \"$want\" missing"; missing=1; fi
           done
           [ -z "${missing:-}" ]
 
