@@ -25,6 +25,7 @@ import { geoPermits } from '../../app/Analytics/geo'
 import { minSegmentSizeFor } from '../../app/Analytics/segment-floor'
 import { listVisitors } from '../../app/Analytics/visitors'
 import { placeLabel, plural, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
+import { TZ_COOKIE, validTimeZone, zonedKey, zoneLabel } from '../../app/Support/timezone'
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
@@ -81,10 +82,23 @@ const rangeLabel = isCustom ? fmtSpan(customFrom, customTo) : isAll ? 'All time'
 let granularity = days <= 2 ? 'hour' : days > 400 ? 'month' : 'day'
 let hourly = granularity === 'hour'
 let bucketLen = granularity === 'hour' ? 13 : granularity === 'month' ? 7 : 10
-// Per-site timezone: the chart buckets in the site's local time (default UTC).
-// Assigned once the active site is resolved; tzLabel is the short axis label.
+// The chart buckets in the READER's timezone: the one their browser reported
+// (the `tz` cookie, set through POST /api/prefs/timezone), else the site's own
+// (default UTC). A reader in Los Angeles looking at 2pm traffic sees 14:00, not
+// 21:00. Assigned once the active site is resolved; tzLabel is the axis label.
 let siteTz = 'UTC'
+let chartTz = 'UTC'
 let tzLabel = 'UTC'
+/** The zone the reader's browser reported, if it has, else null. */
+const savedTz = (() => {
+  const raw = typeof cookies !== 'undefined' ? cookies[TZ_COOKIE] : ''
+  try {
+    return validTimeZone(decodeURIComponent(String(raw || '')))
+  }
+  catch {
+    return null
+  }
+})()
 // Last ~5 minutes; ISO string compares lexicographically against the ISO timestamp column.
 const liveFrom = new Date(Date.now() - 5 * 60 * 1000).toISOString()
 // Compare-to-previous-period overlay: ?compare=1 draws the immediately-preceding window
@@ -496,16 +510,23 @@ async function loadData() {
     if (typeof tz === 'string' && /^[\w+\-/]{1,64}$/.test(tz) && tz !== 'UTC')
       siteTz = tz
   }
-  try {
-    tzLabel = siteTz === 'UTC'
-      ? 'UTC'
-      : (new Intl.DateTimeFormat('en-US', { timeZone: siteTz, timeZoneName: 'short' })
-          .formatToParts(new Date()).find(x => x.type === 'timeZoneName')?.value || siteTz)
+  // The reader's zone wins when Postgres knows it. Asked of Postgres rather than
+  // assumed from Intl, because the two ship different zone databases and a name
+  // one accepts and the other rejects would error the whole chart query.
+  chartTz = siteTz
+  if (savedTz && savedTz !== siteTz) {
+    try {
+      await pgq(`SELECT now() AT TIME ZONE ?`, [savedTz])
+      chartTz = savedTz
+    }
+    catch {}
   }
-  catch { tzLabel = siteTz }
-  const bucketCol = siteTz === 'UTC'
+  tzLabel = zoneLabel(chartTz)
+  // chartTz passed validTimeZone (letters, digits, `_ + - /` only) or came from
+  // the sanitized site column, so it is safe to interpolate.
+  const bucketCol = chartTz === 'UTC'
     ? 'timestamp'
-    : `to_char(timezone('${siteTz}', timestamp::timestamptz), 'YYYY-MM-DD"T"HH24:MI:SS')`
+    : `to_char(timezone('${chartTz}', timestamp::timestamptz), 'YYYY-MM-DD"T"HH24:MI:SS')`
   const bucket = len => `LEFT(${bucketCol}, ${len})`
   // 'all' range: anchor `from` at the site's earliest pageview, then pick the chart
   // granularity from the real span (month for multi-year so imported history is
@@ -1146,29 +1167,45 @@ function densify(rows: ChartRow[], fromISO: string, toISO: string): ChartRow[] {
   const byKey = new Map(rows.map(r => [r.day, r]))
   const out = []
   const keyLen = granularity === 'hour' ? 13 : granularity === 'month' ? 7 : 10
-  let d, end
-  if (granularity === 'month') {
-    d = new Date(`${fromISO.slice(0, 7)}-01T00:00:00Z`)
-    end = new Date(`${toISO.slice(0, 7)}-01T00:00:00Z`)
-  }
-  else if (granularity === 'hour') {
-    d = new Date(`${fromISO.slice(0, 13)}:00:00Z`)
-    end = new Date(`${toISO.slice(0, 13)}:00:00Z`)
+  // Keys are the wall clock in chartTz, the same zone the query bucketed in, or
+  // no bucket would ever be found for a reader outside UTC.
+  const keys = []
+  if (granularity === 'hour') {
+    // Walk real hours and read each one's local label. Across a DST change a
+    // label can repeat or be skipped, which is what the local clock did too.
+    const endT = new Date(toISO).getTime()
+    let t = new Date(fromISO).getTime()
+    t -= t % 3600e3
+    for (let i = 0; t <= endT && i < 5000; i++, t += 3600e3) {
+      const key = zonedKey(new Date(t), chartTz).slice(0, 13)
+      if (keys[keys.length - 1] !== key)
+        keys.push(key)
+    }
   }
   else {
-    d = new Date(`${fromISO.slice(0, 10)}T00:00:00Z`)
-    end = new Date(`${toISO.slice(0, 10)}T00:00:00Z`)
+    // Calendar days and months are date arithmetic on the local dates, which is
+    // zone-free once the two ends are converted.
+    const startKey = zonedKey(new Date(fromISO), chartTz)
+    const endKey = zonedKey(new Date(toISO), chartTz)
+    let d = granularity === 'month'
+      ? new Date(`${startKey.slice(0, 7)}-01T00:00:00Z`)
+      : new Date(`${startKey.slice(0, 10)}T00:00:00Z`)
+    const end = granularity === 'month'
+      ? new Date(`${endKey.slice(0, 7)}-01T00:00:00Z`)
+      : new Date(`${endKey.slice(0, 10)}T00:00:00Z`)
+    // Bound the loop defensively (a corrupt `from` could otherwise spin); monthly
+    // over a decade is ~120 buckets, daily over a year ~365.
+    for (let i = 0; d <= end && i < 5000; i++) {
+      keys.push(d.toISOString().slice(0, keyLen))
+      d = granularity === 'month'
+        ? new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+        : new Date(d.getTime() + 864e5)
+    }
   }
-  // Bound the loop defensively (a corrupt `from` could otherwise spin); monthly
-  // over a decade is ~120 buckets, daily over a year ~365, hourly over 2d ~48.
-  for (let i = 0; d <= end && i < 5000; i++) {
-    const key = d.toISOString().slice(0, keyLen)
+  for (const key of keys) {
     const label = granularity === 'hour' ? `${key.slice(5, 10)} ${key.slice(11, 13)}:00` : key
     const r = byKey.get(key)
     out.push({ day: key, label, views: r ? Number(r.views || 0) : 0, visitors: r ? Number(r.visitors || 0) : 0 })
-    d = granularity === 'month'
-      ? new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
-      : new Date(d.getTime() + (granularity === 'hour' ? 3600e3 : 864e5))
   }
   return out
 }
@@ -1279,7 +1316,7 @@ const shareCapability = __shareToken
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, cityGeo, countryTotals, exportPayload, installOptions, liveNow, liveWhere, range, regionGeo, shareCapability, visitorTimelines })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -2268,6 +2305,26 @@ onMount(() => {
     .then(d => { if (d && d.pro) isPro.set(true) })
     .catch(() => {})
 
+  // Chart in the reader's timezone. The server only knows it once the browser
+  // has said so, so the first visit (or one after moving zones) reports it and
+  // re-renders once. Compared with the SAVED zone, not the chart's: if Postgres
+  // does not know this zone the chart stays on the site's, and comparing with
+  // chartTz would re-render forever.
+  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+  if (browserTz && browserTz !== savedTz) {
+    fetch('/api/prefs/timezone', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ tz: browserTz }),
+    })
+      .then((r) => {
+        if (r.ok && browserTz !== chartTz)
+          refreshFromServer()
+      })
+      .catch(() => {})
+  }
+
   // Refresh the live visitor count every 15s.
   //
   // useInterval, not setInterval, and this is a bug fix rather than a style change.
@@ -2378,7 +2435,12 @@ onMount(() => {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 .range-link:hover { color: var(--text); }
-.range-link[aria-current="page"] {
+/* "true", not "page": the range links all point at this same page, and the stx
+   router's markCurrent() strips aria-current="page" from any link whose href is
+   not the current pathname. A query-only href never is, so the active range lost
+   its highlight on every load. "true" (the current item in a set) is also the
+   accurate value for a picker, and the router leaves it alone. */
+.range-link[aria-current="true"] {
   background: var(--accent);
   color: var(--accent-ink);
 }
@@ -2875,7 +2937,7 @@ select.panel:hover { border-color: var(--accent); }
             <StxLink
               to="?site={{ siteId }}&range={{ r.key }}{{ compare ? '&compare=1' : '' }}"
               class="range-link"
-              aria-current="{{ !isCustom && r.key === range ? 'page' : 'false' }}"
+              aria-current="{{ !isCustom && r.key === range ? 'true' : 'false' }}"
             >{{ r.label }}</StxLink>
           @endforeach
         </nav>

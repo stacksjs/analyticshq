@@ -55,6 +55,7 @@ import {
 } from '../app/Analytics/tracking'
 import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, regionFromIp } from '../app/Analytics/geo'
 import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
+import { tzCookie, validTimeZone } from '../app/Support/timezone'
 import { listVisitors, timelinesEnabled, VISITOR_LIST_LIMIT, visitorTimeline } from '../app/Analytics/visitors'
 
 /**
@@ -3777,6 +3778,29 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
 // because an optional lookup table went stale would be the wrong call. It stays
 // in the body so the answer is one request away when someone asks why country
 // is empty.
+// ---------------------------------------------------------------------------
+// Viewer preferences
+// ---------------------------------------------------------------------------
+// The dashboard renders the chart in the reader's own timezone. The browser
+// knows it (Intl) and the server render does not, so the dashboard posts it here
+// once and the answer rides in a cookie on every later render. No account and
+// no site involved: it says how to display times, not anything about a site, so
+// it needs no auth, and it is validated on every read as well as here.
+route.options('/api/prefs/timezone', () => new Response(null, { status: 204, headers: CORS }))
+
+route.post('/api/prefs/timezone', async (request: any) => {
+  const body = request.jsonBody ?? {}
+  const tz = validTimeZone(body.tz)
+  if (!tz)
+    return json({ error: 'tz must be an IANA timezone name, such as America/Los_Angeles' }, 400)
+  const env = String(process.env.APP_ENV ?? process.env.NODE_ENV ?? '').toLowerCase()
+  const secure = !['', 'local', 'development', 'dev', 'test', 'testing'].includes(env)
+  return new Response(JSON.stringify({ tz }), {
+    status: 200,
+    headers: { ...CORS, 'Content-Type': 'application/json', 'Set-Cookie': tzCookie(tz, secure) },
+  })
+}).skipCsrf()
+
 route.get('/api/health', () => healthResponse({
   extra: {
     // A known-routable address. Resolving it proves the database opened and

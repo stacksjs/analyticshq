@@ -17,6 +17,7 @@ import { resolveSiteRole, satisfies } from '../../app/Analytics/access'
 import { timelinesEnabled, visitorTimeline } from '../../app/Analytics/visitors'
 import { channelOf, fmtDuration } from '../../app/Support/dashboard-format'
 import { money, placeLabel, plural, stamp, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
+import { TZ_COOKIE, validTimeZone } from '../../app/Support/timezone'
 
 // `query` is injected per render, the way the dashboard reads it. Guarded, since
 // a standalone render injects nothing.
@@ -62,14 +63,23 @@ if (authToken) {
 }
 
 const dashboardHref = `/dashboard?site=${encodeURIComponent(siteParam)}`
+// Times in the reader's zone, the one the dashboard saved from their browser.
+const readerTz = (() => {
+  try {
+    return validTimeZone(decodeURIComponent(String((typeof cookies !== 'undefined' ? cookies[TZ_COOKIE] : '') || ''))) || 'UTC'
+  }
+  catch {
+    return 'UTC'
+  }
+})()
 const canErase = role === 'owner' && view === 'ok'
 const label = visitorLabel(idParam)
 
 // Everything the markup needs, formatted here once rather than in the template.
 const summary = timeline
   ? {
-      firstSeen: stamp(timeline.first_seen),
-      lastSeen: `${stamp(timeline.last_seen)} (${timeAgo(timeline.last_seen)})`,
+      firstSeen: stamp(timeline.first_seen, readerTz),
+      lastSeen: `${stamp(timeline.last_seen, readerTz)} (${timeAgo(timeline.last_seen)})`,
       span: plural(timeline.days, 'day'),
       visits: plural(timeline.totals.visits, 'visit'),
       pageviews: plural(timeline.totals.pageviews, 'page view'),
@@ -86,7 +96,7 @@ const summary = timeline
 const visits = timeline
   ? [...timeline.visits].reverse().map((v, i, all) => ({
       n: all.length - i,
-      when: stamp(v.started_at),
+      when: stamp(v.started_at, readerTz),
       source: v.source || 'Direct',
       channel: channelOf(v.source),
       campaign: [v.utm_source, v.utm_medium, v.utm_campaign].filter(Boolean).join(' / '),
@@ -94,7 +104,7 @@ const visits = timeline
       tech: [v.device, v.browser, v.os].filter(Boolean).join(' · '),
       duration: v.duration ? fmtDuration(v.duration) : '',
       items: v.items.map(item => ({
-        time: (stamp(item.at).split(', ')[1] || '').replace(' UTC', ''),
+        time: (stamp(item.at, readerTz).split(', ')[1] || '').split(' ')[0],
         kind: item.kind,
         icon: item.kind === 'pageview' ? 'i-hugeicons-file-01' : (item.kind === 'event' ? 'i-hugeicons-cursor-pointer-02' : 'i-hugeicons-target-02'),
         text: item.kind === 'pageview'

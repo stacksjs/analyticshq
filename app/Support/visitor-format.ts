@@ -8,6 +8,7 @@
 
 import { cityLabel, splitCity } from '../Analytics/cities'
 import { countryName, flag } from './dashboard-format'
+import { zonedKey, zoneLabel } from './timezone'
 
 /** `#3f9a2c`: the first six characters of the visitor hash. */
 export function visitorLabel(visitorId: string | null | undefined): string {
@@ -41,15 +42,14 @@ export function timeAgo(at: string | null | undefined, now: Date = new Date()): 
   return `${Math.round(hours / 24)}d ago`
 }
 
-/** `Sep 25, 14:05 UTC`. UTC because every stored timestamp is. */
-export function stamp(at: string | null | undefined): string {
+/** `Sep 25, 14:05 PDT`: the wall clock in `tz`, which is the reader's zone when known. */
+export function stamp(at: string | null | undefined, tz: string = 'UTC'): string {
   const d = at ? new Date(at) : null
   if (!d || Number.isNaN(d.getTime()))
     return ''
-  const month = d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
-  const hh = String(d.getUTCHours()).padStart(2, '0')
-  const mm = String(d.getUTCMinutes()).padStart(2, '0')
-  return `${month} ${d.getUTCDate()}, ${hh}:${mm} UTC`
+  const key = zonedKey(d, tz)
+  const month = new Date(`${key.slice(0, 10)}T12:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+  return `${month} ${Number(key.slice(8, 10))}, ${key.slice(11, 16)} ${zoneLabel(tz, d)}`
 }
 
 /** `12 visits`, `1 visit`. */
