@@ -75,6 +75,24 @@ About 24000 streams is the ceiling for one box: each one is a loopback
 connection per hop, and `net.ipv4.ip_local_port_range` gives each hop about
 28000. Past that, add a box.
 
+### When to scale: the StatusHQ capacity monitor
+
+`GET /api/health/capacity` reports whether it is time to add a server or a
+bigger one, in the Oh Dear schema StatusHQ reads (`app/Analytics/capacity.ts`
+has every threshold and why). It answers only with the
+`oh-dear-health-check-secret` header matching `ANALYTICSHQ_HEALTH_SECRET`
+(encrypted in `.env.production`), and 404s while that is unset.
+
+On statushq.org it is monitor **"analyticshq: capacity (when to scale)"** in
+the team that holds the other analyticshq monitors, checked every 5 minutes,
+alerting the team's Discord channel. StatusHQ only notifies on a `failed`
+check, so each `failed` line is set to leave time to act; `warning` shows on
+the dashboard without paging. The alert text names the fix: live streams and
+loopback ports mean add a server, memory and CPU mean a bigger one, disk means
+grow the volume or shorten retention, and database connections mean pool
+harder or give Postgres its own box. Rotating the secret means updating both
+`.env.production` and the monitor's `healthSecret`.
+
 ## Database
 
 PostgreSQL 18 (pantry) co-located on the shared box, listening on
