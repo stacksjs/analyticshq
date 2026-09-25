@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { purgeSaltsQuery } from '../../app/Analytics/salt-purge'
 import { clampWindowDays, saltDateFor, windowStartFor } from '../../app/Analytics/salt'
+import { hashVisitor, visitorIpKey } from '../../app/Analytics/tracking'
 import { isVisitorId } from '../../app/Analytics/visitors'
 import { placeLabel, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
 import privacy from '../../config/privacy'
@@ -150,5 +151,36 @@ describe('what a visitor looks like', () => {
     const sql = read('database/migrations/0000000057-add-visitor-window.sql')
     expect(sql).toContain('"visitor_window_days" integer NOT NULL DEFAULT 1')
     expect(sql).toContain('CHECK ("visitor_window_days" BETWEEN 1 AND 30)')
+  })
+})
+
+describe('which part of the address is hashed', () => {
+  test('IPv6 is cut to its /64, so a rotating privacy address stays one visitor', () => {
+    expect(visitorIpKey('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64')
+    expect(visitorIpKey('2001:0DB8:0001:0002::1')).toBe('2001:db8:1:2::/64')
+    expect(visitorIpKey('[2001:db8:1:2::9]:443')).toBe('2001:db8:1:2::/64')
+    const salt = 'secret'
+    expect(hashVisitor('2001:db8:1:2:aaaa::1', 'UA', 'site', salt)).toBe(hashVisitor('2001:db8:1:2:bbbb:cccc:dddd:eeee', 'UA', 'site', salt))
+    expect(hashVisitor('2001:db8:1:2::1', 'UA', 'site', salt)).not.toBe(hashVisitor('2001:db8:1:3::1', 'UA', 'site', salt))
+  })
+
+  test('IPv4 is unchanged, however a proxy spells it', () => {
+    for (const ip of ['203.0.113.7', '203.0.113.7:51234', '::ffff:203.0.113.7'])
+      expect(visitorIpKey(ip)).toBe('203.0.113.7')
+    // NAT64 carries the visitor's own v4. Cutting it to /64 would merge
+    // everyone behind the carrier's gateway into one visitor.
+    expect(visitorIpKey('64:ff9b::192.0.2.1')).toBe('192.0.2.1')
+    expect(visitorIpKey('64:ff9b::c000:201')).toBe('192.0.2.1')
+  })
+
+  test('anything unparseable is hashed as it came, not guessed at', () => {
+    for (const ip of ['garbage', '1:2:3:4:5:6:7:8:9', 'fe80::1%en0', ''])
+      expect(visitorIpKey(ip)).toBe(ip)
+  })
+
+  test('the hash cannot skip it', () => {
+    const src = read('app/Analytics/tracking.ts')
+    const fn = src.slice(src.indexOf('export function hashVisitor'), src.indexOf('\n}', src.indexOf('export function hashVisitor')))
+    expect(fn).toContain('visitorIpKey(ip)')
   })
 })

@@ -23,7 +23,10 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   `siteId` is in the hash, the id is **per-site**: the same person on two sites
   gets two unrelated ids, so there is **no cross-site identity**. A salt is
   deleted once its day is over, and from then on nobody, including us, can tie
-  that day's ids to an IP or browser.
+  that day's ids to an IP or browser. An IPv6 address goes into the hash cut to
+  its /64 network, because the rest is a privacy address the device changes
+  every day or so. That is the same granularity an IPv4 address already has
+  behind a home router, so the hash sees less of the address, not more.
 
 - **Visitor timelines are opt-in, pseudonymous and capped at 30 days.** A site
   owner can turn on "Remember returning visitors". That site then keeps one salt
