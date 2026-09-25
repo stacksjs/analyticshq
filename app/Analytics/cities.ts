@@ -49,17 +49,27 @@ export function splitCity(value: string | null | undefined): { country: string, 
 }
 
 /**
- * What a row reads as: `San Diego, CA`.
+ * Countries whose state or province codes people actually write after a city:
+ * "San Diego, CA", "Toronto, ON", "Sydney, NSW". Elsewhere the ISO code is not
+ * how anyone writes an address ("Berlin, BE", "London, ENG"), and the flag beside
+ * the row already says the country.
+ */
+const CODED_SUBDIVISIONS = new Set(['US', 'CA', 'AU'])
+
+/**
+ * What a row reads as: `San Diego, CA`, or `Berlin`.
  *
- * The subdivision code rides along because it is what tells two towns of the
- * same name apart, and a list saying "Springfield" twice would be useless. The
- * caller adds the flag, since inside a country filter every row would repeat it.
+ * Where the subdivision code is conventional it rides along, because it is what
+ * tells two towns of the same name apart: a list saying "Springfield" twice
+ * would be useless. The caller adds the flag, since inside a country filter
+ * every row would repeat it. The stored value keeps the full code either way,
+ * so filtering and grouping never depend on how a row is labelled.
  */
 export function cityLabel(value: string | null | undefined): string {
   const parts = splitCity(value)
   if (!parts)
     return String(value ?? '')
-  return parts.subdivision ? `${parts.name}, ${parts.subdivision}` : parts.name
+  return parts.subdivision && CODED_SUBDIVISIONS.has(parts.country) ? `${parts.name}, ${parts.subdivision}` : parts.name
 }
 
 /** What a grouped city query hands back, before folding. */

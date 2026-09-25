@@ -67,7 +67,7 @@
  * Attribution is required by the license and is rendered on /features/geography.
  */
 
-import type { Reader as MmdbReader } from 'mmdb-lib'
+import type { Response as MmdbResponse } from 'mmdb-lib'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
@@ -137,7 +137,17 @@ export function geoDbPath(env: NodeJS.ProcessEnv = process.env): string {
  * and there is no usable database". `false` rather than retrying, so a missing
  * file costs one failed read for the process lifetime instead of one per beacon.
  */
-let cached: MmdbReader<GeoRecord> | false | null = null
+let cached: GeoReader | false | null = null
+
+/**
+ * All this module asks of a database: an address in, our record shape out.
+ *
+ * Not mmdb-lib's `Reader<T>`, whose `T` has to satisfy its union of MaxMind
+ * response types. DB-IP's records are a subset of those (a city with a name and
+ * no geoname_id), so `GeoRecord` cannot honestly claim to be one, and the reader
+ * is cast once, where it is built, instead.
+ */
+interface GeoReader { get: (ip: string) => GeoRecord | null }
 
 /**
  * Load the database, once.
@@ -149,11 +159,11 @@ let cached: MmdbReader<GeoRecord> | false | null = null
  * recording pageviews, which is a far worse outcome than an empty country
  * column.
  */
-function reader(): MmdbReader<GeoRecord> | null {
+function reader(): GeoReader | null {
   if (cached !== null)
     return cached || null
   try {
-    cached = new Reader<GeoRecord>(readFileSync(geoDbPath()))
+    cached = new Reader<MmdbResponse>(readFileSync(geoDbPath())) as unknown as GeoReader
   }
   catch {
     // Absent, unreadable, or not a valid MMDB. All three mean the same thing to
@@ -176,7 +186,7 @@ export function resetGeoCache(): void {
  * will do. `resetGeoCache()` puts the file-backed reader back.
  */
 export function setGeoReaderForTests(r: { get: (ip: string) => GeoRecord | null } | null): void {
-  cached = r ? (r as unknown as MmdbReader<GeoRecord>) : false
+  cached = r ?? false
 }
 
 /**

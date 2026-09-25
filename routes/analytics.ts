@@ -38,6 +38,7 @@ import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, sea
 import { estimateRows, FATHOM_MAX_ROWS_PER_REQUEST, FATHOM_MAX_UPLOAD_BYTES, FATHOM_PAGE_VIEW_PREFIX, FATHOM_SESSION_PREFIX, fathomBasename, fathomImportWarnings, readFathomExport, toRecords as fathomRecords } from '../app/Analytics/fathom-import'
 import { readFathomZip } from '../app/Analytics/fathom-zip'
 import { foldRegions } from '../app/Analytics/regions'
+import { liveLocations } from '../app/Analytics/live'
 import { CONNECT_MAX_ROWS, describeFields, parseFieldList, planQuery, shapeRow, shareTokenVerdict } from '../app/Analytics/connect'
 import { route } from '@stacksjs/router'
 import privacy from '../config/privacy'
@@ -3641,7 +3642,20 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
     `SELECT COUNT(DISTINCT visitor_id) AS current FROM page_views WHERE site_id = ? AND timestamp >= ?`,
     [siteId, since],
   ))?.[0]
-  return json({ current: Number(row?.current ?? 0) })
+  const current = Number(row?.current ?? 0)
+  // Where they are, for the dashboard's Live now strip, under this site's floor:
+  // a place finer than a country is named only when it clears it, and rolls up
+  // into its country otherwise. The dashboard's first render calls the same
+  // function (app/Analytics/live.ts), so the strip never changes shape on a poll.
+  let where = { locations: [], more: 0, unknown: 0 } as ReturnType<typeof liveLocations>
+  if (current > 0) {
+    const places = (await pgq(
+      `SELECT country, region, city, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE site_id = ? AND timestamp >= ? GROUP BY country, region, city`,
+      [siteId, since],
+    )) ?? []
+    where = liveLocations(places as never, await minSegmentSizeFor(String(siteId)), current)
+  }
+  return json({ current, where })
 }).middleware('auth')
 
 // ---------------------------------------------------------------------------

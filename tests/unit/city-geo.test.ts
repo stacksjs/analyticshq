@@ -229,6 +229,10 @@ describe('the city value format', () => {
   test('reads as the city with its state', () => {
     expect(cityLabel('US-CA:San Diego')).toBe('San Diego, CA')
     expect(cityLabel('TW:Taipei')).toBe('Taipei')
+    // The code only where people write one: "Berlin, BE" reads as noise.
+    expect(cityLabel('DE-BE:Berlin')).toBe('Berlin')
+    expect(cityLabel('GB-ENG:London')).toBe('London')
+    expect(cityLabel('CA-ON:Toronto')).toBe('Toronto, ON')
     // Unparseable values render as themselves rather than as something invented.
     expect(cityLabel('weird')).toBe('weird')
   })

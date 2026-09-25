@@ -120,7 +120,9 @@ const calRightCells = derived(() => pickGrid(pickShiftMonth(calYm(), 1), pickTod
 function pickIsActive(key) {
   const p = pickPreset(key, pickToday)
   if (!p) return false
-  if (p.range) return !pickUrlFrom && (pickUrlRange || '1y') === p.range
+  // '90d' is the dashboard's default range (dashboard.stx, DEFAULT_RANGE): with no
+  // ?range in the URL that is the period on screen, so it is the one marked.
+  if (p.range) return !pickUrlFrom && (pickUrlRange || '90d') === p.range
   return pickUrlFrom === p.from && pickUrlTo === p.to
 }
 function pickPresetClass(key) {
