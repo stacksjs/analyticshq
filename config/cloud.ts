@@ -781,7 +781,15 @@ export const tsCloud: TsCloudConfig = {
       // Pin the proxy target. `buddy serve` otherwise falls back to
       // 127.0.0.1:3008, which on this SHARED box is the `stacks` project's own
       // API — analyticshq's `POST /collect` would silently cross tenants.
-      env: { API_URL: 'http://127.0.0.1:3025', APP_ENV: 'production', NODE_ENV: 'production' },
+      //
+      // BUN_CONFIG_MAX_HTTP_REQUESTS: this process forwards /api/* to the `api`
+      // site with fetch(), and Bun allows 256 in-flight fetches per process by
+      // default. A live dashboard's event stream is one fetch for as long as the
+      // dashboard is open, so at the default the 257th open dashboard would make
+      // every other forwarded request, /collect included, wait. 24000 matches the
+      // rpx gateway's RPX_MAX_UPSTREAM_CONNS (set in a drop-in on the box, see
+      // DEPLOY.md) and leaves headroom over api's ANALYTICSHQ_LIVE_MAX_STREAMS.
+      env: { API_URL: 'http://127.0.0.1:3025', APP_ENV: 'production', NODE_ENV: 'production', BUN_CONFIG_MAX_HTTP_REQUESTS: '24000' },
     },
 
     // The ingest + stats API (bun-router), behind `buddy serve`'s same-origin
@@ -821,7 +829,11 @@ export const tsCloud: TsCloudConfig = {
         // plugin rewrites them on next boot; deleting is the whole fix.
         'rm -rf storage/framework/auto-imports',
       ],
-      env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production' },
+      // ANALYTICSHQ_LIVE_MAX_STREAMS: live dashboards this process streams to at
+      // once (app/Analytics/realtime.ts). Kept below the two proxy pools in front
+      // of it: `main`'s BUN_CONFIG_MAX_HTTP_REQUESTS and the gateway's
+      // RPX_MAX_UPSTREAM_CONNS, both 24000. Raise all three together or not at all.
+      env: { HOST: '127.0.0.1', APP_ENV: 'production', NODE_ENV: 'production', ANALYTICSHQ_LIVE_MAX_STREAMS: '20000' },
     },
 
     // BunPress documentation, built as static files and mounted under /docs.

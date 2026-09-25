@@ -46,6 +46,35 @@ routes are written around:
   /script.js` on the API would be unreachable from the public origin;
 - the health endpoint is `/api/health`, not `/health`.
 
+### Live dashboards and the proxy pools
+
+A live dashboard holds one open request (`GET /api/sites/{id}/live`, an event
+stream) for as long as it is open, and that request passes through two
+connection pools: the rpx gateway's upstream pool and `main`'s `fetch()` to
+`api`. Both default to 256, so they have to be raised together with the
+number of streams `api` accepts, or open dashboards starve every other request,
+`/collect` included, of connections.
+
+| Where | Setting | Value | Set in |
+| --- | --- | --- | --- |
+| `api` | `ANALYTICSHQ_LIVE_MAX_STREAMS` | 20000 | `config/cloud.ts` |
+| `main` | `BUN_CONFIG_MAX_HTTP_REQUESTS` | 24000 | `config/cloud.ts` |
+| rpx gateway | `RPX_MAX_UPSTREAM_CONNS` | 24000 | drop-in (below) |
+| rpx gateway | `BUN_CONFIG_MAX_HTTP_REQUESTS` | 24000 | drop-in |
+| rpx gateway | `RPX_MAX_QUEUED` | 2048 | drop-in (pinned: its default is 8 × the pool) |
+| rpx gateway | `MemoryHigh` / `MemoryMax` | 2G / 3G | drop-in (was 512M / 768M, with `OOMPolicy=stop`) |
+
+The gateway is shared by every site on the box and its unit is written by
+ts-cloud, so its settings live in a drop-in that ts-cloud does not manage:
+`/etc/systemd/system/rpx-gateway.service.d/60-live-connections.conf`. A fresh
+box needs it recreated, then `systemctl daemon-reload && systemctl restart
+rpx-gateway`. Without it `api` still works: past the gateway's pool, streams
+queue, and dashboards whose stream goes quiet fall back to polling.
+
+About 24000 streams is the ceiling for one box: each one is a loopback
+connection per hop, and `net.ipv4.ip_local_port_range` gives each hop about
+28000. Past that, add a box.
+
 ## Database
 
 PostgreSQL 18 (pantry) co-located on the shared box, listening on
