@@ -20,6 +20,7 @@ import { planForSite } from '../../app/Analytics/entitlements'
 import { foldRegions, splitRegion } from '../../app/Analytics/regions'
 import { cityLabel, foldCities, splitCity } from '../../app/Analytics/cities'
 import { geoPermits } from '../../app/Analytics/geo'
+import { minSegmentSizeFor } from '../../app/Analytics/segment-floor'
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
@@ -248,6 +249,9 @@ let live = false
 let user = null
 let ownedSites = []
 let activeSiteRecord = null
+// This site's disclosure floor: the install's, unless an operator set one for
+// the site (app/Analytics/segment-floor.ts). Resolved once the site is known.
+let siteFloor = privacy.minSegmentSize
 // Runs the install: the switcher lists every site, not only this user's.
 let platformAdmin = false
 
@@ -451,6 +455,7 @@ async function loadData() {
       teamInvites = []
     }
   }
+  siteFloor = await minSegmentSizeFor(siteId)
   // Resolve the site's timezone for chart bucketing. `timestamp` is a stored UTC
   // ISO string; for UTC keep the fast string-prefix, otherwise convert to the
   // site's zone first. siteTz is sanitized to IANA-safe characters, so it is safe
@@ -555,7 +560,7 @@ async function loadData() {
   vitals = buildReport((await pgq(
     `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
-     GROUP BY metric`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
+     GROUP BY metric`, [siteId, from, to])) ?? [], siteFloor)
   // The device split (#43). A second query rather than one grouped by device and
   // rolled up in JS: the site-wide p75 is NOT the average of the three device
   // p75s, and cannot be recovered from them -- a percentile of percentiles is a
@@ -567,7 +572,7 @@ async function loadData() {
   vitalsByDevice = buildDeviceReport((await pgq(
     `SELECT device_type AS device, metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
-     GROUP BY 1, 2`, [siteId, from, to])) ?? [], privacy.minSegmentSize)
+     GROUP BY 1, 2`, [siteId, from, to])) ?? [], siteFloor)
   // Search Console (#25). Site + range only, like vitals: search_queries carries
   // no country/device/browser column for a dimension filter to narrow.
   //
@@ -764,8 +769,8 @@ try {
     // buildReport over an empty list still yields the five metrics at 0 samples,
     // so a host that prefetches without vitals gets "no data yet" rather than a
     // missing panel.
-    vitals = preloaded.vitals ?? buildReport([], privacy.minSegmentSize)
-    vitalsByDevice = preloaded.vitalsByDevice ?? buildDeviceReport([], privacy.minSegmentSize)
+    vitals = preloaded.vitals ?? buildReport([], siteFloor)
+    vitalsByDevice = preloaded.vitalsByDevice ?? buildDeviceReport([], siteFloor)
     searchQueries = preloaded.searchQueries ?? []
     live = true
     // A host that prefetches + injects `preloaded` has already authorized the view.
@@ -787,9 +792,9 @@ catch {
 // render a panel with no rows at all rather than the five "no data yet" ones.
 // Padding here covers every path out of the try/catch above with one line.
 if (!vitals.length)
-  vitals = buildReport([], privacy.minSegmentSize)
+  vitals = buildReport([], siteFloor)
 if (!vitalsByDevice.length)
-  vitalsByDevice = buildDeviceReport([], privacy.minSegmentSize)
+  vitalsByDevice = buildDeviceReport([], siteFloor)
 
 // Whether the reader is looking at a narrowed view. The vitals panel is the one
 // report that cannot honour a filter, so it has to say so exactly when one is on.
@@ -797,7 +802,7 @@ const vitalsFiltered = activeFilters.length > 0
 // Surfaced so a withheld metric can say "3 of 5" rather than only "too few" --
 // an owner who cannot tell how far off the threshold is has no way to know
 // whether waiting a day fixes it.
-const minSegmentSize = privacy.minSegmentSize
+const minSegmentSize = siteFloor
 
 const maxPage = pages.reduce((m, p) => Math.max(m, Number(p.views || 0)), 0) || 1
 const maxEntry = entryPages.reduce((m, e) => Math.max(m, Number(e.entries || 0)), 0) || 1
@@ -851,7 +856,7 @@ const countryRows = countries.map((c) => {
  * carries the country and the code carries the state, which is how most of these
  * are written down anyway.
  */
-const REGION_FLOOR = privacy.minSegmentSize
+const REGION_FLOOR = siteFloor
 const foldedRegions = foldRegions(regions, REGION_FLOOR, 8)
 /**
  * The country the reader has drilled into, or ''.
@@ -3012,8 +3017,13 @@ select.panel:hover { border-color: var(--accent); }
             <div class="font-semibold text-sm">Record state and province</div>
             <div class="mt-0.5 text-text-3 text-xs">
               Off by default. With it on, this site records the state or province a visit came from, never coordinates.
-              The city is a separate setting below. States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
-              quiet region cannot be narrowed down to a person.
+              The city is a separate setting below.
+              @if (REGION_FLOOR > 0)
+                States with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a
+                quiet region cannot be narrowed down to a person.
+              @else
+                Every state is named, however few visitors it had: the disclosure floor is off for this site.
+              @endif
             </div>
           </div>
           @if (regionGeoAllowed)
@@ -3043,8 +3053,12 @@ select.panel:hover { border-color: var(--accent); }
             <div class="font-semibold text-sm">Record city</div>
             <div class="mt-0.5 text-text-3 text-xs">
               Off by default. With it on, this site records the city a visit came from, along with its state or province.
-              The city's name only, never coordinates or a postcode, and the IP is still discarded. Cities with fewer than
-              {{ REGION_FLOOR }} visitors are reported together as "Other", so a small town cannot be narrowed down to a person.
+              The city's name only, never coordinates or a postcode, and the IP is still discarded.
+              @if (REGION_FLOOR > 0)
+                Cities with fewer than {{ REGION_FLOOR }} visitors are reported together as "Other", so a small town cannot be narrowed down to a person.
+              @else
+                Every city is named, however few visitors it had: the disclosure floor is off for this site.
+              @endif
             </div>
           </div>
           @if (cityGeoAllowed)

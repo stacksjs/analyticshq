@@ -748,6 +748,6 @@ describe('the dashboard panel', () => {
   test('survives a database that is not there yet', () => {
     // loadData throwing leaves vitalsByDevice as [], which would render a table
     // with a header and no rows.
-    expect(view).toMatch(/if \(!vitalsByDevice\.length\)\s*\n\s*vitalsByDevice = buildDeviceReport\(\[\], privacy\.minSegmentSize\)/)
+    expect(view).toMatch(/if \(!vitalsByDevice\.length\)\s*\n\s*vitalsByDevice = buildDeviceReport\(\[\], siteFloor\)/)
   })
 })

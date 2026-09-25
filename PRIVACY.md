@@ -47,7 +47,10 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
 
   Region and city rows are subject to the disclosure floor: any state or city
   with fewer than `minSegmentSize` visitors (5 by default) is reported as
-  "Other" rather than named.
+  "Other" rather than named. The install's operator can set a different floor
+  for one site, including 0, which names every state and city on that site
+  (`scripts/account.ts --segment-size`). Site owners cannot change it from the
+  dashboard or the API.
 
   **Precise coordinates are never collected, at any setting.** City is a place
   name and nothing finer: no latitude or longitude, no accuracy radius, no

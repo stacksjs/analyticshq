@@ -123,8 +123,12 @@ describe('both callers apply the same floor, from the same place', () => {
 
   test('the threshold is the configured one in both, not a literal', () => {
     expect(routes).toContain('foldRegions(')
-    expect(routes).toMatch(/foldRegions\([\s\S]{0,400}privacy\.minSegmentSize/)
-    expect(view).toContain('privacy.minSegmentSize')
+    // The configured one for THIS site: the install's floor unless an operator
+    // set one for the site (app/Analytics/segment-floor.ts).
+    expect(routes).toMatch(/foldRegions\([\s\S]{0,400}minSegmentSizeFor\(String\(siteId\)\)/)
+    expect(view).toContain('let siteFloor = privacy.minSegmentSize')
+    expect(view).toContain('siteFloor = await minSegmentSizeFor(siteId)')
+    expect(view).toContain('const REGION_FLOOR = siteFloor')
     expect(view).toContain('foldRegions(regions, REGION_FLOOR')
   })
 

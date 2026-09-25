@@ -14,6 +14,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { shouldSuppress } from '../../app/Analytics/filters'
+import { resolveMinSegmentSize, SITE_FLOOR_KEY } from '../../app/Analytics/segment-floor'
 import privacy from '../../config/privacy'
 
 const ROOT = join(import.meta.dir, '../..')
@@ -153,5 +154,36 @@ describe('the wiring a later edit could quietly loosen', () => {
     const counted = block.indexOf('segmentPopulation(')
     expect(early).toBeGreaterThan(-1)
     expect(early).toBeLessThan(counted)
+  })
+})
+
+describe('a per-site floor', () => {
+  test('a valid override wins, including 0', () => {
+    expect(resolveMinSegmentSize({ [SITE_FLOOR_KEY]: 0 }, 5)).toBe(0)
+    expect(resolveMinSegmentSize({ [SITE_FLOOR_KEY]: 10 }, 5)).toBe(10)
+  })
+
+  test('anything malformed keeps the install floor rather than switching it off', () => {
+    // A string "0", a negative, a fraction or null must not read as 0.
+    for (const bad of ['0', '', -1, 1.5, null, true, Number.NaN, {}])
+      expect(resolveMinSegmentSize({ [SITE_FLOOR_KEY]: bad }, 5)).toBe(5)
+    for (const settings of [null, undefined, 'x', {}, []])
+      expect(resolveMinSegmentSize(settings, 5)).toBe(5)
+  })
+
+  test('the withholding check reads the site\'s floor', () => {
+    const routes = read('routes/analytics.ts')
+    const i = routes.indexOf('async function suppressedResponse')
+    const block = routes.slice(i, routes.indexOf('\n}', i))
+    expect(block).toContain('const minimum = await minSegmentSizeFor(String(siteId))')
+  })
+
+  test('no endpoint writes the override', () => {
+    // Only scripts/account.ts --segment-size sets it. An owner lowering the floor
+    // that protects their own visitors is not a dashboard setting.
+    const routes = read('routes/analytics.ts')
+    expect(routes).not.toContain('min_segment_size')
+    expect(routes).not.toContain('SITE_FLOOR_KEY')
+    expect(read('scripts/account.ts')).toContain('settings[SITE_FLOOR_KEY] = Number(size)')
   })
 })

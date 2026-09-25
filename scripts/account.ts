@@ -10,6 +10,8 @@
  *   bun scripts/account.ts --revoke-tokens --email=you@example.com
  *   bun scripts/account.ts --grant-admin --email=cloud@stacksjs.com
  *   bun scripts/account.ts --revoke-admin --email=someone@example.com
+ *   bun scripts/account.ts --segment-size --site=<id> --size=0
+ *   bun scripts/account.ts --segment-size --site=<id> --size=default
  *
  * Run it on the box (or with `DB_*` pointed at it) — it talks to Postgres
  * directly, like the other scripts here, because the framework's database
@@ -25,6 +27,7 @@
  * a rotation does not actually lock anyone out.
  */
 import { snippetFor } from '../app/Analytics/custom-domain'
+import { SITE_FLOOR_KEY } from '../app/Analytics/segment-floor'
 import { mintSiteId, normalizeSiteInput } from '../app/Analytics/sites'
 import { connect, log, parseArgs, requireArg } from './analytics/lib'
 
@@ -180,6 +183,37 @@ else if (args['grant-admin'] || args['revoke-admin']) {
   log(`#${user.id} ${email} is ${grant ? 'now' : 'no longer'} a platform admin`)
 }
 
+else if (args['segment-size']) {
+  // A per-site disclosure floor, stored in sites.settings (see
+  // app/Analytics/segment-floor.ts). No endpoint writes this key, so this is the
+  // only way to change it. `default` removes the override.
+  const site = requireArg(args, 'site')
+  const size = requireArg(args, 'size')
+  if (size !== 'default' && !/^\d{1,6}$/.test(size)) {
+    log('error: --size must be a whole number of visitors, or "default"')
+    process.exit(1)
+  }
+  const [row] = await sql`SELECT settings FROM sites WHERE id = ${site} LIMIT 1`
+  if (!row) {
+    log(`error: no site with id ${site}`)
+    process.exit(1)
+  }
+  let settings: Record<string, unknown> = {}
+  try {
+    settings = JSON.parse(row.settings || '{}') || {}
+  }
+  catch {
+    settings = {}
+  }
+  if (size === 'default')
+    delete settings[SITE_FLOOR_KEY]
+  else settings[SITE_FLOOR_KEY] = Number(size)
+  await sql`UPDATE sites SET settings = ${JSON.stringify(settings)} WHERE id = ${site}`
+  log(size === 'default'
+    ? `site ${site} uses the install's disclosure floor again`
+    : `site ${site} disclosure floor set to ${size}${size === '0' ? ' (off)' : ''}`)
+}
+
 else {
   log(`usage:
   --list                                    users, their sites, and any unowned sites
@@ -190,7 +224,8 @@ else {
                                             create a site for a user; prints its snippet
   --revoke-tokens --email=                  sign a user out everywhere
   --grant-admin --email=                    let a user see and manage every site
-  --revoke-admin --email=                   take that back`)
+  --revoke-admin --email=                   take that back
+  --segment-size --site= --size=<n|default> set one site's disclosure floor (0 = off)`)
   process.exit(1)
 }
 

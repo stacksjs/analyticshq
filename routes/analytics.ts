@@ -53,6 +53,7 @@ import {
   referrerSource,
 } from '../app/Analytics/tracking'
 import { cityFromIp, countryFromIp, geoHasCities, geoHasRegions, geoPermits, regionFromIp } from '../app/Analytics/geo'
+import { minSegmentSizeFor } from '../app/Analytics/segment-floor'
 
 /**
  * Postgres positional-placeholder shim. bun-query-builder's `db.unsafe()` passes
@@ -209,7 +210,7 @@ async function readFiltersWithSegment(request: any, siteId: string): Promise<Fil
  * because 1" is a disclosure.
  */
 async function suppressedResponse(siteId: string, from: string, to: string, flt: FilterResult): Promise<Response | null> {
-  const minimum = privacy.minSegmentSize
+  const minimum = await minSegmentSizeFor(String(siteId))
   if (minimum <= 0 || flt.count === 0)
     return null
 
@@ -2367,7 +2368,8 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
 // exists to prevent, and it would arrive silently on any database built from the
 // generated migration rather than the one in database/migrations.
 
-const VITALS_MIN_SAMPLES = privacy.minSegmentSize
+// The floor is per site (app/Analytics/segment-floor.ts), so each route reads
+// it for the site it serves rather than sharing one install-wide constant.
 
 route.options('/api/sites/{siteId}/vitals', () => new Response(null, { status: 204, headers: CORS }))
 
@@ -2377,6 +2379,7 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
   if (denied)
     return denied
   const { from, to } = window(request)
+  const vitalsFloor = await minSegmentSizeFor(String(siteId))
 
   // Optional scope. Only a real device class is honoured — an unrecognised
   // `?device=` is ignored rather than matched literally, which would return an
@@ -2430,17 +2433,17 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
     // The floor is applied in SQL here rather than after the fact: a path under
     // it must not occupy one of the 20 slots, or a busy site's report could come
     // back full of rows that are all withheld.
-    [String(siteId), from, to, pathMetric, ...scopeParam, Math.max(1, VITALS_MIN_SAMPLES)],
+    [String(siteId), from, to, pathMetric, ...scopeParam, Math.max(1, vitalsFloor)],
   )
 
   return json({
     range: { from, to },
-    metrics: buildReport((totals ?? []) as any[], VITALS_MIN_SAMPLES),
+    metrics: buildReport((totals ?? []) as any[], vitalsFloor),
     thresholds: VITAL_THRESHOLDS,
     // Echoed so a caller that mistyped `?device=` can see it was not applied,
     // rather than reading a site-wide number as a mobile one.
     device,
-    devices: buildDeviceReport((byDevice ?? []) as any[], VITALS_MIN_SAMPLES),
+    devices: buildDeviceReport((byDevice ?? []) as any[], vitalsFloor),
     pages: {
       metric: pathMetric,
       rows: (byPath ?? []).map((row: any) => ({
@@ -2451,7 +2454,7 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
     },
     // Stated, not implied. See the note above this route.
     filterable: false,
-    minimum: VITALS_MIN_SAMPLES,
+    minimum: vitalsFloor,
   })
 }).middleware('auth')
 
@@ -2464,6 +2467,7 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
     return denied
   const { from, to } = window(request)
   const metric = isVitalMetric(request.query?.metric) ? String(request.query.metric) : 'LCP'
+  const vitalsFloor = await minSegmentSizeFor(String(siteId))
   // Same scope rule as the report above, and the natural next click after the
   // breakdown shows mobile is the slow one: "has mobile always been this slow,
   // or did it regress?" Unrecognised values are ignored, not matched literally.
@@ -2486,7 +2490,7 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
   // gap-filled zero: a chart that dips to 0 reads as "the site got fast", which
   // is the opposite of "we do not know".
   const days = (rows ?? [])
-    .filter((row: any) => VITALS_MIN_SAMPLES <= 0 || Number(row.samples ?? 0) >= VITALS_MIN_SAMPLES)
+    .filter((row: any) => vitalsFloor <= 0 || Number(row.samples ?? 0) >= vitalsFloor)
     .map((row: any) => ({
       day: String(row.day),
       value: Number(row.p75),
@@ -2500,7 +2504,7 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
     threshold: VITAL_THRESHOLDS[metric as keyof typeof VITAL_THRESHOLDS],
     days,
     filterable: false,
-    minimum: VITALS_MIN_SAMPLES,
+    minimum: vitalsFloor,
   })
 }).middleware('auth')
 
@@ -3547,7 +3551,7 @@ function topDimension(path: string, column: string, key: string, opts: { floorRo
         views: Number(r.views),
         visitors: Number(r.visitors),
       })),
-      privacy.minSegmentSize,
+      await minSegmentSizeFor(String(siteId)),
       20,
     )
     const rows: Array<Record<string, unknown>> = folded.rows.map(r => ({ name: r.region, views: r.views, visitors: r.visitors }))
