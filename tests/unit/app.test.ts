@@ -17,8 +17,12 @@ import { join, relative } from 'node:path'
 
 const ROOT = join(import.meta.dir, '../..')
 
-/** Trees that are not ours: dependencies, vendored framework, build output. */
-const PRUNE = new Set(['node_modules', 'storage', '.git', 'dist', '.stacks', 'public', 'coverage'])
+/**
+ * Trees that are not ours: dependencies, vendored framework, build output.
+ * `pantry` is the pantry package manager's install tree, gitignored like
+ * node_modules, and packages in it ship their own tests (@stripe/stripe-js).
+ */
+const PRUNE = new Set(['node_modules', 'pantry', 'storage', '.git', 'dist', '.stacks', 'public', 'coverage'])
 
 function findTests(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
