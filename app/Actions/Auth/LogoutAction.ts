@@ -2,12 +2,12 @@ import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
 import { Auth } from '@stacksjs/auth'
 import { response } from '@stacksjs/router'
-import { clearAuthCookie } from './authCookie'
+import { clearAuthCookie } from '../../Support/authCookie'
 
 /**
  * Project override of the framework's default LogoutAction - same token
  * revocation, plus clearing the HttpOnly `auth-token` cookie LoginAction sets
- * (see Actions/Auth/authCookie.ts for why the cookie exists at all).
+ * (see Support/authCookie.ts for why the cookie exists at all).
  */
 export default new Action({
   name: 'LogoutAction',

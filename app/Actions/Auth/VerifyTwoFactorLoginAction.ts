@@ -3,7 +3,7 @@ import { Action } from '@stacksjs/actions'
 import { Auth, consumeTwoFactorChallenge, verifyTwoFactorLoginCode } from '@stacksjs/auth'
 import { response } from '@stacksjs/router'
 import { schema } from '@stacksjs/validation'
-import { buildAuthCookie, sessionExpiryMinutes } from './authCookie'
+import { buildAuthCookie, sessionExpiryMinutes } from '../../Support/authCookie'
 
 /**
  * Second step of a 2FA login: exchange the LoginAction challenge token plus a

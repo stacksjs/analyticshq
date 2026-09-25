@@ -4,7 +4,7 @@ import { Auth, createTwoFactorChallenge, getTwoFactorState } from '@stacksjs/aut
 import { User } from '@stacksjs/orm'
 import { response } from '@stacksjs/router'
 import { schema } from '@stacksjs/validation'
-import { buildAuthCookie, sessionExpiryMinutes } from './authCookie'
+import { buildAuthCookie, sessionExpiryMinutes } from '../../Support/authCookie'
 
 /**
  * Project override of the framework's default LoginAction (resolved by the
@@ -16,7 +16,7 @@ import { buildAuthCookie, sessionExpiryMinutes } from './authCookie'
  * cookie (config.auth.defaultTokenName). The dashboard's `.stx` pages are
  * server-rendered directly from PostgreSQL with no client hydration and have
  * no other way to know who is asking, so they resolve the signed-in owner from
- * this cookie. See Actions/Auth/authCookie.ts and dashboard.stx's server block.
+ * this cookie. See Support/authCookie.ts and dashboard.stx's server block.
  */
 export default new Action({
   name: 'LoginAction',

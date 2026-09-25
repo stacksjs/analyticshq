@@ -4,7 +4,7 @@ import { Auth, register } from '@stacksjs/auth'
 import { dispatch } from '@stacksjs/events'
 import { response } from '@stacksjs/router'
 import { schema } from '@stacksjs/validation'
-import { buildAuthCookie } from './authCookie'
+import { buildAuthCookie } from '../../Support/authCookie'
 
 /**
  * Project override of the framework's default RegisterAction (resolved by the

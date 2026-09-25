@@ -51,7 +51,7 @@ export default {
    *
    * This value IS the browser session length, not just an API-bearer TTL.
    * LoginAction mirrors the issued access token into the HttpOnly `auth-token`
-   * cookie (see Actions/Auth/authCookie.ts) because the dashboard is
+   * cookie (see Support/authCookie.ts) because the dashboard is
    * server-rendered stx with no client hydration and has no other way to know
    * who is asking. Both the cookie's Max-Age and the
    * `oauth_access_tokens.expires_at` row are stamped from here, and nothing
@@ -62,7 +62,7 @@ export default {
    *
    * This is the BASELINE only. LoginAction and VerifyTwoFactorLoginAction pass
    * a per-login `expiresInMinutes` from the sign-in form's "remember me"
-   * checkbox (see sessionExpiryMinutes in Actions/Auth/authCookie.ts): a week
+   * checkbox (see sessionExpiryMinutes in Support/authCookie.ts): a week
    * unchecked, 30 days checked. This default covers the entry points that have
    * no such checkbox - register, social sign-in, invite acceptance - so they
    * all land on the baseline week.
@@ -102,7 +102,7 @@ export default {
   defaultTokenName: 'auth-token',
 
   // The auth cookie name is NOT overridden here. The custom auth actions
-  // (Actions/Auth/authCookie.ts) and app/Middleware/Auth.ts both resolve it
+  // (Support/authCookie.ts) and app/Middleware/Auth.ts both resolve it
   // from `defaultTokenName` above ('auth-token'), so writer and reader agree on
   // one name. An app-specific `cookie: { name: ... }` override used to point the
   // framework writer at a different name than the middleware read, so the cookie
