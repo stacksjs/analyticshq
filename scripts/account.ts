@@ -6,6 +6,7 @@
  *   bun scripts/account.ts --rotate --email=you@example.com
  *   bun scripts/account.ts --rotate --email=you@example.com --password='...'
  *   bun scripts/account.ts --attach --site=zig-utils --email=you@example.com
+ *   bun scripts/account.ts --create-site --email=you@example.com --name="Mario Adrion" --domain=marioadrion.com
  *   bun scripts/account.ts --revoke-tokens --email=you@example.com
  *
  * Run it on the box (or with `DB_*` pointed at it) — it talks to Postgres
@@ -21,6 +22,8 @@
  * else. Rotating always revokes existing tokens: leaving them live would mean
  * a rotation does not actually lock anyone out.
  */
+import { snippetFor } from '../app/Analytics/custom-domain'
+import { mintSiteId, normalizeSiteInput } from '../app/Analytics/sites'
 import { connect, log, parseArgs, requireArg } from './analytics/lib'
 
 const DEFAULT_BCRYPT_COST = 12
@@ -122,6 +125,35 @@ else if (args.attach) {
   log(`site ${site} now owned by #${user.id} ${email}`)
 }
 
+else if (args['create-site']) {
+  // The same rules as the dashboard's POST /api/sites: a server-minted id and
+  // one name per owner. For setting a site up from the box without a login.
+  const email = requireArg(args, 'email')
+  const input = normalizeSiteInput({ name: args.name, domain: args.domain })
+  if ('error' in input) {
+    log(`error: ${input.error}`)
+    process.exit(1)
+  }
+  const user = await findUser(email)
+  if (!user) {
+    log(`error: no user with email ${email}`)
+    process.exit(1)
+  }
+  const [clash] = await sql`SELECT id FROM sites WHERE owner_id = ${user.id} AND lower(name) = lower(${input.name}) LIMIT 1`
+  if (clash) {
+    log(`error: ${email} already has a site called "${input.name}" (${clash.id})`)
+    process.exit(1)
+  }
+  const id = mintSiteId(user.id, input.name)
+  const now = new Date().toISOString()
+  await sql`
+    INSERT INTO sites (id, name, domains, timezone, is_active, owner_id, settings, created_at, updated_at)
+    VALUES (${id}, ${input.name}, ${JSON.stringify(input.domain ? [input.domain] : [])}, ${typeof args.timezone === 'string' ? args.timezone : 'UTC'}, true, ${user.id}, '{}', ${now}, ${now})`
+  log(`created site ${id} "${input.name}" for #${user.id} ${email}`)
+  // The snippet on stdout, alone, so it can be piped straight into a template.
+  process.stdout.write(`${snippetFor(id, process.env.APP_URL || 'https://analyticshq.org', null, null)}\n`)
+}
+
 else if (args['revoke-tokens']) {
   const email = requireArg(args, 'email')
   const user = await findUser(email)
@@ -138,6 +170,8 @@ else {
   --create --email= --name= [--password=]   create a user (password generated if omitted)
   --rotate --email= [--password=]           set a new password and revoke live tokens
   --attach --site= --email=                 make a user the owner of a site
+  --create-site --email= --name= [--domain=] [--timezone=]
+                                            create a site for a user; prints its snippet
   --revoke-tokens --email=                  sign a user out everywhere`)
   process.exit(1)
 }

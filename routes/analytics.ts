@@ -30,6 +30,7 @@ import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps 
 import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS, MAX_PATTERN_LENGTH, mergeFilters, parseFilterKey, parseSegmentFilters, segmentPopulation, shouldSuppress, validateFilters } from '../app/Analytics/filters'
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
+import { mintSiteId, normalizeSiteInput } from '../app/Analytics/sites'
 import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
@@ -1141,11 +1142,10 @@ route.post('/api/sites', async (request: any) => {
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
 
-  const body = request.jsonBody ?? {}
-  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 255) : ''
-  const domain = typeof body.domain === 'string' ? body.domain.trim().slice(0, 255) : ''
-  if (!name)
-    return json({ error: 'name is required' }, 400)
+  const input = normalizeSiteInput(request.jsonBody ?? {})
+  if ('error' in input)
+    return json({ error: input.error }, 400)
+  const { name, domain } = input
 
   // Two sites of the same name in one account render identically in every list,
   // and each carries its own tracking id, so the snippet you copy out is a coin
@@ -1162,7 +1162,7 @@ route.post('/api/sites', async (request: any) => {
 
   // Unguessable, server-minted id — never trust a caller-supplied one (that would
   // reopen the land-grab of a live public site-id).
-  const id = createHash('sha256').update(`${uid}|${name}|${randomId()}|${Date.now()}`).digest('hex').slice(0, 24)
+  const id = mintSiteId(Number(uid), name)
   const now = new Date().toISOString()
   const domains = domain ? [domain] : []
 
