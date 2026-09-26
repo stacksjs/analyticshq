@@ -69,3 +69,45 @@ export function money(minor: number | null | undefined, currency: string | null 
     return `${(minor / 100).toFixed(2)} ${code}`
   }
 }
+
+/**
+ * `17:50:12.345`: the wall clock in `tz`, to the millisecond. Page views are
+ * stored with millisecond timestamps, and a visitor clicking through three
+ * pages inside one minute reads as three identical `17:50`s without them.
+ * Every zone offset is whole minutes, so the milliseconds never change with it.
+ */
+export function clockMs(at: string | null | undefined, tz: string = 'UTC'): string {
+  const d = at ? new Date(at) : null
+  if (!d || Number.isNaN(d.getTime()))
+    return ''
+  return `${zonedKey(d, tz).slice(11, 19)}.${String(d.getUTCMilliseconds()).padStart(3, '0')}`
+}
+
+/** `Sep 25, 17:50:12 PDT`: a visit's start, to the second. */
+export function stampSeconds(at: string | null | undefined, tz: string = 'UTC'): string {
+  const d = at ? new Date(at) : null
+  if (!d || Number.isNaN(d.getTime()))
+    return ''
+  const key = zonedKey(d, tz)
+  const month = new Date(`${key.slice(0, 10)}T12:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+  return `${month} ${Number(key.slice(8, 10))}, ${key.slice(11, 19)} ${zoneLabel(tz, d)}`
+}
+
+/**
+ * The gap between two steps: `+845ms`, `+12.3s`, `+3m 12s`, `+1h 04m`. Empty
+ * for the first step of a visit, or when either time is missing.
+ */
+export function gap(from: string | null | undefined, to: string | null | undefined): string {
+  const a = from ? new Date(from).getTime() : Number.NaN
+  const b = to ? new Date(to).getTime() : Number.NaN
+  if (!Number.isFinite(a) || !Number.isFinite(b))
+    return ''
+  const ms = Math.max(0, b - a)
+  if (ms < 1000)
+    return `+${ms}ms`
+  if (ms < 60_000)
+    return `+${(ms / 1000).toFixed(1)}s`
+  if (ms < 3_600_000)
+    return `+${Math.floor(ms / 60_000)}m ${String(Math.floor((ms % 60_000) / 1000)).padStart(2, '0')}s`
+  return `+${Math.floor(ms / 3_600_000)}h ${String(Math.floor((ms % 3_600_000) / 60_000)).padStart(2, '0')}m`
+}

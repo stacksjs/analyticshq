@@ -16,7 +16,7 @@ useSeoMeta({
 import { resolveSiteRole, satisfies } from '../../app/Analytics/access'
 import { timelinesEnabled, visitorTimeline } from '../../app/Analytics/visitors'
 import { channelOf, fmtDuration } from '../../app/Support/dashboard-format'
-import { money, placeLabel, plural, stamp, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
+import { clockMs, gap, money, placeLabel, plural, stampSeconds, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
 import { TZ_COOKIE, validTimeZone } from '../../app/Support/timezone'
 
 // `query` is injected per render, the way the dashboard reads it. Guarded, since
@@ -78,8 +78,8 @@ const label = visitorLabel(idParam)
 // Everything the markup needs, formatted here once rather than in the template.
 const summary = timeline
   ? {
-      firstSeen: stamp(timeline.first_seen, readerTz),
-      lastSeen: `${stamp(timeline.last_seen, readerTz)} (${timeAgo(timeline.last_seen)})`,
+      firstSeen: stampSeconds(timeline.first_seen, readerTz),
+      lastSeen: `${stampSeconds(timeline.last_seen, readerTz)} (${timeAgo(timeline.last_seen)})`,
       span: plural(timeline.days, 'day'),
       visits: plural(timeline.totals.visits, 'visit'),
       pageviews: plural(timeline.totals.pageviews, 'page view'),
@@ -96,15 +96,26 @@ const summary = timeline
 const visits = timeline
   ? [...timeline.visits].reverse().map((v, i, all) => ({
       n: all.length - i,
-      when: stamp(v.started_at, readerTz),
+      when: stampSeconds(v.started_at, readerTz),
+      whenUtc: v.started_at,
       source: v.source || 'Direct',
       channel: channelOf(v.source),
+      // "Direct: Direct" said the same thing twice. Show the channel on its own
+      // when the source is just its name, and both when they differ.
+      via: (() => {
+        const channel = channelOf(v.source)
+        const source = v.source || 'Direct'
+        return source.toLowerCase() === String(channel).toLowerCase() ? String(channel) : `${channel}: ${source}`
+      })(),
       campaign: [v.utm_source, v.utm_medium, v.utm_campaign].filter(Boolean).join(' / '),
       place: placeLabel(v.country, v.city),
       tech: [v.device, v.browser, v.os].filter(Boolean).join(' · '),
       duration: v.duration ? fmtDuration(v.duration) : '',
-      items: v.items.map(item => ({
-        time: (stamp(item.at, readerTz).split(', ')[1] || '').split(' ')[0],
+      items: v.items.map((item, idx) => ({
+        time: clockMs(item.at, readerTz),
+        utc: item.at,
+        // How long after the step before it, within this visit.
+        after: idx > 0 ? gap(v.items[idx - 1].at, item.at) : '',
         kind: item.kind,
         icon: item.kind === 'pageview' ? 'i-hugeicons-file-01' : (item.kind === 'event' ? 'i-hugeicons-cursor-pointer-02' : 'i-hugeicons-target-02'),
         text: item.kind === 'pageview'
@@ -266,9 +277,9 @@ async function eraseThisVisitor(): Promise<void> {
       @foreach (visits as v)
         <article class="p-5 panel visit" data-visit>
           <div class="flex flex-wrap gap-x-4 gap-y-1 items-baseline justify-between">
-            <div class="font-semibold text-sm">Visit {{ v.n }} <span class="font-normal text-text-3">{{ v.when }}</span></div>
+            <div class="font-semibold text-sm">Visit {{ v.n }} <span class="font-normal text-text-3" title="{{ v.whenUtc }}">{{ v.when }}</span></div>
             <div class="text-text-3 text-xs">
-              {{ v.channel }}: {{ v.source }}
+              {{ v.via }}
               @if (v.campaign)
                 <span class="mono">({{ v.campaign }})</span>
               @endif
@@ -281,7 +292,8 @@ async function eraseThisVisitor(): Promise<void> {
           <ol class="ml-1 mt-3 pl-4 step">
             @foreach (v.items as item)
               <li class="flex gap-3 items-baseline py-1 text-sm step-row" data-kind="{{ item.kind }}">
-                <span class="shrink-0 w-12 text-text-3 text-xs mono">{{ item.time }}</span>
+                <span class="shrink-0 w-24 tabular-nums text-text-3 text-xs mono" title="{{ item.utc }}">{{ item.time }}</span>
+                <span class="shrink-0 w-16 tabular-nums text-[11px] text-right text-text-3 mono">{{ item.after }}</span>
                 <i class="{{ item.icon }} text-text-3 shrink-0" aria-hidden="true"></i>
                 <span class="{{ item.kind === 'pageview' ? 'mono text-text-2' : 'text-text' }} break-all">{{ item.text }}</span>
               </li>

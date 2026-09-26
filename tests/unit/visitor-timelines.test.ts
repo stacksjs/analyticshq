@@ -14,7 +14,7 @@ import { purgeSaltsQuery } from '../../app/Analytics/salt-purge'
 import { clampWindowDays, saltDateFor, windowStartFor } from '../../app/Analytics/salt'
 import { hashVisitor, visitorIpKey } from '../../app/Analytics/tracking'
 import { isVisitorId } from '../../app/Analytics/visitors'
-import { placeLabel, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
+import { clockMs, gap, placeLabel, stampSeconds, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
 import privacy from '../../config/privacy'
 
 const ROOT = join(import.meta.dir, '../..')
@@ -182,5 +182,36 @@ describe('which part of the address is hashed', () => {
     const src = read('app/Analytics/tracking.ts')
     const fn = src.slice(src.indexOf('export function hashVisitor'), src.indexOf('\n}', src.indexOf('export function hashVisitor')))
     expect(fn).toContain('visitorIpKey(ip)')
+  })
+})
+
+describe('timeline times', () => {
+  test('each step reads to the millisecond, in the reader\'s zone', () => {
+    expect(clockMs('2026-09-26T00:50:12.345Z', 'America/Los_Angeles')).toBe('17:50:12.345')
+    expect(clockMs('2026-09-26T00:50:12.005Z', 'UTC')).toBe('00:50:12.005')
+    // A half-hour zone moves the minutes, never the milliseconds.
+    expect(clockMs('2026-09-26T00:50:12.345Z', 'Asia/Kolkata')).toBe('06:20:12.345')
+    expect(clockMs(null)).toBe('')
+  })
+
+  test('a visit starts to the second', () => {
+    expect(stampSeconds('2026-09-26T00:50:12.345Z', 'America/Los_Angeles')).toBe('Sep 25, 17:50:12 PDT')
+  })
+
+  test('the gap since the previous step', () => {
+    const t = '2026-09-26T00:50:12.000Z'
+    expect(gap(t, '2026-09-26T00:50:12.845Z')).toBe('+845ms')
+    expect(gap(t, '2026-09-26T00:50:24.340Z')).toBe('+12.3s')
+    expect(gap(t, '2026-09-26T00:53:24.000Z')).toBe('+3m 12s')
+    expect(gap(t, '2026-09-26T02:04:12.000Z')).toBe('+1h 14m')
+    expect(gap(null, t)).toBe('')
+  })
+
+  test('the page shows both, and the source once', () => {
+    const view = read('resources/views/visitor.stx')
+    expect(view).toContain('time: clockMs(item.at, readerTz)')
+    expect(view).toContain(`after: idx > 0 ? gap(v.items[idx - 1].at, item.at) : ''`)
+    expect(view).toContain('{{ v.via }}')
+    expect(view).not.toContain('{{ v.channel }}: {{ v.source }}')
   })
 })
