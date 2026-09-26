@@ -366,13 +366,28 @@ describe('the map talks to nothing but this origin', () => {
   })
 
   test('colors are read from the theme tokens, not hardcoded', () => {
-    // ts-maps has no CSS-variable support (zero custom properties in its CSS),
-    // so unlike the hand-rolled traffic chart these must be resolved from the
-    // root and re-applied when [data-theme] flips.
+    // ts-maps takes polygon colours as JS options, not CSS, so unlike the
+    // hand-rolled traffic chart these must be resolved from the root and
+    // re-applied when [data-theme] flips.
     const s = mapScript()
-    expect(s).toContain('getPropertyValue(\'--accent\')')
+    expect(s).toContain('getPropertyValue(name)')
+    for (const token of ['--accent', '--bg', '--text'])
+      expect(s).toContain(`'${token}'`)
     expect(s).toContain('MutationObserver')
     expect(s).toContain('data-theme')
+  })
+
+  test('the sea follows the theme, not the engine\'s light basemap grey', () => {
+    // ts-maps paints its container with its own --tsmap-tile-bg (#e8eaed) and
+    // removes the inline background-color on init, which left the dark
+    // dashboard with a pale grey map. The override has to target the token.
+    expect(dashboard).toMatch(/#country-map\.tsmap-container\s*\{[^}]*--tsmap-tile-bg:\s*var\(--bg\)/)
+  })
+
+  test('country fills are opaque, so few visits never render darker than none', () => {
+    // A translucent accent blends with the page behind it; on the dark palette
+    // that made low-traffic countries darker than empty land.
+    expect(mapScript()).toMatch(/fillOpacity:\s*1\b/)
   })
 
   test('clicking a country reuses the same filter contract as the list', () => {
