@@ -77,7 +77,12 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   **Precise coordinates are never collected, at any setting.** City is a place
   name and nothing finer: no latitude or longitude, no accuracy radius, no
   postcode. `cityFromIp` reads the city's English name and never the record's
-  location block. This remains stricter than Plausible/Fathom, which resolve
+  location block. The live map puts a dot on a named city by looking the NAME
+  up in a gazetteer of place centres, built offline from the same database at
+  deploy time (`scripts/geo/build-city-points.ts`): every record for a city is
+  averaged into one point and rounded to 0.1 degree, about 11km. It locates
+  places, never visitors, and only places that already cleared the site's
+  disclosure floor. This remains stricter than Plausible/Fathom, which resolve
   every visitor to city level with no way to turn it down.
 - **No URL query strings or fragments** are collected from tracked pages.
 

@@ -142,6 +142,20 @@ jobs:
 
       # Attach deploys over SSH to the shared box (same DEPLOY_SSH_KEY authorized
       # on the box). Derive the .pub from the private key so one secret suffices.
+      # Where each city and region is, for the live map's dots, built from the
+      # database fetched above (scripts/geo/build-city-points.ts). A place
+      # gazetteer: public names to their rounded centres, never a visitor's
+      # position. Best effort like the fetch: without it the dots sit on
+      # country centres, as they did before.
+      - name: Build the city points gazetteer
+        continue-on-error: true
+        run: |
+          if [ -f storage/geo/dbip-country-lite.mmdb ]; then
+            bun scripts/geo/build-city-points.ts storage/geo/dbip-country-lite.mmdb storage/geo/city-points.json
+          else
+            echo "::warning::No geolocation database, so no city points: live dots will sit on country centres."
+          fi
+
       - name: Add deploy SSH key
         run: |
           if [ -n "${{ secrets.DEPLOY_SSH_KEY }}" ]; then

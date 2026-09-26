@@ -131,7 +131,44 @@ describe('the wiring', () => {
   })
 
   test('the map dots follow the stream', () => {
-    expect(view).toContain(':data-live-countries="liveMap()"')
-    expect(view).toContain(`attributeFilter: ['data-live-countries']`)
+    expect(view).toContain(':data-live-points="liveMap()"')
+    expect(view).toContain(`attributeFilter: ['data-live-points']`)
+  })
+})
+
+describe('map points', () => {
+  const { livePoints } = require('../../app/Analytics/live') as typeof import('../../app/Analytics/live')
+  const table: Record<string, [number, number]> = { 'US-CA:Santa Monica': [34, -118.5], 'US-CA': [36.4, -120] }
+  const locate = (k: { city?: string | null, region?: string | null }) => (k.city ? table[k.city] : k.region ? table[k.region] : null) ?? null
+  const rows = [
+    { country: 'US', region: 'US-CA', city: 'US-CA:Santa Monica', visitors: 1 },
+    { country: 'US', region: 'US-TX', city: 'US-TX:Austin', visitors: 1 },
+    { country: 'DE', region: null, city: null, visitors: 2 },
+  ]
+
+  test('with the floor off, a visitor lands on their city', () => {
+    const points = livePoints(rows, 0, locate)
+    expect(points.find(p => p.key === 'city:US-CA:Santa Monica')?.at).toEqual([34, -118.5])
+    // A city the gazetteer lacks falls to its region, then its country.
+    expect(points.find(p => p.key === 'country:US')?.at).toBeNull()
+    expect(points.find(p => p.key === 'country:DE')).toMatchObject({ visitors: 2, at: null })
+  })
+
+  test('under the floor, a lone visitor is never placed on their town', () => {
+    const points = livePoints(rows, 5, locate)
+    expect(points.some(p => p.key.startsWith('city:') || p.key.startsWith('region:'))).toBe(false)
+    expect(points.find(p => p.key === 'country:US')).toMatchObject({ visitors: 2, at: null })
+  })
+
+  test('the ingest never touches the gazetteer', () => {
+    // Coordinates exist only for drawing places. geo.ts and the /collect path
+    // must never import them.
+    expect(read('app/Analytics/geo.ts')).not.toMatch(/from '[^']*city-points'/)
+    expect(read('routes/analytics.ts')).not.toMatch(/from '[^']*city-points'/)
+    expect(read('app/Analytics/realtime.ts')).toContain(`import { pointOf } from './city-points'`)
+  })
+
+  test('the gazetteer is rounded to about 11km', () => {
+    expect(read('scripts/geo/build-city-points.ts')).toContain('const round = (x: number) => Math.round(x * 10) / 10')
   })
 })

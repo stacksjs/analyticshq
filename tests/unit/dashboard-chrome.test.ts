@@ -107,7 +107,7 @@ describe('live now', () => {
   })
 
   test('the live count is site-wide, whatever the filters', () => {
-    const block = view.slice(view.indexOf('const live = await liveSnapshot('), view.indexOf('liveCountries = live.countries'))
+    const block = view.slice(view.indexOf('const live = await liveSnapshot('), view.indexOf('livePlaces = live.points'))
     expect(block).not.toContain('filterSql')
   })
 })

@@ -250,8 +250,8 @@ let prevAvgDuration = 0
 let liveNow = 0
 // Where the live visitors are, for the Live now strip. See app/Analytics/live.ts.
 let liveWhere = { locations: [], more: 0, unknown: 0 }
-/** Live visitors per country, for the pulsing dots on the map. */
-let liveCountries = []
+/** Where live visitors are, for the pulsing dots on the map (app/Analytics/live.ts livePoints). */
+let livePlaces = []
 let goals = []
 let events = []
 let outboundLinks = []
@@ -756,7 +756,7 @@ async function loadData() {
     const live = await liveSnapshot(String(siteId))
     liveNow = live.current
     liveWhere = live.where
-    liveCountries = live.countries
+    livePlaces = live.points
   }
   // Goals for this site: per active goal, conversions in [from,to], distinct
   // converting visitors, and total value. LEFT JOIN so goals with zero in-range
@@ -1313,7 +1313,7 @@ const shareCapability = __shareToken
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveCountries, liveNow, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1347,9 +1347,9 @@ const liveCount = state(typeof liveNow === 'number' ? liveNow : 0)
 // The places behind that count, refreshed by the same poll. liveWhere is bridged
 // from the server block like liveNow.
 const liveSpots = state(typeof liveWhere === 'object' && liveWhere ? liveWhere : { locations: [], more: 0, unknown: 0 })
-// Live visitors per country. The map script reads them off a data attribute
-// (it is a plain module, outside this block), so a push moves the dots too.
-const liveMap = state(JSON.stringify(Array.isArray(liveCountries) ? liveCountries : []))
+// Where live visitors are. The map script reads them off a data attribute (it
+// is a plain module, outside this block), so a push moves the dots too.
+const liveMap = state(JSON.stringify(Array.isArray(livePlaces) ? livePlaces : []))
 
 // Uniform HQ auth: every authenticated call on this page is a same-origin fetch
 // carrying the HttpOnly auth-token cookie the browser sends automatically. No
@@ -2344,8 +2344,8 @@ onMount(() => {
       liveCount.set(d.current)
     if (d && d.where && Array.isArray(d.where.locations))
       liveSpots.set(d.where)
-    if (d && Array.isArray(d.countries))
-      liveMap.set(JSON.stringify(d.countries))
+    if (d && Array.isArray(d.points))
+      liveMap.set(JSON.stringify(d.points))
   }
   let poll: { pause: () => void } | null = null
   const tick = () => fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/realtime`, { credentials: 'same-origin' })
@@ -3406,9 +3406,9 @@ select.panel:hover { border-color: var(--accent); }
             blob inside a script body is the shape that has broken this file
             before, and stx forbids @json there for exactly that reason. --}}
         <div hidden data-country-totals="{{ JSON.stringify(countryTotals) }}" data-country-names="{{ JSON.stringify(countryNames) }}"></div>
-        {{-- Live visitors per country, kept current by the stream in the client
+        {{-- Where live visitors are, kept current by the stream in the client
             block. The map script watches this attribute and moves its dots. --}}
-        <div hidden data-live-countries="{{ JSON.stringify(liveCountries) }}" :data-live-countries="liveMap()"></div>
+        <div hidden data-live-points="{{ JSON.stringify(livePlaces) }}" :data-live-points="liveMap()"></div>
         {{-- Filled by the map script when a country has traffic but no polygon
             to shade. Natural Earth's 110m boundaries omit city-states — Singapore
             and Hong Kong among them — and those are ordinary traffic sources for
@@ -4292,14 +4292,16 @@ select.panel:hover { border-color: var(--accent); }
     }
   })
 
-  // Live visitors: a pulsing dot on each country someone is on the site from
-  // right now. Country, because that is the finest location every report is
-  // allowed to show, and the product never stores coordinates to place a city
-  // with. The dot sits at the centroid of the country's largest landmass,
-  // weighted by cos(latitude) so the US dot lands in the lower 48 rather than
-  // in Alaska, which an equirectangular map draws oversized.
+  // Live visitors: a pulsing dot on each place someone is on the site from,
+  // at the finest place the site's disclosure floor allows. The server sends
+  // the point (a city's or region's centre from a gazetteer; see
+  // scripts/geo/build-city-points.ts), so a visitor from Santa Monica lands on
+  // Santa Monica. A place it could not locate comes with `at: null` and goes on
+  // its country: the centroid of the country's largest landmass, weighted by
+  // cos(latitude) so the US one sits in the lower 48 rather than in Alaska,
+  // which an equirectangular map draws oversized.
   //
-  // The client block keeps [data-live-countries] current from the live stream;
+  // The client block keeps [data-live-points] current from the live stream;
   // this only watches it, so a new visitor's dot appears within about a second.
   const LIVE_FALLBACK = { SG: [1.35, 103.82], HK: [22.32, 114.17], MT: [35.9, 14.45], MC: [43.74, 7.42], BH: [26.07, 50.56], MO: [22.2, 113.55], LU: [49.61, 6.13], AD: [42.51, 1.52], LI: [47.16, 9.55], SM: [43.94, 12.46] }
   const centroids = {}
@@ -4334,22 +4336,23 @@ select.panel:hover { border-color: var(--accent); }
       centroids[f.id] = best
   }
 
-  const liveEl = document.querySelector('[data-live-countries]')
+  const liveEl = document.querySelector('[data-live-points]')
   const dots = LayerGroup ? new LayerGroup().addTo(map) : null
   function drawLive() {
     if (!dots || !Marker || !DivIcon)
       return
     let live = []
-    try { live = JSON.parse(liveEl?.getAttribute('data-live-countries') || '[]') }
+    try { live = JSON.parse(liveEl?.getAttribute('data-live-points') || '[]') }
     catch (_) { live = [] }
     dots.clearLayers()
     const top = Math.max(1, ...live.map(l => Number(l.visitors) || 0))
     for (const l of live) {
-      const at = centroids[l.country] || LIVE_FALLBACK[l.country]
+      const at = (Array.isArray(l.at) && l.at.length === 2 ? l.at : null) || centroids[l.country] || LIVE_FALLBACK[l.country]
       if (!at)
         continue
       const size = Math.round(9 + 7 * Math.sqrt((Number(l.visitors) || 0) / top))
-      const who = `${names[l.country] || serverNames[l.country] || l.country}: ${l.visitors} online now`
+      const place = l.label || names[l.country] || serverNames[l.country] || l.country
+      const who = `${place}: ${l.visitors} online now`
       const pin = new Marker(at, {
         icon: new DivIcon({ className: 'live-pin', html: '<i></i>', iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
         keyboard: false,
@@ -4363,7 +4366,7 @@ select.panel:hover { border-color: var(--accent); }
   }
   drawLive()
   if (liveEl)
-    new MutationObserver(drawLive).observe(liveEl, { attributes: true, attributeFilter: ['data-live-countries'] })
+    new MutationObserver(drawLive).observe(liveEl, { attributes: true, attributeFilter: ['data-live-points'] })
 
   // Countries with traffic that the 110m boundaries cannot draw (Singapore,
   // Hong Kong, Malta, Monaco, Bahrain, Macau — city-states omitted at this

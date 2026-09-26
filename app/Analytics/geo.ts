@@ -86,7 +86,7 @@ import SUBDIVISIONS from './subdivisions.json'
  * misconfiguring something, because there is nothing in the country database
  * for `regionFromIp` to return.
  */
-interface GeoRecord {
+export interface GeoRecord {
   country?: { iso_code?: string }
   registered_country?: { iso_code?: string }
   /**
@@ -397,7 +397,20 @@ export const CITY_NAME_MAX = 80
  * product records is the name of a city.
  */
 export function cityFromIp(ip: string): string | null {
-  const found = lookup(ip)
+  return cityOf(lookup(ip))
+}
+
+/**
+ * The region value (`US-CA`) of a database record. Exported for the city
+ * points build (scripts/geo/build-city-points.ts), which has to key the
+ * gazetteer exactly the way page views are keyed.
+ */
+export function regionOfRecord(found: GeoRecord | null): string | null {
+  return regionOf(found)
+}
+
+/** The city value (`US-CA:San Diego`) of a database record. See cityFromIp. */
+export function cityOf(found: GeoRecord | null): string | null {
   const place = regionOf(found) ?? countryOf(found)
   if (!place)
     return null

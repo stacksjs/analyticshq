@@ -93,3 +93,64 @@ export function liveLocations(
     unknown: Math.max(0, Math.round(Number(total) || 0) - placed),
   }
 }
+
+/** One dot on the live map. `at` is null when only the country is known. */
+export interface LivePoint {
+  key: string
+  country: string
+  label: string
+  visitors: number
+  at: [number, number] | null
+}
+
+/**
+ * The live map's dots: every place someone is on the site from, at the finest
+ * level the disclosure floor allows, which is the same rule the strip above
+ * uses. A city under the floor becomes its region, a region under it becomes
+ * its country, so a lone visitor from a small town shows as a dot on the state
+ * or country, never on the town.
+ *
+ * `locate` turns a city or region into its centre (./city-points.ts). A place
+ * it cannot place gets `at: null`, and the map puts it on the country instead.
+ */
+export function livePoints(
+  rows: readonly LivePlaceRow[],
+  floor: number,
+  locate: (key: { city?: string | null, region?: string | null }) => [number, number] | null,
+  limit = 200,
+): LivePoint[] {
+  const points = new Map<string, LivePoint>()
+  const add = (key: string, country: string, label: string, visitors: number, at: [number, number] | null): void => {
+    const hit = points.get(key)
+    if (hit)
+      hit.visitors += visitors
+    else points.set(key, { key, country, label, visitors, at })
+  }
+
+  for (const row of rows) {
+    const visitors = Number(row.visitors ?? 0)
+    const country = String(row.country ?? '').toUpperCase()
+    if (!visitors || !/^[A-Z]{2}$/.test(country))
+      continue
+    const named = floor <= 0 || visitors >= floor
+    const city = row.city && splitCity(row.city)
+    const region = row.region && splitRegion(row.region)
+    const cityAt = named && city ? locate({ city: row.city }) : null
+    if (cityAt) {
+      add(`city:${row.city}`, country, cityLabel(row.city), visitors, cityAt)
+      continue
+    }
+    const regionKey = named && region ? row.region : (named && city?.region ? city.region : null)
+    const regionAt = regionKey ? locate({ region: regionKey }) : null
+    if (regionKey && regionAt) {
+      const sub = splitRegion(regionKey)
+      add(`region:${regionKey}`, country, `${sub?.subdivision ?? regionKey}, ${countryName(country)}`, visitors, regionAt)
+      continue
+    }
+    add(`country:${country}`, country, countryName(country), visitors, null)
+  }
+
+  return [...points.values()]
+    .sort((a, b) => b.visitors - a.visitors || a.label.localeCompare(b.label))
+    .slice(0, limit)
+}

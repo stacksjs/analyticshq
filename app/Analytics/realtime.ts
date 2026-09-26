@@ -55,8 +55,9 @@
 import process from 'node:process'
 import { db } from '@stacksjs/database'
 import privacy from '../../config/privacy'
-import type { LiveLocations, LivePlaceRow } from './live'
-import { liveLocations } from './live'
+import type { LiveLocations, LivePlaceRow, LivePoint } from './live'
+import { pointOf } from './city-points'
+import { liveLocations, livePoints } from './live'
 import { resolveMinSegmentSize } from './segment-floor'
 
 /** What "online now" means: a page view in the last five minutes. */
@@ -95,8 +96,10 @@ export function maxStreams(env: Record<string, string | undefined> = process.env
 export interface LiveSnapshot {
   current: number
   where: LiveLocations
-  /** Live visitors per ISO country, for the map. */
+  /** Live visitors per ISO country. */
   countries: Array<{ country: string, visitors: number }>
+  /** The map's dots, at the finest place the site's floor allows. */
+  points: LivePoint[]
 }
 
 interface Stream {
@@ -217,9 +220,11 @@ export async function liveSnapshots(siteIds: string[], now: Date = new Date()): 
         if (/^[A-Z]{2}$/.test(country))
           byCountry.set(country, (byCountry.get(country) ?? 0) + Number(row.visitors ?? 0))
       }
+      const floor = floorBySite.get(id) ?? privacy.minSegmentSize
       out.set(id, {
         current,
-        where: current > 0 ? liveLocations(rows, floorBySite.get(id) ?? privacy.minSegmentSize, current) : { locations: [], more: 0, unknown: 0 },
+        where: current > 0 ? liveLocations(rows, floor, current) : { locations: [], more: 0, unknown: 0 },
+        points: current > 0 ? livePoints(rows, floor, pointOf) : [],
         countries: [...byCountry.entries()]
           .map(([country, visitors]) => ({ country, visitors }))
           .sort((a, b) => b.visitors - a.visitors),
@@ -229,7 +234,7 @@ export async function liveSnapshots(siteIds: string[], now: Date = new Date()): 
   return out
 }
 
-const EMPTY: LiveSnapshot = { current: 0, where: { locations: [], more: 0, unknown: 0 }, countries: [] }
+const EMPTY: LiveSnapshot = { current: 0, where: { locations: [], more: 0, unknown: 0 }, countries: [], points: [] }
 
 /** One snapshot, for a single site, straight from the database. */
 export async function liveSnapshot(siteId: string): Promise<LiveSnapshot> {
