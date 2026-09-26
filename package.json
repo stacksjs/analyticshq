@@ -88,13 +88,13 @@
     "@loghq/stacks": "^0.2.6",
     "@stacksjs/buddy": "^0.75.5",
     "@stacksjs/logging": "^0.75.5",
-    "@stacksjs/stx": "^0.2.315",
-    "@stacksjs/ts-cloud": "^0.16.11",
+    "@stacksjs/stx": "^0.2.316",
+    "@stacksjs/ts-cloud": "^0.16.13",
     "@ts-analytics/tracking": "^0.1.17",
     "bun-query-builder": "^0.3.2",
     "mmdb-lib": "^3.0.3",
     "stacks": "^0.75.5",
-    "stripe": "22.3.2",
+    "stripe": "22.6.2",
     "ts-maps": "^0.3.15"
   },
   "devDependencies": {
