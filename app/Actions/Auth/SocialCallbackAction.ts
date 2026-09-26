@@ -2,37 +2,26 @@ import type { RequestInstance } from '@stacksjs/types'
 import { createHmac } from 'node:crypto'
 import { Action } from '@stacksjs/actions'
 import { Auth, register } from '@stacksjs/auth'
-import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
-import { GitHubProvider, GoogleProvider } from '@stacksjs/socials'
 import { buildAuthCookie } from '../../Support/authCookie'
+import { isSocialProvider, socialConfigured, socialDriver, verifyState } from '../../Support/social'
 
-function makeDriver(provider: string): GitHubProvider | GoogleProvider | null {
-  const svc = config.services as any
-  if (provider === 'github')
-    return new GitHubProvider({ clientId: svc.github?.clientId ?? '', clientSecret: svc.github?.clientSecret ?? '', redirectUrl: svc.github?.redirectUrl ?? '' })
-  if (provider === 'google')
-    return new GoogleProvider({ clientId: svc.google?.clientId ?? '', clientSecret: svc.google?.clientSecret ?? '', redirectUrl: svc.google?.redirectUrl ?? '' })
-  return null
-}
-
-function verifyState(state: string): boolean {
-  const [ts, sig] = String(state || '').split('.')
-  if (!ts || !sig)
-    return false
-  const secret = String((config.app as any)?.key || process.env.APP_KEY || 'stacks-oauth')
-  const expect = createHmac('sha256', secret).update(ts).digest('hex').slice(0, 32)
-  if (sig !== expect)
-    return false
-  return Date.now() - Number(ts) < 600_000
+/** The id of the account with this email, or null. */
+async function userIdByEmail(email: string): Promise<number | null> {
+  const rows = await db.unsafe('SELECT id FROM users WHERE lower(email) = $1 LIMIT 1', [email])
+  const id = Number(rows[0]?.id)
+  return Number.isInteger(id) && id > 0 ? id : null
 }
 
 function fail(message: string): Response {
   // Send the user back to /login with a friendly reason. Errors here are rare
   // (bad state, provider hiccup), so a redirect beats a raw JSON error page.
   const to = `/login?error=${encodeURIComponent(message)}`
-  return response.html(`<!doctype html><meta charset="utf-8"><title>Sign-in failed</title><script>location.replace(${JSON.stringify(to)})</script>Redirecting...`, 400)
+  // A plain redirect. This used to call `response.html`, which the response
+  // factory does not have, so every failed social sign-in threw inside its own
+  // error path and answered 500 instead of landing back on the sign-in page.
+  return response.redirect(to, 303)
 }
 
 export default new Action({
@@ -40,14 +29,13 @@ export default new Action({
   description: 'Handle the OAuth callback from a social provider',
   method: 'GET',
   async handle(request: RequestInstance) {
-    const provider = String((request as any).getParam?.('provider') ?? (request as any).params?.provider ?? '')
-    const query = (request as any).query ?? {}
-    const code = String(query.code ?? '')
-    const state = String(query.state ?? '')
+    const provider = request.getParam('provider')
+    const code = String(request.query.code ?? '')
+    const state = String(request.query.state ?? '')
 
-    const driver = makeDriver(provider)
-    if (!driver)
+    if (!isSocialProvider(provider) || !socialConfigured(provider))
       return fail('Unknown sign-in provider.')
+    const driver = socialDriver(provider)
     if (!verifyState(state))
       return fail('Your sign-in link expired. Please try again.')
     if (!code)
@@ -67,36 +55,33 @@ export default new Action({
       return fail('That account did not share an email address.')
 
     // Find an existing user by email.
-    const existing = await db.selectFrom('users').where('email', '=', email).selectAll().executeTakeFirst() as any
+    const existing = await userIdByEmail(email)
 
     // Never link an unverified provider email onto an existing account
     // (account-takeover vector). A brand new signup is fine.
     if (existing && social.emailVerified === false)
       return fail('That email is not verified with the provider.')
 
-    let userId: number
-    if (existing) {
-      userId = Number(existing.id)
-      await db.updateTable('users')
-        .set({ provider, provider_id: String(social.id), avatar: social.avatar ?? existing.avatar ?? null })
-        .where('id', '=', userId)
-        .execute()
-    }
-    else {
+    let userId = existing
+    if (!userId) {
       // Create the account through the native register flow (handles hashing
       // and token-client wiring); the password is random and unused for
       // social accounts.
       const randomPassword = createHmac('sha256', String(social.id)).update(`${Date.now()}`).digest('hex')
-      await register({ name: social.name || email.split('@')[0], email, password: randomPassword } as any)
-      const created = await db.selectFrom('users').where('email', '=', email).selectAll().executeTakeFirst() as any
-      if (!created)
+      await register({ name: social.name || email.split('@')[0], email, password: randomPassword })
+      userId = await userIdByEmail(email)
+      if (!userId)
         return fail('We could not create your account.')
-      userId = Number(created.id)
-      await db.updateTable('users')
-        .set({ provider, provider_id: String(social.id), avatar: social.avatar ?? null })
-        .where('id', '=', userId)
-        .execute()
     }
+
+    // An avatar URL longer than the column is dropped rather than failing the
+    // sign-in over a picture. COALESCE keeps the one on file when the provider
+    // sends none.
+    const avatar = social.avatar && social.avatar.length <= 255 ? social.avatar : null
+    await db.unsafe(
+      'UPDATE users SET provider = $1, provider_id = $2, avatar = COALESCE($3, avatar) WHERE id = $4',
+      [provider, String(social.id), avatar, userId],
+    )
 
     const result = await Auth.loginUsingId(userId)
     if (!result?.token)

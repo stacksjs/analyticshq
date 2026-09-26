@@ -84,11 +84,36 @@ export default defineModel({
       validation: { rule: schema.boolean().optional() },
       factory: () => false,
     },
+
+    // Social sign-in (migration 58). Written only by SocialCallbackAction from
+    // what the provider returned, so guarded and not fillable. Hidden: the
+    // account page gets the ones it shows from /api/me.
+    provider: {
+      fillable: false,
+      guarded: true,
+      hidden: true,
+      validation: { rule: schema.string().max(255).optional() },
+      factory: () => null,
+    },
+    provider_id: {
+      fillable: false,
+      guarded: true,
+      hidden: true,
+      validation: { rule: schema.string().max(255).optional() },
+      factory: () => null,
+    },
+    avatar: {
+      fillable: false,
+      guarded: true,
+      hidden: true,
+      validation: { rule: schema.string().max(255).optional() },
+      factory: () => null,
+    },
   },
 
   set: {
-    password: async (attributes: Record<string, any>) => {
-      return await makeHash(attributes.password, { algorithm: 'bcrypt' })
+    password: async (attributes: Record<string, unknown>) => {
+      return await makeHash(String(attributes.password ?? ''), { algorithm: 'bcrypt' })
     },
   },
 })
