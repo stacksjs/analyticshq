@@ -71,4 +71,8 @@ export default {
     column: 'deleted_at',
     defaultFilter: true,
   },
-} satisfies QueryBuilderConfig
+  // `Partial`, as the Stacks template has it: `QueryBuilderConfig` is the
+  // resolved shape with every field required, while setConfig() takes a
+  // Partial and fills in defaults. Declaring against the full type demanded a
+  // snapshotDir this app deliberately leaves to DB_SNAPSHOT_PATH.
+} satisfies Partial<QueryBuilderConfig>

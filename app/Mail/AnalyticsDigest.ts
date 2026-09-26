@@ -1,3 +1,4 @@
+import type { TemplateVariableValue } from '@stacksjs/email'
 import type { SiteSummary } from '../Analytics/summary'
 import { config } from '@stacksjs/config'
 import { mail, template } from '@stacksjs/email'
@@ -23,6 +24,20 @@ function formatDelta(current: number, previous: number): string {
 /** 12,480 rather than 12480 — these are read at a glance on a phone. */
 function num(n: number): string {
   return n.toLocaleString('en-US')
+}
+
+/**
+ * Rows for the template's `@foreach`, as a template variable.
+ *
+ * The `.stx` renderer hands variables to the template as props, lists
+ * included, but `@stacksjs/email` through 0.74.70 types a variable as a single
+ * printable value. Widened upstream (stacks `core/email/src/template.ts`,
+ * `TemplateVariableValue` now takes lists and records); drop this for the
+ * plain array once the app is on a release that ships it.
+ */
+function rows(list: Array<{ label: string, views: string }>): TemplateVariableValue {
+  const value: unknown = list
+  return value as TemplateVariableValue
 }
 
 /** "1–8 August 2026", from two ISO strings. */
@@ -59,8 +74,8 @@ export async function sendAnalyticsDigest(options: AnalyticsDigestOptions): Prom
       sessions: num(summary.current.sessions),
       visitorsDelta: formatDelta(summary.current.visitors, summary.previous.visitors),
       viewsDelta: formatDelta(summary.current.views, summary.previous.views),
-      topPages: summary.topPages.map(r => ({ label: r.label, views: num(r.views) })),
-      topSources: summary.topSources.map(r => ({ label: r.label, views: num(r.views) })),
+      topPages: rows(summary.topPages.map(r => ({ label: r.label, views: num(r.views) }))),
+      topSources: rows(summary.topSources.map(r => ({ label: r.label, views: num(r.views) }))),
       dashboardUrl: `${appUrl}/dashboard?site=${encodeURIComponent(siteId)}`,
       settingsUrl: `${appUrl}/dashboard?site=${encodeURIComponent(siteId)}`,
       year: new Date().getFullYear(),

@@ -184,7 +184,8 @@ describe('what a platform admin is shown and given', () => {
     // created_at used to be selected with avatar and provider, which this
     // install's users table lacks, so the whole query threw.
     const me = read('app/Actions/MeAction.ts')
-    expect(me).toContain(`.select(['created_at'])`)
-    expect(me).not.toContain(`.select(['avatar', 'provider', 'created_at'])`)
+    expect(me).toContain(`'SELECT created_at FROM users WHERE id = $1'`)
+    expect(me).toContain(`'SELECT avatar, provider FROM users WHERE id = $1'`)
+    expect(me).not.toMatch(/SELECT[^']*created_at[^']*avatar|SELECT[^']*avatar[^']*created_at/)
   })
 })

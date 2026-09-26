@@ -1926,7 +1926,7 @@ function fathomWindows(from: string, to: string, days: number): Array<[string, s
 }
 
 /** One request. Returns the parsed body, or null when it could not be reached. */
-async function postFathom(payload: Record<string, unknown>): Promise<any> {
+async function postFathom(payload: Record<string, unknown>): Promise<FathomReply> {
   // Whichever shape was chosen, sent every time - the check, the import and each
   // window all re-post it. A zip is the cheaper of the two to send repeatedly.
   const upload = fathomZip() ? { zip: fathomZip() } : { files: fathomFiles() }
@@ -1936,11 +1936,11 @@ async function postFathom(payload: Record<string, unknown>): Promise<any> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...upload, acceptFiltered: fathomAcceptFiltered(), ...payload }),
   })
-  const data = await res.json().catch(() => ({}))
+  const data: FathomImportBody = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, data }
 }
 
-function fathomFailure(status: number, data: any): string {
+function fathomFailure(status: number, data: FathomImportBody): string {
   if (status === 429)
     return 'Several imports have started in the last minute. Wait a minute and try again.'
   return data?.error || 'The import failed.'
@@ -1969,14 +1969,14 @@ async function checkFathomExport(): Promise<void> {
       // Which files were read, because a zip upload is opaque to the person who
       // sent it: they chose one file, and this is where they find out that the
       // country and browser breakdowns were inside it.
-      const read = ((p.read ?? []) as string[]).join(', ')
+      const read = (p.read ?? []).join(', ')
       fathomPreview.set(
         `${read ? `Read ${read}. ` : ''}`
         + `Found ${Number(p.paths ?? 0).toLocaleString()} pages, ${Number(p.visitors ?? 0).toLocaleString()} visitors and `
         + `${Number(p.pageViews ?? 0).toLocaleString()} page views, covering ${data.range?.from} to ${data.range?.to}. `
         + `Nothing has been imported yet.${prior}`,
       )
-      fathomWarnings.set((data.warnings ?? []) as string[])
+      fathomWarnings.set(data.warnings ?? [])
     }
   }
   catch {
@@ -2009,7 +2009,7 @@ async function importFromFathom(): Promise<void> {
     if (first.ok) {
       pageViews += Number(first.data.imported?.pageViews ?? 0)
       sessions += Number(first.data.imported?.sessions ?? 0)
-      warnings.push(...((first.data.warnings ?? []) as string[]))
+      warnings.push(...(first.data.warnings ?? []))
     }
     else if (first.status === 413 && first.data.range?.from) {
       // Too big for one request. Post the SAME files again in date windows,
@@ -2038,7 +2038,7 @@ async function importFromFathom(): Promise<void> {
         }
         pageViews += Number(res.data.imported?.pageViews ?? 0)
         sessions += Number(res.data.imported?.sessions ?? 0)
-        for (const w of (res.data.warnings ?? []) as string[]) {
+        for (const w of res.data.warnings ?? []) {
           if (!warnings.includes(w))
             warnings.push(w)
         }

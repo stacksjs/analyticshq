@@ -64,4 +64,4 @@ route.get('/api/auth/{provider}/callback', 'Actions/Auth/SocialCallbackAction').
 // Billing (Stripe). Checkout requires an authenticated user (bearer token);
 // the webhook is a Stripe callback so it skips CSRF and auth.
 route.post('/payments/checkout', 'Actions/Payment/CreateCheckoutAction').middleware('auth').skipCsrf()
-route.post('/webhooks/stripe', 'Actions/StripeWebhook').skipCsrf()
+route.post('/webhooks/stripe', 'Actions/StripeWebhookAction').skipCsrf()

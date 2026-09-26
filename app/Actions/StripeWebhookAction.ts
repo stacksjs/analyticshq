@@ -78,8 +78,9 @@ export default new Action({
   description: 'Handle Stripe webhook events',
   method: 'POST',
   async handle(request: RequestInstance) {
-    const raw = (await (request as any).rawBody?.()) ?? ''
-    const sig = (request as any).headers?.get?.('stripe-signature') ?? ''
+    // The exact bytes Stripe signed: a re-serialized JSON body would not verify.
+    const raw = (await request.rawBody?.()) ?? ''
+    const sig = request.headers.get('stripe-signature') ?? ''
     const secret = services?.stripe?.webhookSecret
     if (!secret)
       return response.json({ error: 'Webhook secret not configured' }, 400)

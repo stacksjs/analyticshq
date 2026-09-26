@@ -85,9 +85,13 @@ describe('the vendored bundle stays in step with the dependency', () => {
   })
 })
 
+/** A ring of [lon, lat] points. */
+type Ring = number[][]
+type Geometry = { type: 'Polygon', coordinates: Ring[] } | { type: 'MultiPolygon', coordinates: Ring[][] }
+
 describe('the map data matches the column it is keyed on', () => {
   const world = JSON.parse(readFileSync(geojson, 'utf8')) as {
-    features: { id: string, geometry: { type: string, coordinates: any } }[]
+    features: { id: string, geometry: Geometry }[]
   }
 
   test('every feature is keyed by an ISO alpha-2 code', () => {
@@ -127,12 +131,12 @@ describe('the map data matches the column it is keyed on', () => {
     // Russia's 467-point mainland, which painted a stripe through every country
     // at its latitude. Antarctica genuinely encircles the pole and is trimmed
     // from the view, so it is the one permitted exception.
-    const rings = (g: any): any[] => (g.type === 'Polygon' ? g.coordinates : g.coordinates.flat())
+    const rings = (g: Geometry): Ring[] => (g.type === 'Polygon' ? g.coordinates : g.coordinates.flat())
     const offenders: string[] = []
     for (const f of world.features) {
       for (const ring of rings(f.geometry)) {
-        const lons = ring.map((p: number[]) => p[0])
-        const lats = ring.map((p: number[]) => p[1])
+        const lons = ring.map(p => p[0])
+        const lats = ring.map(p => p[1])
         if (Math.max(...lons) - Math.min(...lons) > 180 && Math.max(...lats) > -58)
           offenders.push(f.id)
       }

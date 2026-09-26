@@ -34,16 +34,18 @@
   },
   "include": [
     "types/**/*.ts",
-    "resources/stores/**/*.ts",
+    "resources/**/*.ts",
     "*.ts",
     "*.d.ts",
     "types/**/*.d.ts",
-    "app/Models/**/*.ts",
-    "app/Services/**/*.ts",
-    "app/Support/**/*.ts"
+    "app/**/*.ts",
+    "routes/**/*.ts",
+    "config/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "cloud/**/*.ts"
   ],
   "exclude": [
-    "cloud/**",
     "dist/**",
     "node_modules/**",
     "pantry/**",

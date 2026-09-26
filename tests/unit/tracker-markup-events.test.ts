@@ -28,7 +28,21 @@ function element(tag: string, attrs: Record<string, string> = {}, parent?: FakeE
 }
 
 /** Just enough of an Element for `closest`, attributes and `href`. */
-function dom(el: FakeElement): any {
+interface FakeNode {
+  href: string | undefined
+  attributes: Array<{ name: string, value: string }>
+  getAttribute: (name: string) => string | null
+  hasAttribute: (name: string) => boolean
+  closest: (selector: string) => FakeNode | null
+}
+
+/** A click as the tracker's listener reads it. */
+interface FakeClick { type: string, target: FakeNode }
+
+/** One beacon body the tracker posted: `e` is the event name, `p` its properties. */
+type Beacon = Record<string, unknown>
+
+function dom(el: FakeElement): FakeNode {
   const matches = (candidate: FakeElement, selector: string): boolean => {
     if (selector === 'a')
       return candidate.tag === 'a'
@@ -40,7 +54,7 @@ function dom(el: FakeElement): any {
     attributes: Object.entries(el.attrs).map(([name, value]) => ({ name, value })),
     getAttribute: (name: string) => el.attrs[name] ?? null,
     hasAttribute: (name: string) => name in el.attrs,
-    closest(selector: string) {
+    closest(selector: string): FakeNode | null {
       for (let at: FakeElement | undefined = el; at; at = at.parent) {
         if (matches(at, selector))
           return dom(at)
@@ -52,16 +66,16 @@ function dom(el: FakeElement): any {
 
 /** Load the tracker and return what it posts, plus a way to click. */
 function load() {
-  const sent: any[] = []
-  const listeners: Record<string, ((ev: any) => void)[]> = {}
+  const sent: Beacon[] = []
+  const listeners: Record<string, ((ev: FakeClick) => void)[]> = {}
   const document = {
     currentScript: { src: 'https://analyticshq.org/script.js', getAttribute: (name: string) => ({ 'data-site': 'site123' } as Record<string, string>)[name] ?? null },
     referrer: '',
-    addEventListener: (type: string, fn: (ev: any) => void) => { (listeners[type] ??= []).push(fn) },
+    addEventListener: (type: string, fn: (ev: FakeClick) => void) => { (listeners[type] ??= []).push(fn) },
   }
-  const window: any = { addEventListener: () => {} }
+  const window = { addEventListener: () => {} }
   const location = { href: 'https://fan.example/tour', origin: 'https://fan.example', pathname: '/tour', search: '', hostname: 'fan.example' }
-  const fetch = (_url: string, init: any) => { sent.push(JSON.parse(init.body)) }
+  const fetch = (_url: string, init?: RequestInit) => { sent.push(JSON.parse(String(init?.body))) }
   // eslint-disable-next-line no-new-func
   new Function('document', 'window', 'location', 'navigator', 'history', 'fetch', source)(
     document, window, location, {}, { pushState() {} }, fetch,

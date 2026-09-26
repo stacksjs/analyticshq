@@ -54,3 +54,25 @@ interface ChartGeometry {
   padT: number
   padB: number
 }
+
+/**
+ * What POST /api/sites/{id}/import/fathom answers with, in every case the
+ * dashboard reads: a dry-run preview, a finished import, a 413 asking for date
+ * windows, or an error. Each field is present only in the cases that send it.
+ */
+interface FathomImportBody {
+  error?: string
+  preview?: { priorImport?: boolean, read?: string[], paths?: number, visitors?: number, pageViews?: number }
+  range?: { from: string, to: string }
+  warnings?: string[]
+  imported?: { pageViews?: number, sessions?: number }
+  estimate?: { pageViews?: number }
+  maxRows?: number
+}
+
+/** One request to that endpoint, as the dashboard's postFathom reports it. */
+interface FathomReply {
+  ok: boolean
+  status: number
+  data: FathomImportBody
+}

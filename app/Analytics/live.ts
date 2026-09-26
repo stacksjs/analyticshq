@@ -75,8 +75,8 @@ export function liveLocations(
       continue
     placed += visitors
     const named = floor <= 0 || visitors >= floor
-    const city = row.city && splitCity(row.city)
-    const region = row.region && splitRegion(row.region)
+    const city = row.city ? splitCity(row.city) : null
+    const region = row.region ? splitRegion(row.region) : null
     if (named && city)
       add(`city:${row.city}`, country, cityLabel(row.city), visitors)
     else if (named && region)
@@ -133,8 +133,8 @@ export function livePoints(
     if (!visitors || !/^[A-Z]{2}$/.test(country))
       continue
     const named = floor <= 0 || visitors >= floor
-    const city = row.city && splitCity(row.city)
-    const region = row.region && splitRegion(row.region)
+    const city = row.city ? splitCity(row.city) : null
+    const region = row.region ? splitRegion(row.region) : null
     const cityAt = named && city ? locate({ city: row.city }) : null
     if (cityAt) {
       add(`city:${row.city}`, country, cityLabel(row.city), visitors, cityAt)

@@ -44,3 +44,5 @@ process.on('SIGTERM', shutdown)
 // If either server exits on its own, tear the other down too.
 await Promise.race([api.exited, views.exited])
 shutdown()
+
+export {}

@@ -8,14 +8,16 @@ import { response } from '@stacksjs/router'
  * importing the optional `~/config/remote` module while still giving the
  * dashboard a valid, empty registry.
  */
+export function listRemoteCommands(): Response {
+  return response.json({
+    hosts: [],
+    commands: [],
+  })
+}
+
 export default new Action({
   name: 'RemoteCommandIndexAction',
   description: 'List the remote commands configured for AnalyticsHQ',
   method: 'GET',
-  async handle() {
-    return response.json({
-      hosts: [],
-      commands: [],
-    })
-  },
+  handle: listRemoteCommands,
 })

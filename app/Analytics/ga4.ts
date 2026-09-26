@@ -44,6 +44,10 @@ export {
   redactKey,
   type ServiceAccountKey,
 } from './google-auth'
+// A re-export does not bind the name in THIS module: the two used below were
+// ReferenceErrors the moment Google refused a report, hiding the real reason.
+import { redactKey, type ServiceAccountKey } from './google-auth'
+import type { FetchLike } from '../Support/fetch-like'
 
 const API_BASE = (): string => process.env.GA4_API_BASE || 'https://analyticsdata.googleapis.com'
 
@@ -100,7 +104,7 @@ export async function runReport(
   token: string,
   propertyId: string,
   dateRange: { startDate: string, endDate: string },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: FetchLike = fetch,
 ): Promise<Ga4Report> {
   const rows: Ga4Row[] = []
   let rowCount = 0
@@ -230,7 +234,7 @@ export interface Ga4FetchOptions {
   startDate?: string
   /** ISO date, or a GA relative token like 'yesterday'. */
   endDate?: string
-  fetchImpl?: typeof fetch
+  fetchImpl?: FetchLike
 }
 
 export interface Ga4FetchResult {

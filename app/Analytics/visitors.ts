@@ -28,6 +28,8 @@
  */
 
 import { db } from '@stacksjs/database'
+import type { Row } from '../Support/rows'
+import { num, text } from '../Support/rows'
 
 /** Visitors per list, newest activity first. */
 export const VISITOR_LIST_LIMIT = 50
@@ -100,20 +102,20 @@ export async function listVisitors(siteId: string, from: string, to: string, fil
      GROUP BY visitor_id
      ORDER BY MAX(timestamp) DESC
      LIMIT ?`,
-  ), [String(siteId), from, to, ...filterParams, Math.max(1, Math.min(200, limit))]) as any[]
+  ), [String(siteId), from, to, ...filterParams, Math.max(1, Math.min(200, limit))])
 
-  return (rows ?? []).map(r => ({
+  return rows.map(r => ({
     visitor_id: String(r.visitor_id),
     first_seen: String(r.first_seen),
     last_seen: String(r.last_seen),
-    pageviews: Number(r.pageviews),
-    visits: Number(r.visits),
-    days: Number(r.days),
-    country: r.country ?? null,
-    city: r.city ?? null,
-    device: r.device ?? null,
-    browser: r.browser ?? null,
-    first_source: r.first_source ?? null,
+    pageviews: num(r.pageviews),
+    visits: num(r.visits),
+    days: num(r.days),
+    country: text(r.country),
+    city: text(r.city),
+    device: text(r.device),
+    browser: text(r.browser),
+    first_source: text(r.first_source),
   }))
 }
 
@@ -185,31 +187,31 @@ export async function visitorTimeline(siteId: string, visitorId: string): Promis
        WHERE c.site_id = $1 AND c.visitor_id = $2 ORDER BY c.timestamp ASC LIMIT ${TIMELINE_LIMITS.conversions}`,
       args,
     ),
-  ]) as [any[], any[], any[], any[]]
+  ])
 
-  if (!sessions?.length && !pageviews?.length)
+  if (!sessions.length && !pageviews.length)
     return null
 
   const visits = new Map<string, TimelineVisit>()
-  for (const s of sessions ?? []) {
+  for (const s of sessions) {
     visits.set(String(s.id), {
       session_id: String(s.id),
       started_at: String(s.started_at),
-      ended_at: s.ended_at ?? null,
-      duration: Number(s.duration ?? 0),
-      entry_path: s.entry_path ?? null,
-      exit_path: s.exit_path ?? null,
-      source: s.referrer_source ?? null,
-      referrer: s.referrer ?? null,
-      utm_source: s.utm_source ?? null,
-      utm_medium: s.utm_medium ?? null,
-      utm_campaign: s.utm_campaign ?? null,
-      country: s.country ?? null,
-      region: s.region ?? null,
-      city: s.city ?? null,
-      device: s.device_type ?? null,
-      browser: s.browser ?? null,
-      os: s.os ?? null,
+      ended_at: text(s.ended_at),
+      duration: num(s.duration),
+      entry_path: text(s.entry_path),
+      exit_path: text(s.exit_path),
+      source: text(s.referrer_source),
+      referrer: text(s.referrer),
+      utm_source: text(s.utm_source),
+      utm_medium: text(s.utm_medium),
+      utm_campaign: text(s.utm_campaign),
+      country: text(s.country),
+      region: text(s.region),
+      city: text(s.city),
+      device: text(s.device_type),
+      browser: text(s.browser),
+      os: text(s.os),
       bounce: pgTrue(s.is_bounce),
       items: [],
     })
@@ -218,7 +220,7 @@ export async function visitorTimeline(siteId: string, visitorId: string): Promis
   // A page view whose session row is missing (pruned, or written before the
   // session was) still belongs on the timeline. It gets a visit of its own,
   // built from the page view's columns.
-  const visitFor = (sessionId: unknown, at: string, pv?: any): TimelineVisit => {
+  const visitFor = (sessionId: unknown, at: string, pv?: Row): TimelineVisit => {
     const key = String(sessionId ?? `orphan:${at.slice(0, 10)}`)
     let visit = visits.get(key)
     if (!visit) {
@@ -227,19 +229,19 @@ export async function visitorTimeline(siteId: string, visitorId: string): Promis
         started_at: at,
         ended_at: null,
         duration: 0,
-        entry_path: pv?.path ?? null,
+        entry_path: text(pv?.path),
         exit_path: null,
-        source: pv?.referrer_source ?? null,
+        source: text(pv?.referrer_source),
         referrer: null,
         utm_source: null,
         utm_medium: null,
         utm_campaign: null,
-        country: pv?.country ?? null,
-        region: pv?.region ?? null,
-        city: pv?.city ?? null,
-        device: pv?.device_type ?? null,
-        browser: pv?.browser ?? null,
-        os: pv?.os ?? null,
+        country: text(pv?.country),
+        region: text(pv?.region),
+        city: text(pv?.city),
+        device: text(pv?.device_type),
+        browser: text(pv?.browser),
+        os: text(pv?.os),
         bounce: false,
         items: [],
       }
@@ -248,16 +250,16 @@ export async function visitorTimeline(siteId: string, visitorId: string): Promis
     return visit
   }
 
-  for (const p of pageviews ?? [])
+  for (const p of pageviews)
     visitFor(p.session_id, String(p.timestamp), p).items.push({ kind: 'pageview', at: String(p.timestamp), path: String(p.path ?? '/') })
-  for (const e of events ?? [])
-    visitFor(e.session_id, String(e.timestamp)).items.push({ kind: 'event', at: String(e.timestamp), name: String(e.name), path: e.path ?? null, properties: e.properties ?? null })
+  for (const e of events)
+    visitFor(e.session_id, String(e.timestamp)).items.push({ kind: 'event', at: String(e.timestamp), name: String(e.name), path: text(e.path), properties: text(e.properties) })
   let revenue = 0
-  for (const c of conversions ?? []) {
-    const amount = c.amount_minor == null ? null : Number(c.amount_minor)
+  for (const c of conversions) {
+    const amount = c.amount_minor == null ? null : num(c.amount_minor)
     if (amount)
       revenue += amount
-    visitFor(c.session_id, String(c.timestamp)).items.push({ kind: 'conversion', at: String(c.timestamp), goal: c.goal ?? null, path: c.path ?? null, amount_minor: amount, currency: c.currency ?? null })
+    visitFor(c.session_id, String(c.timestamp)).items.push({ kind: 'conversion', at: String(c.timestamp), goal: text(c.goal), path: text(c.path), amount_minor: amount, currency: text(c.currency) })
   }
 
   const ordered = [...visits.values()].sort((a, b) => a.started_at.localeCompare(b.started_at))
@@ -274,9 +276,9 @@ export async function visitorTimeline(siteId: string, visitorId: string): Promis
     days,
     totals: {
       visits: ordered.length,
-      pageviews: (pageviews ?? []).length,
-      events: (events ?? []).length,
-      conversions: (conversions ?? []).length,
+      pageviews: pageviews.length,
+      events: events.length,
+      conversions: conversions.length,
       revenue_minor: revenue,
     },
     visits: ordered,

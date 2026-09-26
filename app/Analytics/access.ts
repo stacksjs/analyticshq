@@ -137,6 +137,22 @@ export interface ReachableSite {
   owner_email?: string | null
 }
 
+/** A site-list row, read column by column rather than cast. */
+function toReachableSite(r: Record<string, unknown>): ReachableSite {
+  const role = r.role === 'owner' || isAssignableRole(r.role) ? r.role : 'viewer'
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ''),
+    domains: r.domains,
+    timezone: r.timezone == null ? null : String(r.timezone),
+    currency: r.currency == null ? null : String(r.currency),
+    is_active: r.is_active,
+    created_at: r.created_at,
+    role,
+    ...('owner_email' in r ? { owner_email: r.owner_email == null ? null : String(r.owner_email) } : {}),
+  }
+}
+
 /**
  * Every site this user can open, with their role on each, newest first.
  *
@@ -178,7 +194,7 @@ export async function listReachableSites(userId: string | number): Promise<{ pla
         [uid],
       )
 
-  return { platformAdmin, sites: (rows ?? []) as ReachableSite[] }
+  return { platformAdmin, sites: (rows ?? []).map(toReachableSite) }
 }
 
 /** Whether a site row exists at all, for callers that need to answer 404 vs 403. */

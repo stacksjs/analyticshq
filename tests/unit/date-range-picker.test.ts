@@ -11,7 +11,24 @@ const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf
 // runtime, and this evaluates exactly that text, so the tests run against the
 // code the page runs rather than a copy of it.
 const pureSlice = component.match(/\/\/ #region pure\n([\s\S]*?)\n\/\/ #endregion pure/)?.[1] ?? ''
-const pure = new Function(`${pureSlice}\nreturn { pickYmd, pickParse, pickShift, pickShiftMonth, pickMonthOf, pickGrid, pickOrder, pickPreset, pickQuery }`)() as Record<string, (...args: any[]) => any>
+interface PickCell { ymd: string, day: number, inMonth: boolean, future: boolean }
+type PickSelection = { from: string, to: string } | { range: string }
+
+/** The functions the region defines, as the component calls them. */
+interface PickerMath {
+  pickYmd: (y: number, m: number, d: number) => string
+  pickParse: (s: string) => { y: number, m: number, d: number }
+  pickShift: (s: string, days: number) => string
+  pickShiftMonth: (ym: string, n: number) => string
+  pickMonthOf: (s: string) => string
+  pickGrid: (ym: string, todayYmd: string) => PickCell[]
+  pickOrder: (a: string, b: string) => { from: string, to: string }
+  pickPreset: (key: string, todayYmd: string) => PickSelection | null
+  pickQuery: (search: string, sel: PickSelection) => string
+}
+
+// eslint-disable-next-line no-new-func
+const pure: PickerMath = new Function(`${pureSlice}\nreturn { pickYmd, pickParse, pickShift, pickShiftMonth, pickMonthOf, pickGrid, pickOrder, pickPreset, pickQuery }`)()
 
 describe('date range picker: calendar grid', () => {
   test('six weeks starting on the Sunday on or before the 1st', () => {
@@ -19,7 +36,7 @@ describe('date range picker: calendar grid', () => {
     expect(cells).toHaveLength(42)
     expect(cells[0].ymd).toBe('2026-05-31')
     expect(cells[0].inMonth).toBe(false)
-    expect(cells.filter((c: any) => c.inMonth)).toHaveLength(30)
+    expect(cells.filter(c => c.inMonth)).toHaveLength(30)
     expect(cells.at(-1)!.ymd).toBe('2026-07-11')
   })
 
@@ -28,15 +45,15 @@ describe('date range picker: calendar grid', () => {
   })
 
   test('leap February and the December to January rollover', () => {
-    expect(pure.pickGrid('2028-02', '2028-09-16').filter((c: any) => c.inMonth)).toHaveLength(29)
+    expect(pure.pickGrid('2028-02', '2028-09-16').filter(c => c.inMonth)).toHaveLength(29)
     const dec = pure.pickGrid('2026-12', '2027-01-16')
     expect(dec.at(-1)!.ymd.startsWith('2027-01')).toBe(true)
   })
 
   test('days after today are marked future', () => {
     const cells = pure.pickGrid('2026-09', '2026-09-16')
-    expect(cells.find((c: any) => c.ymd === '2026-09-16').future).toBe(false)
-    expect(cells.find((c: any) => c.ymd === '2026-09-17').future).toBe(true)
+    expect(cells.find(c => c.ymd === '2026-09-16')?.future).toBe(false)
+    expect(cells.find(c => c.ymd === '2026-09-17')?.future).toBe(true)
   })
 })
 

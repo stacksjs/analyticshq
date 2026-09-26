@@ -246,10 +246,12 @@ describe('the insert', () => {
   test('every column the synthesis writes is a column the insert names', () => {
     // A key the synthesis sets but the column list omits is silently dropped —
     // the row inserts fine and the data is just missing.
+    const sessionColumns: readonly string[] = SESSION_COLUMNS
+    const pageViewColumns: readonly string[] = PAGE_VIEW_COLUMNS
     for (const key of Object.keys(rows.sessions[0]))
-      expect(SESSION_COLUMNS).toContain(key as any)
+      expect(sessionColumns).toContain(key)
     for (const key of Object.keys(rows.pageViews[0]))
-      expect(PAGE_VIEW_COLUMNS).toContain(key as any)
+      expect(pageViewColumns).toContain(key)
   })
 })
 

@@ -184,7 +184,10 @@ export interface PrivacyConfig {
   }
 }
 
-export default {
+// Typed as PrivacyConfig rather than `satisfies`, which kept every value as its
+// literal: granularity read as the type 'city', so code guarding against an
+// operator setting it to 'none' was flagged as an impossible comparison.
+const privacy: PrivacyConfig = {
   // Parsed by the same helper `scripts/analytics/prune.ts` uses, rather than
   // re-implementing the "unset / 0 / negative / non-numeric = disabled" rule here.
   // lib.ts is dependency-free, so importing it costs nothing on the ingest path.
@@ -226,4 +229,6 @@ export default {
     screenSize: false,
     webVitals: true,
   },
-} satisfies PrivacyConfig
+}
+
+export default privacy

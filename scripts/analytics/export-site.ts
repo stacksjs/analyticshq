@@ -15,6 +15,14 @@ import { connect, log, parseArgs, requireArg, requireSite } from './lib'
 
 // FK-safe order: parents (sites, goals, sessions) before children.
 const TABLES = ['sites', 'goals', 'sessions', 'page_views', 'custom_events', 'conversions'] as const
+type Table = typeof TABLES[number]
+
+/** One row as Postgres returns it: column name to value. */
+type Row = Record<string, unknown>
+
+function isTable(name: string): name is Table {
+  return TABLES.some(t => t === name)
+}
 const USAGE = 'usage: export-site --site=<id> [--out=file] [--format=ndjson|csv] [--table=<name>]'
 
 const args = parseArgs()
@@ -26,17 +34,17 @@ const sql = connect()
 const site = await requireSite(sql, siteId)
 
 // Keyset-paginate a table by its `id` PK so huge tables never load fully in memory.
-async function* pages(table: string, keyCol: 'id' | 'site_id', batch = 5000): AsyncGenerator<any[]> {
+async function* pages(table: Table, keyCol: 'id' | 'site_id', batch = 5000): AsyncGenerator<Row[]> {
   let last = ''
   for (;;) {
-    const rows: any[] = await sql.unsafe(
+    const rows: Row[] = await sql.unsafe(
       `SELECT * FROM ${table} WHERE ${keyCol} = $1 AND id > $2 ORDER BY id LIMIT $3`,
       [siteId, last, batch],
     )
     if (!rows.length)
       return
     yield rows
-    last = rows[rows.length - 1].id
+    last = String(rows[rows.length - 1].id)
     if (rows.length < batch)
       return
   }
@@ -52,7 +60,7 @@ function csvCell(v: unknown): string {
 
 if (format === 'csv') {
   const table = requireArg(args, 'table', `csv export needs a single --table (one of: ${TABLES.join(', ')})`)
-  if (!TABLES.includes(table as any)) {
+  if (!isTable(table)) {
     log(`error: unknown --table "${table}"`)
     process.exit(1)
   }

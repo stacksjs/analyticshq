@@ -59,6 +59,8 @@ import type { LiveLocations, LivePlaceRow, LivePoint } from './live'
 import { pointOf } from './city-points'
 import { liveLocations, livePoints } from './live'
 import { resolveMinSegmentSize } from './segment-floor'
+import type { Row } from '../Support/rows'
+import { num, text } from '../Support/rows'
 
 /** What "online now" means: a page view in the last five minutes. */
 export const LIVE_WINDOW_MS = 5 * 60 * 1000
@@ -154,13 +156,13 @@ async function floorsFor(siteIds: string[]): Promise<Map<string, number>> {
   const now = Date.now()
   const stale = siteIds.filter(id => (floors.get(id)?.at ?? 0) < now - FLOOR_TTL_MS)
   for (const part of chunks(stale, SITES_PER_QUERY)) {
-    const rows = await db.unsafe(`SELECT id, settings FROM sites WHERE id IN (${placeholders(part.length)})`, part)
-      .catch(() => []) as Array<{ id: string, settings: string | null }>
+    const rows: Row[] = await db.unsafe(`SELECT id, settings FROM sites WHERE id IN (${placeholders(part.length)})`, part)
+      .catch(() => [])
     const seen = new Set<string>()
-    for (const row of rows ?? []) {
+    for (const row of rows) {
       let settings: unknown = {}
       try {
-        settings = JSON.parse(row.settings || '{}')
+        settings = JSON.parse(text(row.settings) || '{}')
       }
       catch {}
       floors.set(String(row.id), { floor: resolveMinSegmentSize(settings, privacy.minSegmentSize), at: now })
@@ -200,15 +202,15 @@ export async function liveSnapshots(siteIds: string[], now: Date = new Date()): 
          WHERE timestamp >= $1 AND site_id IN (${list}) GROUP BY site_id, country, region, city`,
         [since, ...part],
       ),
-    ]) as [Array<{ site_id: string, current: number | string }>, Array<LivePlaceRow & { site_id: string }>]
+    ])
 
-    const currentBySite = new Map((counts ?? []).map(r => [String(r.site_id), Number(r.current)]))
+    const currentBySite = new Map(counts.map(r => [String(r.site_id), num(r.current)]))
     const placesBySite = new Map<string, LivePlaceRow[]>()
-    for (const row of places ?? []) {
+    for (const row of places) {
       const key = String(row.site_id)
       if (!placesBySite.has(key))
         placesBySite.set(key, [])
-      placesBySite.get(key)!.push(row)
+      placesBySite.get(key)!.push({ country: text(row.country), region: text(row.region), city: text(row.city), visitors: num(row.visitors) })
     }
 
     for (const id of part) {

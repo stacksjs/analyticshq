@@ -62,7 +62,7 @@ describe('guardrail: site-scoped read endpoints require at least viewer', () => 
 
 describe('guardrail: top-dimension reports are owner-gated', () => {
   test('the topDimension helper enforces auth + site ownership', () => {
-    const i = analytics.indexOf('function topDimension(')
+    const i = analytics.search(/function topDimension[<(]/)
     expect(i).toBeGreaterThan(-1)
 
     // Bounded by the helper's first registration rather than by a character

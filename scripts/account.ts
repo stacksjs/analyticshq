@@ -72,11 +72,11 @@ if (args.list) {
     log('no users')
   for (const u of users) {
     const sites = await sql`SELECT id FROM sites WHERE owner_id = ${u.id} ORDER BY id`
-    log(`#${u.id}  ${u.email}  (${u.name})${u.is_platform_admin ? '  [platform admin]' : ''}  sites: ${sites.map((s: any) => s.id).join(', ') || '—'}`)
+    log(`#${u.id}  ${u.email}  (${u.name})${u.is_platform_admin ? '  [platform admin]' : ''}  sites: ${sites.map((s: { id: string }) => s.id).join(', ') || '—'}`)
   }
   const orphans = await sql`SELECT id FROM sites WHERE owner_id IS NULL ORDER BY id`
   if (orphans.length > 0)
-    log(`unowned sites (invisible in the dashboard): ${orphans.map((s: any) => s.id).join(', ')}`)
+    log(`unowned sites (invisible in the dashboard): ${orphans.map((s: { id: string }) => s.id).join(', ')}`)
 }
 
 else if (args.create) {

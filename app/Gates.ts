@@ -32,7 +32,7 @@ export const gates = {
    * addresses, so `endsWith('@stacksjs.org')` let anyone who typed one in pass.
    */
   'access-admin': async (user: UserModel | null) => {
-    return isPlatformAdmin((user as any)?.id)
+    return isPlatformAdmin(user?.id)
   },
 
   /**
@@ -86,7 +86,7 @@ export const policies: Record<string, string | { policy: string, model?: string 
  * // Super admins bypass all checks
  * (user) => user?.role === 'super-admin' ? true : null
  */
-export const before: Array<(user: UserModel | null, ability: string, args: any[]) => boolean | null | Promise<boolean | null>> = [
+export const before: Array<(user: UserModel | null, ability: string, args: unknown[]) => boolean | null | Promise<boolean | null>> = [
   // Example: Super admin bypass
   // (user, ability) => {
   //   if (user?.role === 'super-admin') {
@@ -101,7 +101,7 @@ export const before: Array<(user: UserModel | null, ability: string, args: any[]
  *
  * Run after gate/policy checks. Can override the result.
  */
-export const after: Array<(user: UserModel | null, ability: string, result: boolean, args: any[]) => boolean | void | Promise<boolean | void>> = [
+export const after: Array<(user: UserModel | null, ability: string, result: boolean, args: unknown[]) => boolean | void | Promise<boolean | void>> = [
   // Example: Log all authorization checks
   // (user, ability, result) => {
   //   console.log(`User ${user?.id} ${result ? 'allowed' : 'denied'} for ${ability}`)

@@ -92,6 +92,7 @@
     "@ts-analytics/tracking": "^0.1.15",
     "mmdb-lib": "^3.0.3",
     "stacks": "^0.74.66",
+    "stripe": "22.3.2",
     "ts-maps": "^0.3.7"
   },
   "devDependencies": {

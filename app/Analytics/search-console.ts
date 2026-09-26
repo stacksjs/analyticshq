@@ -35,6 +35,7 @@
  * Google, so signing, pagination and folding run without a network.
  */
 import { getAccessToken, SCOPE_SEARCH_CONSOLE_READONLY } from './google-auth'
+import type { FetchLike } from '../Support/fetch-like'
 
 const API_BASE = (): string => process.env.SEARCH_CONSOLE_API_BASE || 'https://searchconsole.googleapis.com'
 
@@ -203,7 +204,7 @@ export async function runSearchAnalytics(
   token: string,
   siteUrl: string,
   range: { startDate: string, endDate: string },
-  fetchImpl: typeof fetch = fetch,
+  fetchImpl: FetchLike = fetch,
 ): Promise<SearchConsoleReport> {
   const rows: SearchConsoleApiRow[] = []
   let truncated = false
@@ -289,7 +290,7 @@ export interface SearchConsoleFetchOptions {
   /** Defaults to Search Console's own retention limit, 16 months. */
   startDate?: string
   endDate?: string
-  fetchImpl?: typeof fetch
+  fetchImpl?: FetchLike
 }
 
 export interface SearchConsoleFetchResult {

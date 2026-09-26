@@ -22,7 +22,7 @@ interface PageAudit {
 
 interface Pending {
   reject: (error: Error) => void
-  resolve: (value: any) => void
+  resolve: (value: unknown) => void
   timer: ReturnType<typeof setTimeout>
 }
 
@@ -72,24 +72,30 @@ async function waitFor<T>(read: () => Promise<T> | T, timeout = 12_000): Promise
   return value
 }
 
+/** A CDP message or result, read field by field. */
+function asRecord(v: unknown): Record<string, unknown> {
+  return typeof v === 'object' && v !== null ? { ...v } : {}
+}
+
 class Cdp {
   private id = 0
   private pending = new Map<number, Pending>()
 
   constructor(private socket: WebSocket) {
     socket.addEventListener('message', (event) => {
-      const message = JSON.parse(String(event.data))
-      if (!message.id) return
-      const pending = this.pending.get(message.id)
+      const message = asRecord(JSON.parse(String(event.data)))
+      const id = Number(message.id)
+      if (!id) return
+      const pending = this.pending.get(id)
       if (!pending) return
-      this.pending.delete(message.id)
+      this.pending.delete(id)
       clearTimeout(pending.timer)
-      if (message.error) pending.reject(new Error(message.error.message))
+      if (message.error) pending.reject(new Error(String(asRecord(message.error).message)))
       else pending.resolve(message.result)
     })
   }
 
-  send(method: string, params: Record<string, any> = {}): Promise<any> {
+  send(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
     const id = ++this.id
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -102,10 +108,14 @@ class Cdp {
   }
 
   async evaluate<T>(expression: string): Promise<T> {
-    const result = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true })
-    if (result.exceptionDetails)
-      throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text)
-    return result.result?.value as T
+    const result = asRecord(await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }))
+    if (result.exceptionDetails) {
+      const details = asRecord(result.exceptionDetails)
+      throw new Error(String(asRecord(details.exception).description || details.text))
+    }
+    // The page's own value, returned by value: this script's expressions say what they return.
+    const value: unknown = asRecord(result.result).value
+    return value as T
   }
 }
 
@@ -341,7 +351,7 @@ async function main(): Promise<void> {
           }
 
           const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true, fromSurface: true })
-          writeFileSync(join(OUTPUT, `${routeName(route)}-${theme}-${viewport.name}.png`), Buffer.from(shot.data, 'base64'))
+          writeFileSync(join(OUTPUT, `${routeName(route)}-${theme}-${viewport.name}.png`), Buffer.from(String(asRecord(shot).data), 'base64'))
           screenshots += 1
         }
       }

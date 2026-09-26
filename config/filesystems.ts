@@ -12,15 +12,14 @@ import { env } from '@stacksjs/env'
  */
 export default {
   /**
-   * Storage driver to use
+   * The default disk: `local` (storage/app), `public` (public/), or `s3`.
    *
-   * Options: 'local', 'bun', 's3', 'memory'
-   * - 'local': Node.js fs-based storage (compatible, slower)
-   * - 'bun': Bun-native storage (fastest, recommended when using Bun)
-   * - 's3': AWS S3 or S3-compatible storage
-   * - 'memory': In-memory storage (for testing)
+   * This names a DISK, not an adapter. It used to say `'bun'` behind an
+   * `as any`, which no disk is called, so the first `Storage` call on the
+   * default disk would have thrown "Disk [bun] is not configured". Nothing
+   * here uses file storage yet, which is the only reason it never did.
    */
-  driver: (env.STORAGE_DRIVER || 'bun') as any,
+  driver: env.STORAGE_DRIVER || 'local',
 
   /**
    * Root directory for local/bun drivers

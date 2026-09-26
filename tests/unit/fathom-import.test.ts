@@ -734,7 +734,7 @@ describe('splitting an export too big for one request', () => {
       .replace(/: Array<\[string, string\]>/g, '')
       .replace(/: string|: number/g, '')
     // eslint-disable-next-line no-new-func
-    return new Function(`${body}; return fathomWindows`)() as any
+    return new Function(`${body}; return fathomWindows`)()
   })()
 
   test('windows tile the range with no gap and no overlap', () => {

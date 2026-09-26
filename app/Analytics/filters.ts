@@ -222,7 +222,7 @@ export async function segmentPopulation(
   from: string,
   to: string,
   filter: { sql: string, params: unknown[] },
-  query: (sql: string, params: unknown[]) => Promise<any>,
+  query: (sql: string, params: unknown[]) => Promise<ReadonlyArray<Record<string, unknown>>>,
 ): Promise<number | null> {
   try {
     const rows = await query(
@@ -230,7 +230,7 @@ export async function segmentPopulation(
        WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?${filter.sql}`,
       [siteId, from, to, ...filter.params],
     )
-    const n = Number(rows?.[0]?.n)
+    const n = Number(rows[0]?.n)
     return Number.isFinite(n) ? n : null
   }
   catch {

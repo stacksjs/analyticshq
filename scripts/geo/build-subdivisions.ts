@@ -37,7 +37,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
-import { Reader } from 'mmdb-lib'
+import { openTree } from './mmdb-tree'
 
 /**
  * DB-IP spellings no dataset above matches, keyed `CC:Name`. Each was checked by
@@ -111,25 +111,48 @@ function norm(s: string): string {
     .replace(GENERIC, ' ').replace(/\s+/g, ' ').trim()
 }
 
+/** One region from iso3166-2-db's `i18n/en.json`, with the fields this reads. */
+interface WikidataRegion { cc: string, iso: string, name: string, wikipedia: string | null }
+
+const field = (o: object, key: string): unknown => (key in o ? Reflect.get(o, key) : undefined)
+
+/**
+ * iso3166-2-db's English names, flattened. The file is
+ * `{ [cc]: { regions: [{ iso, name, reference: { wikipedia } }] } }`; anything
+ * not shaped like that is skipped rather than trusted.
+ */
+function wikidataRegions(json: unknown): WikidataRegion[] {
+  const out: WikidataRegion[] = []
+  if (typeof json !== 'object' || json === null)
+    return out
+  for (const [cc, country] of Object.entries(json)) {
+    const regions = typeof country === 'object' && country !== null ? field(country, 'regions') : null
+    if (!Array.isArray(regions))
+      continue
+    for (const r of regions) {
+      if (typeof r !== 'object' || r === null)
+        continue
+      const iso = field(r, 'iso')
+      const name = field(r, 'name')
+      if (typeof iso !== 'string' || !iso || typeof name !== 'string')
+        continue
+      const ref = field(r, 'reference')
+      const wp = typeof ref === 'object' && ref !== null ? field(ref, 'wikipedia') : null
+      out.push({ cc, iso, name, wikipedia: typeof wp === 'string' ? wp : null })
+    }
+  }
+  return out
+}
+
 /** Every distinct (country, first-subdivision English name) in the database. */
 function subdivisionsIn(mmdbPath: string): Array<[string, string]> {
-  // eslint-disable-next-line ts/no-explicit-any
-  const r: any = new Reader<any>(readFileSync(mmdbPath))
-  if (!String(r.metadata.databaseType).includes('City'))
-    throw new Error(`${mmdbPath} is ${r.metadata.databaseType}, not a City database`)
-  const { nodeCount, nodeByteSize } = r.metadata
-  const pointers = new Set<number>()
-  for (let n = 0; n < nodeCount; n++) {
-    const off = n * nodeByteSize
-    for (const v of [r.walker.left(off), r.walker.right(off)])
-      if (v > nodeCount)
-        pointers.add(v)
-  }
+  const tree = openTree(mmdbPath)
+  if (!tree.databaseType.includes('City'))
+    throw new Error(`${mmdbPath} is ${tree.databaseType}, not a City database`)
   const pairs = new Map<string, [string, string]>()
-  for (const p of pointers) {
-    const d = r.resolveDataPointer(p)
-    const cc = d?.country?.iso_code
-    const name = d?.subdivisions?.[0]?.names?.en
+  for (const d of tree.records()) {
+    const cc = d.country?.iso_code
+    const name = d.subdivisions?.[0]?.names?.en
     if (typeof cc === 'string' && typeof name === 'string')
       pairs.set(`${cc}:${name}`, [cc, name])
   }
@@ -143,9 +166,9 @@ async function main(): Promise<void> {
 
   const { iso31662 } = await import('iso-3166')
   const { allCountries } = await import('country-region-data')
-  const en = JSON.parse(readFileSync(join(process.cwd(), 'node_modules/iso3166-2-db/i18n/en.json'), 'utf8'))
+  const en = wikidataRegions(JSON.parse(readFileSync(join(process.cwd(), 'node_modules/iso3166-2-db/i18n/en.json'), 'utf8')))
 
-  const valid = new Set<string>(iso31662.map((e: { code: string }) => e.code))
+  const valid = new Set<string>(iso31662.map(e => e.code))
   // Exact names and normalized names are indexed apart, so "Moscow" (the city)
   // and "Moscow Oblast" (normalized to "moscow") are not the same candidate.
   const exact = new Map<string, Map<string, number>>()
@@ -163,25 +186,19 @@ async function main(): Promise<void> {
     }
   }
 
-  for (const e of iso31662 as Array<{ code: string, parent: string, name: string }>) {
+  for (const e of iso31662) {
     const cc = e.code.slice(0, 2)
     const pri = e.parent === cc ? 1 : 3
     for (const part of e.name.split(/\s*[/;]\s*|\s*\[[a-z-]+\]\s*/))
       add(cc, part, e.code, pri)
     add(cc, e.name.split(',')[0], e.code, pri)
   }
-  // eslint-disable-next-line ts/no-explicit-any
-  for (const [cc, c] of Object.entries<any>(en)) {
-    for (const r of c.regions ?? []) {
-      if (!r.iso)
-        continue
-      add(cc, r.name, `${cc}-${r.iso}`, 1)
-      const wp = r.reference?.wikipedia
-      if (typeof wp === 'string' && wp.startsWith('en:'))
-        add(cc, wp.slice(3).replace(/_/g, ' ').replace(/\s*\(.*\)\s*$/, '').split(',')[0], `${cc}-${r.iso}`, 2)
-    }
+  for (const { cc, iso, name, wikipedia } of en) {
+    add(cc, name, `${cc}-${iso}`, 1)
+    if (wikipedia?.startsWith('en:'))
+      add(cc, wikipedia.slice(3).replace(/_/g, ' ').replace(/\s*\(.*\)\s*$/, '').split(',')[0], `${cc}-${iso}`, 2)
   }
-  for (const [, cc, regions] of allCountries as Array<[string, string, Array<[string, string]>]>) {
+  for (const [, cc, regions] of allCountries) {
     for (const [name, short] of regions)
       if (short)
         add(cc, name, `${cc}-${short}`, 2)

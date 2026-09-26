@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'bun:test'
-import RemoteCommandIndexAction from '../../app/Actions/Dashboard/Remote/RemoteCommandIndexAction'
-import RemoteCommandRunAction from '../../app/Actions/Dashboard/Remote/RemoteCommandRunAction'
+import RemoteCommandIndexAction, { listRemoteCommands } from '../../app/Actions/Dashboard/Remote/RemoteCommandIndexAction'
+import RemoteCommandRunAction, { refuseRemoteCommand } from '../../app/Actions/Dashboard/Remote/RemoteCommandRunAction'
 
 describe('dashboard remote commands', () => {
   it('loads without the optional framework remote config alias', async () => {
-    const result = await RemoteCommandIndexAction.handle()
+    expect(RemoteCommandIndexAction.handle).toBe(listRemoteCommands)
+    const result = listRemoteCommands()
 
     expect(result.status).toBe(200)
     expect(await result.json()).toEqual({
@@ -14,7 +15,8 @@ describe('dashboard remote commands', () => {
   })
 
   it('fails closed when a remote command run is requested', async () => {
-    const result = await RemoteCommandRunAction.handle()
+    expect(RemoteCommandRunAction.handle).toBe(refuseRemoteCommand)
+    const result = refuseRemoteCommand()
 
     expect(result.status).toBe(403)
     expect(await result.json()).toEqual({

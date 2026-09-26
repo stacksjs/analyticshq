@@ -22,8 +22,7 @@ export default new Action({
     if (!user)
       return response.unauthorized('Authentication required')
 
-    const body = (request as any).jsonBody ?? {}
-    const interval = body.interval === 'yearly' ? 'yearly' : 'monthly'
+    const interval = request.get<unknown>('interval') === 'yearly' ? 'yearly' : 'monthly'
     const lookupKey = interval === 'yearly' ? 'analyticshq_pro_yearly' : 'analyticshq_pro_monthly'
 
     try {

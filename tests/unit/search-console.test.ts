@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as googleAuth from '../../app/Analytics/google-auth'
 import { SCOPE_SEARCH_CONSOLE_READONLY } from '../../app/Analytics/google-auth'
+import type { FetchLike } from '../../app/Support/fetch-like'
 import {
   buildSearchInsert,
   defaultEndDate,
@@ -324,13 +325,13 @@ describe('Google refusals', () => {
 
 describe('the API request', () => {
   const fakeFetch = (pages: unknown[][]) => {
-    const seen: any[] = []
+    const seen: Array<{ url: string, body: Record<string, unknown> }> = []
     let call = 0
-    const impl = (async (_url: string, init: any) => {
-      seen.push({ url: _url, body: JSON.parse(init.body) })
+    const impl: FetchLike = async (url, init) => {
+      seen.push({ url, body: JSON.parse(String(init?.body)) })
       const rows = pages[call++] ?? []
-      return { ok: true, json: async () => ({ rows }), text: async () => '' } as any
-    }) as unknown as typeof fetch
+      return Response.json({ rows })
+    }
     return { impl, seen }
   }
 
@@ -362,7 +363,7 @@ describe('the API request', () => {
   })
 
   test('a refusal throws with the actionable message', async () => {
-    const impl = (async () => ({ ok: false, status: 403, text: async () => 'denied' })) as unknown as typeof fetch
+    const impl: FetchLike = async () => new Response('denied', { status: 403 })
     await expect(runSearchAnalytics('tok', 'sc-domain:x.com', { startDate: 'a', endDate: 'b' }, impl))
       .rejects.toThrow(/Users and permissions/)
   })

@@ -25,20 +25,28 @@ const sql = connect()
 
 // Read the whole archive, bucket rows by table.
 const text = inPath ? await Bun.file(inPath).text() : await Bun.stdin.text()
-const buckets: Record<string, any[]> = Object.fromEntries(TABLES.map(t => [t, []]))
+/** One archived row: column name to value, as export-site wrote it. */
+type Row = Record<string, unknown>
+
+const buckets: Record<string, Row[]> = Object.fromEntries(TABLES.map(t => [t, []]))
 let bad = 0
 for (const line of text.split('\n')) {
   if (!line.trim())
     continue
-  let row: any
+  let parsed: unknown
   try {
-    row = JSON.parse(line)
+    parsed = JSON.parse(line)
   }
   catch {
     bad++
     continue
   }
-  const t = row._t
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    bad++
+    continue
+  }
+  const row: Row = { ...parsed }
+  const t = String(row._t)
   if (!buckets[t]) {
     bad++
     continue

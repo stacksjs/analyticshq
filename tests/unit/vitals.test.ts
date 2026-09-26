@@ -45,7 +45,8 @@ describe('the metrics we collect', () => {
     expect([...VITAL_METRICS].sort()).toEqual(['CLS', 'FCP', 'INP', 'LCP', 'TTFB'])
     // Google retired FID for INP in March 2024. ts-analytics still collects it;
     // porting it would have shipped a withdrawn metric on day one.
-    expect(VITAL_METRICS).not.toContain('FID' as any)
+    const metrics: readonly string[] = VITAL_METRICS
+    expect(metrics).not.toContain('FID')
   })
 
   test('every metric has a threshold, and every threshold a metric', () => {
@@ -329,8 +330,9 @@ describe('the promise the site makes', () => {
   test('the three metrics named in the nav copy are the three we collect', () => {
     const nav = read('resources/partials/site-nav.stx')
     expect(nav).toContain('LCP, INP, and CLS')
+    const metrics: readonly string[] = VITAL_METRICS
     for (const metric of ['LCP', 'INP', 'CLS'])
-      expect(VITAL_METRICS).toContain(metric as any)
+      expect(metrics).toContain(metric)
   })
 })
 

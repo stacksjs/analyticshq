@@ -31,7 +31,7 @@ export async function sessionFrom(cookies: Record<string, string | undefined> | 
     const viewer = await Auth.getUserFromToken(token)
     if (!viewer)
       return SIGNED_OUT
-    return { check: true, user: { name: String((viewer as any).name || ''), email: String((viewer as any).email || '') } }
+    return { check: true, user: { name: String(viewer.name || ''), email: String(viewer.email || '') } }
   }
   catch {
     return SIGNED_OUT

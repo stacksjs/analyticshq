@@ -1,8 +1,28 @@
-import type { LoggingConfig } from '@stacksjs/types'
+import type { LoggingConfig, LogRecord, LogTransport } from '@stacksjs/types'
 import { bughqTransport } from '@bughq/stacks'
 import { loghqTransport } from '@loghq/stacks'
 import { env } from '@stacksjs/env'
 import { storagePath } from '@stacksjs/path'
+
+/**
+ * The loghq transport, as the framework's `LogTransport`.
+ *
+ * `@loghq/stacks` types its record with a `[key: string]: unknown` index
+ * signature, and an interface (the framework's `LogRecord`) carries no implicit
+ * one, so the transport is not assignable as it comes. Spreading the record
+ * into a fresh object literal is: same fields, and the literal type has the
+ * index signature the handler asks for.
+ */
+function loghq(): LogTransport {
+  const transport = loghqTransport({
+    key: env.LOGHQ_KEY,
+    host: env.LOGHQ_HOST || undefined,
+    environment: env.APP_ENV,
+    channel: 'analyticshq',
+    captureStruct: true,
+  })
+  return { ...transport, log: (record: LogRecord) => transport.log({ ...record }) }
+}
 
 /**
  * **Logging Configuration**
@@ -57,13 +77,7 @@ export default {
    * `channel` is what separates this app's stream from the other four in loghq.
    */
   transports: [
-    loghqTransport({
-      key: env.LOGHQ_KEY,
-      host: env.LOGHQ_HOST || undefined,
-      environment: env.APP_ENV,
-      channel: 'analyticshq',
-      captureStruct: true,
-    }),
+    loghq(),
 
     // The other half of the pair, and a different job: loghq takes the whole
     // stream, bughq takes only what failed. Records at error and above become

@@ -14,6 +14,18 @@ export default {
     default: 'Stacks',
   },
 
+  // Read by config/cache.ts, and never declared here, so it was untyped.
+  CACHE_DRIVER: {
+    validation: schema.enum(['memory', 'redis']),
+    default: 'memory',
+  },
+
+  // The default storage disk (config/filesystems.ts).
+  STORAGE_DRIVER: {
+    validation: schema.enum(['local', 'public', 's3']),
+    default: 'local',
+  },
+
   APP_ENV: {
     validation: schema.enum(['local', 'dev', 'stage', 'prod']),
     default: 'local',
@@ -194,7 +206,7 @@ export default {
   },
 
   // Read by config/services.ts and verified against every incoming webhook in
-  // app/Actions/StripeWebhook.ts, which returns 400 when it is unset. It was
+  // app/Actions/StripeWebhookAction.ts, which returns 400 when it is unset. It was
   // consumed there without ever being declared here, so a fresh clone had no
   // way to learn the variable exists — and an unset secret does not fail
   // loudly at boot, it fails silently at the moment a real payment arrives and

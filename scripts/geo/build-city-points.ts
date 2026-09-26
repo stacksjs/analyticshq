@@ -28,11 +28,10 @@
  * database has no cities, so it writes nothing and the map falls back to
  * country centres.
  */
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import process from 'node:process'
-import { Reader } from 'mmdb-lib'
-import type { GeoRecord } from '../../app/Analytics/geo'
-import { cityOf, regionOfRecord } from '../../app/Analytics/geo'
+import { cityOf } from '../../app/Analytics/geo'
+import { openTree } from './mmdb-tree'
 
 type Sum = { lat: number, lon: number, n: number }
 
@@ -56,30 +55,18 @@ function main(): void {
     throw new Error('usage: bun scripts/geo/build-city-points.ts <dbip-city-lite.mmdb> <out.json>')
 
   const started = performance.now()
-  // eslint-disable-next-line ts/no-explicit-any
-  const r: any = new Reader<GeoRecord & { location?: { latitude?: number, longitude?: number } }>(readFileSync(src))
-  if (!String(r.metadata.databaseType).includes('City')) {
-    console.log(`${src} is ${r.metadata.databaseType}: no cities, so no points. The map uses country centres.`)
+  const tree = openTree(src)
+  if (!tree.databaseType.includes('City')) {
+    console.log(`${src} is ${tree.databaseType}: no cities, so no points. The map uses country centres.`)
     return
   }
 
-  // Every data record, once: the tree's leaves are pointers into the data
-  // section, and many addresses share one record.
-  const { nodeCount, nodeByteSize } = r.metadata
-  const pointers = new Set<number>()
-  for (let n = 0; n < nodeCount; n++) {
-    const off = n * nodeByteSize
-    for (const v of [r.walker.left(off), r.walker.right(off)]) {
-      if (v > nodeCount)
-        pointers.add(v)
-    }
-  }
-
+  let records = 0
   const cities = new Map<string, Sum>()
-  for (const p of pointers) {
-    const rec = r.resolveDataPointer(p)
-    const lat = Number(rec?.location?.latitude)
-    const lon = Number(rec?.location?.longitude)
+  for (const rec of tree.records()) {
+    records++
+    const lat = Number(rec.location?.latitude)
+    const lon = Number(rec.location?.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
       continue
     const city = cityOf(rec)
@@ -102,8 +89,8 @@ function main(): void {
   for (const [key, s] of regions)
     regionPoints[key] = [round(s.lat / s.n), round(s.lon / s.n)]
 
-  writeFileSync(out, JSON.stringify({ built: new Date().toISOString(), source: String(r.metadata.databaseType), cities: cityPoints, regions: regionPoints }))
-  console.log(`${Object.keys(cityPoints).length} cities, ${Object.keys(regionPoints).length} regions from ${pointers.size} records in ${((performance.now() - started) / 1000).toFixed(1)}s -> ${out}`)
+  writeFileSync(out, JSON.stringify({ built: new Date().toISOString(), source: tree.databaseType, cities: cityPoints, regions: regionPoints }))
+  console.log(`${Object.keys(cityPoints).length} cities, ${Object.keys(regionPoints).length} regions from ${records} records in ${((performance.now() - started) / 1000).toFixed(1)}s -> ${out}`)
 }
 
 main()

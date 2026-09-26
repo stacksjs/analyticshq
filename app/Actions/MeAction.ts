@@ -4,6 +4,15 @@ import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
 import { isPlatformAdmin } from '../Analytics/access'
 import { userIsPro } from '../Analytics/entitlements'
+import type { Row } from '../Support/rows'
+import { text } from '../Support/rows'
+
+/** A timestamp column as the account page reads it: ISO text, whatever the driver returned. */
+function stampOf(v: unknown): string | null {
+  if (v instanceof Date)
+    return Number.isNaN(v.getTime()) ? null : v.toISOString()
+  return text(v)
+}
 
 /**
  * Return the authenticated user plus their Pro status. The dashboard calls this
@@ -30,43 +39,29 @@ export default new Action({
     if (!user)
       return response.unauthorized('Authentication required')
 
-    const pro = await userIsPro((user as any).id)
+    const pro = await userIsPro(user.id)
     // Whether the site list this user gets is the whole install. Display only:
     // every site endpoint resolves it again for itself.
-    const platformAdmin = await isPlatformAdmin((user as any).id)
+    const platformAdmin = await isPlatformAdmin(user.id)
 
     // Enrich with profile fields the account page shows. created_at is read on
     // its own: it used to be selected together with `avatar` and `provider`,
-    // which this install's users table does not have, so the whole query threw
-    // and every account page said "Member since --". The optional social-login
-    // columns are read separately, and their absence costs only themselves.
-    let profile: any = {}
-    try {
-      profile = await db.selectFrom('users')
-        .where('id', '=', (user as any).id)
-        .select(['created_at'])
-        .executeTakeFirst() ?? {}
-    }
-    catch {
-      profile = {}
-    }
-    try {
-      const social: any = await db.selectFrom('users')
-        .where('id', '=', (user as any).id)
-        .select(['avatar', 'provider'])
-        .executeTakeFirst()
-      profile = { ...profile, avatar: social?.avatar, provider: social?.provider }
-    }
-    catch {}
+    // which no migration had created until 58, so the whole query threw and
+    // every account page said "Member since --". They are still read apart, so
+    // an install that has not run 58 loses only the avatar.
+    const profile = await db.unsafe('SELECT created_at FROM users WHERE id = $1', [user.id])
+      .then(rows => rows[0] ?? {}, (): Row => ({}))
+    const social = await db.unsafe('SELECT avatar, provider FROM users WHERE id = $1', [user.id])
+      .then(rows => rows[0] ?? {}, (): Row => ({}))
 
     return response.json({
       user: {
-        id: (user as any).id,
-        name: (user as any).name,
-        email: (user as any).email,
-        avatar: profile.avatar ?? (user as any).avatar ?? null,
-        provider: profile.provider ?? null,
-        created_at: profile.created_at ?? null,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar: text(social.avatar) ?? user.avatar ?? null,
+        provider: text(social.provider),
+        created_at: stampOf(profile.created_at) ?? user.created_at ?? null,
       },
       pro,
       plan: pro ? 'pro' : 'free',

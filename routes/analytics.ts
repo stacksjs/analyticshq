@@ -24,6 +24,7 @@ import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
 import { featureUnavailableMessage, isUnlimited, limitReachedMessage, type PlanFeatures, type PlanLimits } from '../config/plans'
+import type { AlertChannel } from '../app/Alerts/delivery'
 import { checkWebhookUrl } from '../app/Alerts/url-safety'
 import { healthResponse } from '../app/Support/health'
 import { computeFunnel, FUNNEL_SCOPES, isFunnelScope, parseSteps, validateSteps } from '../app/Analytics/funnels'
@@ -31,7 +32,7 @@ import { buildFilterSql, collectFilters, FILTER_COLUMNS, FILTER_OPS, MAX_FILTERS
 import { formatMinor, normalizeCurrency, resolveConversionAmount, toMinorUnits } from '../app/Analytics/money'
 import { checkDomainShape, snippetFor, verifyDomainDns } from '../app/Analytics/custom-domain'
 import { mintSiteId, normalizeSiteInput } from '../app/Analytics/sites'
-import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVitalsPayload, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
+import { buildDeviceReport, buildReport, isVitalDevice, isVitalMetric, parseVitalsPayload, type VitalAggregate, VITAL_THRESHOLDS } from '../app/Analytics/vitals'
 import { buildInsert, GA_PAGE_VIEW_PREFIX, GA_SESSION_PREFIX, synthesizeRecord } from '../app/Analytics/ga-import'
 import { fetchGa4History, importWarnings, normalizePropertyId, parseServiceAccountKey } from '../app/Analytics/ga4'
 import { buildSearchInsert, fetchSearchConsoleHistory, searchImportWarnings, searchRowId } from '../app/Analytics/search-console'
@@ -69,9 +70,53 @@ import { capacityReport, coreCount, cpuLoadCheck, dbConnectionsCheck, disk, disk
  * SQL string, so the blanket replace is safe.
  */
 const IS_PG = (process.env.DB_CONNECTION ?? 'postgres') === 'postgres'
-function pgq(sql: string, params?: unknown[]): Promise<any> {
+/** One row as Postgres returns it: column name to value. Read with Number()/String(). */
+type Row = Record<string, unknown>
+
+function pgq(sql: string, params?: unknown[]): Promise<Row[]> {
   const bound = IS_PG ? ((): string => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql
-  return db.unsafe(bound, params ?? []) as Promise<any>
+  return db.unsafe(bound, params ?? [])
+}
+
+/** A text column's value, or null. Numbers and the like are spelled out, never guessed. */
+function text(v: unknown): string | null {
+  if (v == null)
+    return null
+  return typeof v === 'string' ? v : String(v)
+}
+
+/** A web_vitals aggregate row. `p75` stays null when nothing was measured. */
+function toVitalAggregate(r: Row): VitalAggregate {
+  return { metric: String(r.metric), p75: r.p75 == null ? null : Number(r.p75), samples: Number(r.samples) }
+}
+
+/**
+ * The signed-in user the auth middleware stamped on the request, or null.
+ *
+ * The router types `_authenticatedUser` as unknown, so it is checked here once
+ * rather than cast at every call site: an object with an id, or nothing.
+ */
+function authenticatedUser(request: HandlerRequest): { id: number | string, email?: string, name?: string } | null {
+  const u = request._authenticatedUser
+  if (typeof u !== 'object' || u === null || !('id' in u))
+    return null
+  const { id } = u as { id: unknown }
+  if (typeof id !== 'number' && typeof id !== 'string')
+    return null
+  const email = 'email' in u && typeof u.email === 'string' ? u.email : undefined
+  const name = 'name' in u && typeof u.name === 'string' ? u.name : undefined
+  return { id, email, name }
+}
+
+/**
+ * What the request-taking helpers below read. Structural, so the router's
+ * precise per-path `RequestFor<'/api/sites/{siteId}/…'>` is assignable to it.
+ */
+interface HandlerRequest {
+  query?: Record<string, string | string[]>
+  params?: object
+  headers: Headers
+  _authenticatedUser?: unknown
 }
 
 const CORS = {
@@ -89,7 +134,7 @@ function json(data: unknown, status = 200): Response {
 }
 
 /** Parse a `from`/`to` window from the query string, defaulting to last 7d. */
-function window(req: { query: Record<string, any> }): { from: string, to: string } {
+function window(req: { query?: Record<string, string | string[]> }): { from: string, to: string } {
   const now = new Date()
   const weekAgo = new Date(now.getTime() - 7 * 864e5)
   const from = (req.query?.from as string) || weekAgo.toISOString()
@@ -112,7 +157,7 @@ function window(req: { query: Record<string, any> }): { from: string, to: string
  * unknown operator — so the endpoint can answer 400 rather than pass something
  * malformed to the database and turn it into a 500.
  */
-function readFilters(req: { query: Record<string, any> }): FilterResult {
+function readFilters(req: { query?: Record<string, string | string[]> }): FilterResult {
   const specs = collectFilters(req.query ?? {})
   const validated = validateFilters(specs)
   if ('error' in validated)
@@ -158,7 +203,7 @@ function invalidPatternMessage(error: unknown): string | null {
  * Anything else is rethrown — a broken query of ours is not the caller's fault
  * and must not be reported as if it were.
  */
-async function filteredQuery(sql: string, params: unknown[]): Promise<{ rows: any[] } | { response: Response }> {
+async function filteredQuery(sql: string, params: unknown[]): Promise<{ rows: Row[] } | { response: Response }> {
   try {
     return { rows: (await pgq(sql, params)) ?? [] }
   }
@@ -177,7 +222,7 @@ async function filteredQuery(sql: string, params: unknown[]): Promise<{ rows: an
  * primary-key read, and a stale cache would show a reader the definition they
  * just edited rather than the one they saved.
  */
-async function readFiltersWithSegment(request: any, siteId: string): Promise<FilterResult> {
+async function readFiltersWithSegment(request: HandlerRequest, siteId: string): Promise<FilterResult> {
   const segmentId = request.query?.segment
   if (typeof segmentId !== 'string' || !segmentId)
     return readFilters(request)
@@ -188,7 +233,7 @@ async function readFiltersWithSegment(request: any, siteId: string): Promise<Fil
   if (!row)
     return { sql: '', params: [], count: 0, error: 'Segment not found' }
 
-  const merged = mergeFilters(parseSegmentFilters(row.filters), request.query ?? {})
+  const merged = mergeFilters(parseSegmentFilters(text(row.filters)), request.query ?? {})
   const specs = collectFilters(merged)
   const validated = validateFilters(specs)
   if ('error' in validated)
@@ -359,6 +404,20 @@ interface GoalRow {
   currency: string | null
 }
 
+/** A goals row, read column by column. */
+function toGoalRow(r: Row): GoalRow {
+  const num = (v: unknown): number | null => (v == null || v === '' ? null : Number(v))
+  return {
+    id: String(r.id),
+    type: text(r.type),
+    pattern: text(r.pattern),
+    match_type: text(r.match_type),
+    value: num(r.value),
+    default_amount_minor: r.default_amount_minor == null ? null : (typeof r.default_amount_minor === 'number' ? r.default_amount_minor : String(r.default_amount_minor)),
+    currency: text(r.currency),
+  }
+}
+
 function matchesGoal(
   goal: GoalRow,
   hit: { isPageview: boolean, path: string, eventName: string },
@@ -396,7 +455,7 @@ function conversionId(sessionId: string, goalId: string): string {
 
 route.options('/collect', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/collect', async (request: any) => {
+route.post('/collect', async (request) => {
   const body = request.jsonBody ?? {}
   const siteId = body.s
   if (!siteId)
@@ -521,11 +580,11 @@ route.post('/collect', async (request: any) => {
 
   let url: URL | null = null
   try {
-    url = body.u ? new URL(body.u) : null
+    url = typeof body.u === 'string' && body.u ? new URL(body.u) : null
   }
   catch { /* ignore malformed url */ }
   const path = clip255(url?.pathname) ?? '/'
-  const source = referrerSource(body.r)
+  const source = referrerSource(typeof body.r === 'string' ? body.r : undefined)
 
   // Ensure the site row exists before any child insert. sessions, page_views,
   // custom_events and conversions all FK to sites.id, so a first-ever hit for a
@@ -648,7 +707,7 @@ route.post('/collect', async (request: any) => {
     const eventCurrency = normalizeCurrency(eventProps.currency)
     const eventAmountRaw = eventProps.value ?? eventProps.revenue ?? eventProps.amount
 
-    for (const goal of (goals ?? []) as GoalRow[]) {
+    for (const goal of (goals ?? []).map(toGoalRow)) {
       if (!matchesGoal(goal, { isPageview, path, eventName }))
         continue
 
@@ -713,8 +772,8 @@ route.post('/collect', async (request: any) => {
  * auth-guarded route this is populated. Returns a string for dialect-agnostic
  * comparison (owner_id is compared in JS, never bound into an int column).
  */
-function authUserId(request: any): string | null {
-  const id = request?._authenticatedUser?.id
+function authUserId(request: HandlerRequest): string | null {
+  const id = authenticatedUser(request)?.id
   return id == null ? null : String(id)
 }
 
@@ -743,7 +802,7 @@ function authUserId(request: any): string | null {
  * conceal and collapsing the two would only make real 404s undebuggable. The
  * secret is the data, and that is what the role check protects.
  */
-async function requireSiteRole(request: any, siteId: string, required: SiteRole): Promise<Response | null> {
+async function requireSiteRole(request: HandlerRequest, siteId: string, required: SiteRole): Promise<Response | null> {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
@@ -759,7 +818,7 @@ async function requireSiteRole(request: any, siteId: string, required: SiteRole)
 }
 
 /** Destructive and ownership-transferring operations only. */
-async function requireSiteOwner(request: any, siteId: string): Promise<Response | null> {
+async function requireSiteOwner(request: HandlerRequest, siteId: string): Promise<Response | null> {
   return requireSiteRole(request, siteId, 'owner')
 }
 
@@ -821,7 +880,7 @@ async function requirePlanIncludes(siteId: string, feature: keyof PlanFeatures, 
 
 route.options('/api/sites', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites', async (request: any) => {
+route.get('/api/sites', async (request) => {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
@@ -894,7 +953,7 @@ async function pendingInviteCount(siteId: string): Promise<number> {
 
 route.options('/api/sites/{siteId}/members', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/members', async (request: any) => {
+route.get('/api/sites/{siteId}/members', async (request) => {
   const siteId = request.params.siteId
   // Viewer, not admin: knowing who else can see a site is part of knowing whether
   // it is being shared, and a viewer who cannot see that has no way to notice.
@@ -904,7 +963,7 @@ route.get('/api/sites/{siteId}/members', async (request: any) => {
   return json({ members: await listSiteMembers(siteId) })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/members', async (request: any) => {
+route.post('/api/sites/{siteId}/members', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -947,7 +1006,7 @@ route.post('/api/sites/{siteId}/members', async (request: any) => {
 
 route.options('/api/sites/{siteId}/members/{userId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.delete('/api/sites/{siteId}/members/{userId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/members/{userId}', async (request) => {
   const siteId = request.params.siteId
   const targetId = Number(request.params.userId)
   const denied = await requireSiteRole(request, siteId, 'admin')
@@ -989,7 +1048,7 @@ async function listSiteInvites(siteId: string): Promise<Array<Record<string, unk
      ORDER BY i.created_at DESC`,
     [String(siteId)],
   )
-  return (rows ?? []).map((r: any) => ({
+  return (rows ?? []).map((r: Row) => ({
     id: Number(r.id),
     email: String(r.email),
     role: String(r.role),
@@ -1001,7 +1060,7 @@ async function listSiteInvites(siteId: string): Promise<Array<Record<string, unk
 
 route.options('/api/sites/{siteId}/invites', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/invites', async (request: any) => {
+route.get('/api/sites/{siteId}/invites', async (request) => {
   const siteId = request.params.siteId
   // Viewer, matching the members list: who else is being given access is part of
   // knowing how widely a site is shared.
@@ -1011,7 +1070,7 @@ route.get('/api/sites/{siteId}/invites', async (request: any) => {
   return json({ invites: await listSiteInvites(siteId) })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/invites', async (request: any) => {
+route.post('/api/sites/{siteId}/invites', async (request) => {
   const siteId = request.params.siteId
   // Role first, then plan. An outsider must get 403 without learning anything
   // about the owner's billing, and 402 would tell them the site exists and is
@@ -1082,7 +1141,7 @@ route.post('/api/sites/{siteId}/invites', async (request: any) => {
   const delivered = await sendSiteInvite({
     to: email,
     siteName: String(site?.name ?? siteId),
-    invitedBy: inviter?.name ?? inviter?.email ?? null,
+    invitedBy: text(inviter?.name) ?? text(inviter?.email),
     role,
     token,
     expiresLabel,
@@ -1098,7 +1157,7 @@ route.post('/api/sites/{siteId}/invites', async (request: any) => {
 
 route.options('/api/sites/{siteId}/invites/{inviteId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.delete('/api/sites/{siteId}/invites/{inviteId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/invites/{inviteId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1128,7 +1187,7 @@ route.options('/api/invites/accept', () => new Response(null, { status: 204, hea
  * site access to an existing identity and never mints one, so there is no path
  * here from an unauthenticated address to an account.
  */
-route.post('/api/invites/accept', async (request: any) => {
+route.post('/api/invites/accept', async (request) => {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
@@ -1148,7 +1207,9 @@ route.post('/api/invites/accept', async (request: any) => {
     [hashToken(token)],
   ))?.[0]
 
-  const refusal = inviteRefusal(invite as any, me.email)
+  const refusal = inviteRefusal(invite
+    ? { email: String(invite.email), role: String(invite.role), expires_at: text(invite.expires_at), accepted_at: text(invite.accepted_at) }
+    : null, me.email)
   if (refusal) {
     // One body and one status for every refusal. The server distinguishes them
     // so the page can offer "ask for a new one" on an expired link, but a holder
@@ -1176,7 +1237,7 @@ route.post('/api/invites/accept', async (request: any) => {
   // nothing. Nobody legitimately redeems twenty invitations a minute.
 }).middleware('auth').skipCsrf().rateLimit(20, 'minute')
 
-route.post('/api/sites', async (request: any) => {
+route.post('/api/sites', async (request) => {
   const uid = authUserId(request)
   if (!uid)
     return json({ error: 'Unauthorized' }, 401)
@@ -1235,7 +1296,7 @@ function isValidTimeZone(tz: string): boolean {
 route.options('/api/sites/{siteId}', () => new Response(null, { status: 204, headers: CORS }))
 
 // Rename / edit a site (name, domains, timezone). Owner-scoped, partial update.
-route.patch('/api/sites/{siteId}', async (request: any) => {
+route.patch('/api/sites/{siteId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1391,7 +1452,7 @@ route.patch('/api/sites/{siteId}', async (request: any) => {
 }).middleware('auth').skipCsrf()
 
 // Delete a site and cascade-erase all of its data (events + goals + the row).
-route.delete('/api/sites/{siteId}', async (request: any) => {
+route.delete('/api/sites/{siteId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteOwner(request, siteId)
   if (denied)
@@ -1412,7 +1473,7 @@ const GOAL_MATCH_TYPES = new Set(['exact', 'contains', 'starts_with'])
 
 route.options('/api/sites/{siteId}/goals', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/goals', async (request: any) => {
+route.get('/api/sites/{siteId}/goals', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -1425,7 +1486,7 @@ route.get('/api/sites/{siteId}/goals', async (request: any) => {
   return json({ goals: rows ?? [] })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/goals', async (request: any) => {
+route.post('/api/sites/{siteId}/goals', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1509,7 +1570,7 @@ route.post('/api/sites/{siteId}/goals', async (request: any) => {
 
 route.options('/api/sites/{siteId}/goals/{goalId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.delete('/api/sites/{siteId}/goals/{goalId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/goals/{goalId}', async (request) => {
   const siteId = request.params.siteId
   const goalId = request.params.goalId
   const denied = await requireSiteRole(request, siteId, 'admin')
@@ -1564,13 +1625,13 @@ function boundedInt(value: unknown, bound: { min: number, max: number, fallback:
  * same guard immediately before every request, because DNS can change after a URL
  * is stored. See app/Alerts/url-safety.ts.
  */
-async function validateChannels(raw: unknown): Promise<{ error: string } | { channels: any[] }> {
+async function validateChannels(raw: unknown): Promise<{ error: string } | { channels: AlertChannel[] }> {
   if (!Array.isArray(raw) || raw.length === 0)
     return { error: 'at least one channel is required' }
   if (raw.length > 10)
     return { error: 'a maximum of 10 channels is allowed' }
 
-  const channels: any[] = []
+  const channels: AlertChannel[] = []
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object')
       return { error: 'each channel must be an object' }
@@ -1601,10 +1662,10 @@ async function validateChannels(raw: unknown): Promise<{ error: string } | { cha
 }
 
 /** Shape one row for the API, parsing `channels` so clients do not double-decode. */
-function alertOut(row: any): Record<string, unknown> {
+function alertOut(row: Row): Record<string, unknown> {
   let channels: unknown = []
   try {
-    channels = JSON.parse(row.channels || '[]')
+    channels = JSON.parse(text(row.channels) || '[]')
   }
   catch {
     channels = []
@@ -1630,7 +1691,7 @@ function alertOut(row: any): Record<string, unknown> {
 
 route.options('/api/sites/{siteId}/alerts', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/alerts', async (request: any) => {
+route.get('/api/sites/{siteId}/alerts', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1642,7 +1703,7 @@ route.get('/api/sites/{siteId}/alerts', async (request: any) => {
   return json({ alerts: (rows ?? []).map(alertOut) })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/alerts', async (request: any) => {
+route.post('/api/sites/{siteId}/alerts', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1716,7 +1777,7 @@ route.post('/api/sites/{siteId}/alerts', async (request: any) => {
 
 route.options('/api/sites/{siteId}/alerts/{alertId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.patch('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
+route.patch('/api/sites/{siteId}/alerts/{alertId}', async (request) => {
   const siteId = request.params.siteId
   const alertId = request.params.alertId
   const denied = await requireSiteRole(request, siteId, 'admin')
@@ -1803,7 +1864,7 @@ route.patch('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
   return json({ alert: alertOut(row) })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/alerts/{alertId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/alerts/{alertId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1839,20 +1900,20 @@ async function funnelGoalNames(siteId: string, steps: string[]): Promise<Record<
   return names
 }
 
-function funnelOut(row: any): Record<string, unknown> {
+function funnelOut(row: Row): Record<string, unknown> {
   return {
     id: row.id,
     site_id: row.site_id,
     name: row.name,
     scope: row.scope,
-    steps: parseSteps(row.steps),
+    steps: parseSteps(text(row.steps)),
     created_at: row.created_at,
   }
 }
 
 route.options('/api/sites/{siteId}/funnels', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/funnels', async (request: any) => {
+route.get('/api/sites/{siteId}/funnels', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -1861,7 +1922,7 @@ route.get('/api/sites/{siteId}/funnels', async (request: any) => {
   return json({ funnels: (rows ?? []).map(funnelOut) })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/funnels', async (request: any) => {
+route.post('/api/sites/{siteId}/funnels', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1904,7 +1965,7 @@ route.post('/api/sites/{siteId}/funnels', async (request: any) => {
 
 route.options('/api/sites/{siteId}/funnels/{funnelId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.patch('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
+route.patch('/api/sites/{siteId}/funnels/{funnelId}', async (request) => {
   const siteId = request.params.siteId
   const funnelId = request.params.funnelId
   const denied = await requireSiteRole(request, siteId, 'admin')
@@ -1958,7 +2019,7 @@ route.patch('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
   return json({ funnel: funnelOut(row) })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/funnels/{funnelId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -1969,7 +2030,7 @@ route.delete('/api/sites/{siteId}/funnels/{funnelId}', async (request: any) => {
 
 route.options('/api/sites/{siteId}/funnels/{funnelId}/results', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any) => {
+route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -1979,7 +2040,7 @@ route.get('/api/sites/{siteId}/funnels/{funnelId}/results', async (request: any)
   if (!row)
     return json({ error: 'Funnel not found' }, 404)
 
-  const steps = parseSteps(row.steps)
+  const steps = parseSteps(text(row.steps))
   if (steps.length < 2)
     return json({ error: 'This funnel no longer has enough steps' }, 409)
 
@@ -2033,7 +2094,7 @@ function cnameTarget(): string {
 
 route.options('/api/sites/{siteId}/domain', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/domain', async (request: any) => {
+route.get('/api/sites/{siteId}/domain', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -2047,11 +2108,11 @@ route.get('/api/sites/{siteId}/domain', async (request: any) => {
     verified: !!row?.custom_domain_verified_at,
     verified_at: row?.custom_domain_verified_at ?? null,
     cname_target: cnameTarget(),
-    snippet: snippetFor(String(siteId), appUrl, row?.custom_domain ?? null, row?.custom_domain_verified_at ?? null),
+    snippet: snippetFor(String(siteId), appUrl, text(row?.custom_domain), text(row?.custom_domain_verified_at)),
   })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/domain', async (request: any) => {
+route.post('/api/sites/{siteId}/domain', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -2084,7 +2145,7 @@ route.post('/api/sites/{siteId}/domain', async (request: any) => {
 
 route.options('/api/sites/{siteId}/domain/verify', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/domain/verify', async (request: any) => {
+route.post('/api/sites/{siteId}/domain/verify', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -2115,7 +2176,7 @@ route.post('/api/sites/{siteId}/domain/verify', async (request: any) => {
   })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/domain', async (request: any) => {
+route.delete('/api/sites/{siteId}/domain', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -2160,8 +2221,9 @@ function tokensMatch(a: unknown, b: unknown): boolean {
 }
 
 /** Resolve a widget request, or the reason it was refused. */
-async function widgetSite(request: any): Promise<{ siteId: string, settings: Record<string, any> } | null> {
-  const siteId = String(request.params.siteId ?? '')
+async function widgetSite(request: HandlerRequest): Promise<{ siteId: string, settings: Record<string, unknown> } | null> {
+  const params = (request.params ?? {}) as { siteId?: string }
+  const siteId = String(params.siteId ?? '')
   const token = request.query?.token
   if (!siteId || typeof token !== 'string')
     return null
@@ -2175,7 +2237,7 @@ async function widgetSite(request: any): Promise<{ siteId: string, settings: Rec
 const WIDGET_CACHE = 'public, max-age=300, s-maxage=300'
 
 /** Days a widget may look back. Bounded so a public endpoint cannot ask for everything. */
-function widgetWindow(request: any): { from: string, to: string, days: number } {
+function widgetWindow(request: HandlerRequest): { from: string, to: string, days: number } {
   const raw = Number(request.query?.days ?? 30)
   const days = Number.isFinite(raw) ? Math.min(365, Math.max(1, Math.trunc(raw))) : 30
   const to = new Date()
@@ -2185,7 +2247,7 @@ function widgetWindow(request: any): { from: string, to: string, days: number } 
 
 route.options('/api/sites/{siteId}/widget', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/widget', async (request: any) => {
+route.post('/api/sites/{siteId}/widget', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -2205,7 +2267,7 @@ route.post('/api/sites/{siteId}/widget', async (request: any) => {
   })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/widget', async (request: any) => {
+route.delete('/api/sites/{siteId}/widget', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -2223,7 +2285,7 @@ route.delete('/api/sites/{siteId}/widget', async (request: any) => {
  */
 route.options('/api/public/{siteId}/summary', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/public/{siteId}/summary', async (request: any) => {
+route.get('/api/public/{siteId}/summary', async (request) => {
   const site = await widgetSite(request)
   // One answer for "no such site", "no widget token" and "wrong token". A public
   // endpoint that distinguishes them turns a site id — which is public — into a
@@ -2250,14 +2312,14 @@ route.get('/api/public/{siteId}/summary', async (request: any) => {
     days,
     visitors: Number(totals?.visitors ?? 0),
     views: Number(totals?.views ?? 0),
-    series: (series ?? []).map((r: any) => ({ day: r.day, visitors: Number(r.visitors ?? 0) })),
+    series: (series ?? []).map((r: Row) => ({ day: r.day, visitors: Number(r.visitors ?? 0) })),
   }), {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': WIDGET_CACHE, ...CORS },
   })
 })
 
 /** The badge itself. Served as an image, so no CORS dance and no script. */
-route.get('/public/{siteId}/badge.svg', async (request: any) => {
+route.get('/public/{siteId}/badge.svg', async (request) => {
   const site = await widgetSite(request)
   if (!site) {
     // An SVG, not a 404 page: this is loaded by <img>, and a broken image tells
@@ -2289,7 +2351,7 @@ route.get('/public/{siteId}/badge.svg', async (request: any) => {
 })
 
 /** A standalone sparkline, for embedding next to the badge. */
-route.get('/public/{siteId}/sparkline.svg', async (request: any) => {
+route.get('/public/{siteId}/sparkline.svg', async (request) => {
   const site = await widgetSite(request)
   if (!site) {
     return new Response(renderSparkline([]), {
@@ -2306,7 +2368,7 @@ route.get('/public/{siteId}/sparkline.svg', async (request: any) => {
     [site.siteId, from, to],
   )
 
-  return new Response(renderSparkline((rows ?? []).map((r: any) => Number(r.visitors ?? 0))), {
+  return new Response(renderSparkline((rows ?? []).map((r: Row) => Number(r.visitors ?? 0))), {
     headers: { 'Content-Type': 'image/svg+xml', 'Cache-Control': WIDGET_CACHE, ...CORS },
   })
 })
@@ -2327,7 +2389,7 @@ route.get('/public/{siteId}/sparkline.svg', async (request: any) => {
 
 route.options('/api/sites/{siteId}/revenue', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/revenue', async (request: any) => {
+route.get('/api/sites/{siteId}/revenue', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -2355,7 +2417,7 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
     [String(siteId), from, to],
   )
 
-  const shape = (row: any) => ({
+  const shape = (row: Row) => ({
     currency: String(row.currency),
     amountMinor: Number(row.amount_minor ?? 0),
     amount: formatMinor(Number(row.amount_minor ?? 0), String(row.currency)),
@@ -2365,7 +2427,7 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
   return json({
     range: { from, to },
     currencies: (byCurrency ?? []).map(shape),
-    goals: (byGoal ?? []).map((row: any) => ({
+    goals: (byGoal ?? []).map((row: Row) => ({
       goal_id: row.goal_id,
       name: row.name ?? '(deleted goal)',
       ...shape(row),
@@ -2412,7 +2474,7 @@ route.get('/api/sites/{siteId}/revenue', async (request: any) => {
 
 route.options('/api/sites/{siteId}/vitals', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/vitals', async (request: any) => {
+route.get('/api/sites/{siteId}/vitals', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -2477,15 +2539,15 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
 
   return json({
     range: { from, to },
-    metrics: buildReport((totals ?? []) as any[], vitalsFloor),
+    metrics: buildReport(totals.map(toVitalAggregate), vitalsFloor),
     thresholds: VITAL_THRESHOLDS,
     // Echoed so a caller that mistyped `?device=` can see it was not applied,
     // rather than reading a site-wide number as a mobile one.
     device,
-    devices: buildDeviceReport((byDevice ?? []) as any[], vitalsFloor),
+    devices: buildDeviceReport(byDevice.map(r => ({ ...toVitalAggregate(r), device: text(r.device) })), vitalsFloor),
     pages: {
       metric: pathMetric,
-      rows: (byPath ?? []).map((row: any) => ({
+      rows: (byPath ?? []).map((row: Row) => ({
         path: String(row.path),
         value: Number(row.p75),
         samples: Number(row.samples ?? 0),
@@ -2499,7 +2561,7 @@ route.get('/api/sites/{siteId}/vitals', async (request: any) => {
 
 route.options('/api/sites/{siteId}/vitals-trends', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
+route.get('/api/sites/{siteId}/vitals-trends', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -2529,8 +2591,8 @@ route.get('/api/sites/{siteId}/vitals-trends', async (request: any) => {
   // gap-filled zero: a chart that dips to 0 reads as "the site got fast", which
   // is the opposite of "we do not know".
   const days = (rows ?? [])
-    .filter((row: any) => vitalsFloor <= 0 || Number(row.samples ?? 0) >= vitalsFloor)
-    .map((row: any) => ({
+    .filter((row: Row) => vitalsFloor <= 0 || Number(row.samples ?? 0) >= vitalsFloor)
+    .map((row: Row) => ({
       day: String(row.day),
       value: Number(row.p75),
       samples: Number(row.samples ?? 0),
@@ -2579,7 +2641,7 @@ const GA4_MAX_ROWS_PER_REQUEST = 50_000
 
 route.options('/api/sites/{siteId}/import/ga4', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
+route.post('/api/sites/{siteId}/import/ga4', async (request) => {
   const siteId = request.params.siteId
   // Owner, not admin: this writes history into the site's own tables, and
   // `replace` deletes a previous import.
@@ -2702,7 +2764,7 @@ route.post('/api/sites/{siteId}/import/ga4', async (request: any) => {
 
 route.options('/api/sites/{siteId}/import/fathom', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/import/fathom', async (request: any) => {
+route.post('/api/sites/{siteId}/import/fathom', async (request) => {
   const siteId = request.params.siteId
   // Owner, not admin: this writes history into the site's own tables, and
   // `replace` deletes a previous import. Role first, plan second, so an
@@ -2925,7 +2987,7 @@ const SEARCH_MAX_ROWS_PER_REQUEST = 50_000
 
 route.options('/api/sites/{siteId}/search', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/search', async (request: any) => {
+route.get('/api/sites/{siteId}/search', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -2980,7 +3042,7 @@ route.get('/api/sites/{siteId}/search', async (request: any) => {
 }).middleware('auth')
 
 /** Shape one grouped row, with CTR derived rather than stored. */
-function searchRow(row: any): Record<string, unknown> {
+function searchRow(row: Row): Record<string, unknown> {
   const clicks = Number(row.clicks ?? 0)
   const impressions = Number(row.impressions ?? 0)
   return {
@@ -2992,7 +3054,7 @@ function searchRow(row: any): Record<string, unknown> {
   }
 }
 
-function searchTotals(row: any): Record<string, unknown> {
+function searchTotals(row: Row): Record<string, unknown> {
   const clicks = Number(row?.clicks ?? 0)
   const impressions = Number(row?.impressions ?? 0)
   return {
@@ -3005,7 +3067,7 @@ function searchTotals(row: any): Record<string, unknown> {
 
 route.options('/api/sites/{siteId}/import/search-console', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/import/search-console', async (request: any) => {
+route.post('/api/sites/{siteId}/import/search-console', async (request) => {
   const siteId = request.params.siteId
   // Owner, not admin: this accepts a credential to somebody's Google property.
   const denied = await requireSiteOwner(request, siteId)
@@ -3121,7 +3183,7 @@ route.options('/api/connect/{siteId}/report', () => new Response(null, { status:
  * differ. 404 for an unknown site and 403 for a bad token, matching the rest of
  * the API — site ids are public, so distinguishing them leaks nothing.
  */
-async function requireShareToken(request: any, siteId: string): Promise<Response | null> {
+async function requireShareToken(request: HandlerRequest, siteId: string): Promise<Response | null> {
   const provided = String(
     request.query?.token
     || String(request.headers?.get?.('authorization') ?? '').replace(/^Bearer\s+/i, '')
@@ -3138,7 +3200,7 @@ async function requireShareToken(request: any, siteId: string): Promise<Response
   return verdict.ok ? null : json({ error: verdict.error }, verdict.status)
 }
 
-route.get('/api/connect/{siteId}/fields', async (request: any) => {
+route.get('/api/connect/{siteId}/fields', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireShareToken(request, siteId)
   if (denied)
@@ -3146,7 +3208,7 @@ route.get('/api/connect/{siteId}/fields', async (request: any) => {
   return json({ fields: describeFields(), maxRows: CONNECT_MAX_ROWS })
 }).skipCsrf()
 
-route.get('/api/connect/{siteId}/report', async (request: any) => {
+route.get('/api/connect/{siteId}/report', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireShareToken(request, siteId)
   if (denied)
@@ -3164,7 +3226,7 @@ route.get('/api/connect/{siteId}/report', async (request: any) => {
     return json({ error: plan.error }, 400)
 
   const rows = await pgq(plan.sql, [String(siteId), from, to])
-  const shaped = (rows ?? []).map((row: any) => shapeRow(row, plan.dimensions, plan.metrics))
+  const shaped = (rows ?? []).map((row: Row) => shapeRow(row, plan.dimensions, plan.metrics))
 
   return json({
     range: { from, to },
@@ -3216,19 +3278,19 @@ function validateSegmentFilters(raw: unknown): { error: string } | { filters: Re
   return { filters }
 }
 
-function segmentOut(row: any): Record<string, unknown> {
+function segmentOut(row: Row): Record<string, unknown> {
   return {
     id: row.id,
     site_id: row.site_id,
     name: row.name,
-    filters: parseSegmentFilters(row.filters),
+    filters: parseSegmentFilters(text(row.filters)),
     created_at: row.created_at,
   }
 }
 
 route.options('/api/sites/{siteId}/segments', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/segments', async (request: any) => {
+route.get('/api/sites/{siteId}/segments', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3237,7 +3299,7 @@ route.get('/api/sites/{siteId}/segments', async (request: any) => {
   return json({ segments: (rows ?? []).map(segmentOut) })
 }).middleware('auth')
 
-route.post('/api/sites/{siteId}/segments', async (request: any) => {
+route.post('/api/sites/{siteId}/segments', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -3268,7 +3330,7 @@ route.post('/api/sites/{siteId}/segments', async (request: any) => {
 
 route.options('/api/sites/{siteId}/segments/{segmentId}', () => new Response(null, { status: 204, headers: CORS }))
 
-route.patch('/api/sites/{siteId}/segments/{segmentId}', async (request: any) => {
+route.patch('/api/sites/{siteId}/segments/{segmentId}', async (request) => {
   const siteId = request.params.siteId
   const segmentId = request.params.segmentId
   const denied = await requireSiteRole(request, siteId, 'admin')
@@ -3311,7 +3373,7 @@ route.patch('/api/sites/{siteId}/segments/{segmentId}', async (request: any) => 
   return json({ segment: segmentOut(row) })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/segments/{segmentId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/segments/{segmentId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -3343,10 +3405,10 @@ route.get('/api/filters', async () => {
 // viewer can never create/delete anything.
 
 /** Read a site's settings JSON (tolerant of null/legacy non-JSON). */
-async function readSiteSettings(siteId: string): Promise<Record<string, any>> {
+async function readSiteSettings(siteId: string): Promise<Record<string, unknown>> {
   const rows = await pgq(`SELECT settings FROM sites WHERE id = ?`, [String(siteId)])
   try {
-    return JSON.parse(rows?.[0]?.settings || '{}') || {}
+    return JSON.parse(text(rows?.[0]?.settings) || '{}') || {}
   }
   catch {
     return {}
@@ -3355,7 +3417,7 @@ async function readSiteSettings(siteId: string): Promise<Record<string, any>> {
 
 route.options('/api/sites/{siteId}/share', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/sites/{siteId}/share', async (request: any) => {
+route.post('/api/sites/{siteId}/share', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -3368,7 +3430,7 @@ route.post('/api/sites/{siteId}/share', async (request: any) => {
   return json({ token, path: `/dashboard?site=${encodeURIComponent(String(siteId))}&share=${token}` })
 }).middleware('auth').skipCsrf()
 
-route.delete('/api/sites/{siteId}/share', async (request: any) => {
+route.delete('/api/sites/{siteId}/share', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
@@ -3396,7 +3458,7 @@ const TIMELINES_OFF = 'Visitor timelines are off for this site. The site owner c
 
 route.options('/api/sites/{siteId}/visitors', () => new Response(null, { status: 204, headers: CORS }))
 
-route.get('/api/sites/{siteId}/visitors', async (request: any) => {
+route.get('/api/sites/{siteId}/visitors', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3419,7 +3481,7 @@ route.get('/api/sites/{siteId}/visitors', async (request: any) => {
   }
 }).middleware('auth')
 
-route.get('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) => {
+route.get('/api/sites/{siteId}/visitors/{visitorId}', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3459,7 +3521,7 @@ async function eraseRows(siteId: string, visitorId?: string): Promise<Record<str
 route.options('/api/sites/{siteId}/data', () => new Response(null, { status: 204, headers: CORS }))
 
 // Wipe all analytics data for a site (keeps the site and its goals config).
-route.delete('/api/sites/{siteId}/data', async (request: any) => {
+route.delete('/api/sites/{siteId}/data', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteOwner(request, siteId)
   if (denied)
@@ -3473,7 +3535,7 @@ route.options('/api/sites/{siteId}/visitors/{visitorId}', () => new Response(nul
 // GDPR erasure for a single visitor id. The id is a 24h-rotating per-site hash,
 // so this covers the rows sharing it (in practice one UTC day) — there is no
 // durable key that could reach further back, by design.
-route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) => {
+route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request) => {
   const siteId = request.params.siteId
   const visitorId = request.params.visitorId
   const denied = await requireSiteOwner(request, siteId)
@@ -3488,7 +3550,7 @@ route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request: any) =>
   })
 }).middleware('auth').skipCsrf()
 
-route.get('/api/sites/{siteId}/stats', async (request: any) => {
+route.get('/api/sites/{siteId}/stats', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3516,7 +3578,7 @@ route.get('/api/sites/{siteId}/stats', async (request: any) => {
   })
 }).middleware('auth')
 
-route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
+route.get('/api/sites/{siteId}/timeseries', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3539,7 +3601,7 @@ route.get('/api/sites/{siteId}/timeseries', async (request: any) => {
   return json({ series: result.rows })
 }).middleware('auth')
 
-route.get('/api/sites/{siteId}/pages', async (request: any) => {
+route.get('/api/sites/{siteId}/pages', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3562,7 +3624,7 @@ route.get('/api/sites/{siteId}/pages', async (request: any) => {
   return json({ pages: result.rows })
 }).middleware('auth')
 
-route.get('/api/sites/{siteId}/referrers', async (request: any) => {
+route.get('/api/sites/{siteId}/referrers', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3605,8 +3667,8 @@ route.get('/api/sites/{siteId}/referrers', async (request: any) => {
  * "Other" — the traffic still counts, and nobody can point at where it came
  * from.
  */
-function topDimension(path: string, column: string, key: string, opts: { floorRows?: boolean } = {}): void {
-  route.get(path, async (request: any) => {
+function topDimension<P extends `/api/sites/{siteId}/${string}`>(path: P, column: string, key: string, opts: { floorRows?: boolean } = {}): void {
+  route.get(path, async (request) => {
     const siteId = request.params.siteId
     const denied = await requireSiteRole(request, siteId, 'viewer')
     if (denied)
@@ -3674,7 +3736,7 @@ topDimension('/api/sites/{siteId}/utm/mediums', 'utm_medium', 'mediums')
 topDimension('/api/sites/{siteId}/utm/campaigns', 'utm_campaign', 'campaigns')
 
 // Custom events, by name.
-route.get('/api/sites/{siteId}/events', async (request: any) => {
+route.get('/api/sites/{siteId}/events', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3690,7 +3752,7 @@ route.get('/api/sites/{siteId}/events', async (request: any) => {
 }).middleware('auth')
 
 // Entry pages (session first page).
-route.get('/api/sites/{siteId}/entry-pages', async (request: any) => {
+route.get('/api/sites/{siteId}/entry-pages', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3706,7 +3768,7 @@ route.get('/api/sites/{siteId}/entry-pages', async (request: any) => {
 }).middleware('auth')
 
 // Exit pages (session last page).
-route.get('/api/sites/{siteId}/exit-pages', async (request: any) => {
+route.get('/api/sites/{siteId}/exit-pages', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3723,7 +3785,7 @@ route.get('/api/sites/{siteId}/exit-pages', async (request: any) => {
 
 // Current visitors: unique visitors in the last ~5 minutes. Polled by the
 // dashboard to keep the live count fresh without a reload (issue #20).
-route.get('/api/sites/{siteId}/realtime', async (request: any) => {
+route.get('/api/sites/{siteId}/realtime', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3738,7 +3800,7 @@ route.get('/api/sites/{siteId}/realtime', async (request: any) => {
 // dashboard, fed by a single per-process ticker and by /collect as page views
 // arrive. See app/Analytics/realtime.ts for why this scales with watched sites
 // rather than with watchers. The role is checked once, when the stream opens.
-route.get('/api/sites/{siteId}/live', async (request: any) => {
+route.get('/api/sites/{siteId}/live', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'viewer')
   if (denied)
@@ -3788,7 +3850,7 @@ route.get('/api/sites/{siteId}/live', async (request: any) => {
 // numbers describe the infrastructure, so it answers only to StatusHQ's
 // `oh-dear-health-check-secret` header (tokensMatch, constant time), and is off
 // (404) until ANALYTICSHQ_HEALTH_SECRET is set.
-route.get('/api/health/capacity', async (request: any) => {
+route.get('/api/health/capacity', async (request) => {
   const secret = String(process.env.ANALYTICSHQ_HEALTH_SECRET ?? '')
   if (!secret)
     return json({ error: 'Not found' }, 404)
@@ -3823,7 +3885,7 @@ route.get('/api/health/capacity', async (request: any) => {
 // it needs no auth, and it is validated on every read as well as here.
 route.options('/api/prefs/timezone', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/api/prefs/timezone', async (request: any) => {
+route.post('/api/prefs/timezone', async (request) => {
   const body = request.jsonBody ?? {}
   const tz = validTimeZone(body.tz)
   if (!tz)

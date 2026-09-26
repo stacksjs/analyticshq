@@ -22,7 +22,7 @@ describe('sessionFrom', () => {
 
   test('exposes the name and email and nothing else', () => {
     const src = read('app/Support/session.ts')
-    expect(src).toContain(`user: { name: String((viewer as any).name || ''), email: String((viewer as any).email || '') }`)
+    expect(src).toContain(`user: { name: String(viewer.name || ''), email: String(viewer.email || '') }`)
     expect(src).not.toMatch(/password|token:|is_platform_admin/)
   })
 })
