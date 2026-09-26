@@ -36,6 +36,9 @@ const avatarUrl: StxSignal<string> = state('')
 const initialCh: StxSignal<string> = state('')
 const provider: StxSignal<string> = state('')
 const pro: StxSignal<boolean> = state(false)
+// A platform admin runs the install (app/Analytics/access.ts): every feature,
+// no limits, never billed, so there is no plan to show and nothing to upgrade.
+const admin: StxSignal<boolean> = state(false)
 
 function initial(s: string | null | undefined): string {
   return (s || '?').trim().charAt(0).toUpperCase()
@@ -90,6 +93,7 @@ onMount(() => {
       if (u.provider)
         provider.set(u.provider)
       pro.set(d.pro === true)
+      admin.set(d.platformAdmin === true)
       loaded.set(true)
     })
     .catch(() => {})
@@ -176,13 +180,23 @@ onMount(() => {
         <div>
           <div class="text-xs tracking-wide uppercase" style="color: var(--text-3); font-family: var(--mono)">Plan</div>
           <div class="mt-1 font-semibold text-base">
-            {{ pro() ? 'Pro' : 'Free' }}
-            @if (pro())
-              <span class="ml-1 px-2 py-0.5 badge badge-pro">active</span>
+            @if (admin())
+              Admin
+              <span class="ml-1 px-2 py-0.5 badge badge-pro">all features</span>
+            @else
+              {{ pro() ? 'Pro' : 'Free' }}
+              @if (pro())
+                <span class="ml-1 px-2 py-0.5 badge badge-pro">active</span>
+              @endif
             @endif
           </div>
+          @if (admin())
+            <div class="mt-1 text-text-3 text-xs">This account runs the install: every site is open to it, and its own sites have every feature with no limits. Never billed.</div>
+          @endif
         </div>
-        @if (pro())
+        @if (admin())
+          <StxLink to="/dashboard" class="px-4 py-2 text-sm whitespace-nowrap btn btn-ghost">All sites</StxLink>
+        @elseif (pro())
           <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost">Manage plan</StxLink>
         @else
           <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary">Upgrade to Pro</StxLink>

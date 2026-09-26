@@ -35,18 +35,29 @@ export default new Action({
     // every site endpoint resolves it again for itself.
     const platformAdmin = await isPlatformAdmin((user as any).id)
 
-    // Enrich with profile fields the account page shows (avatar + which
-    // provider the account signed in with). Tolerate columns not existing yet.
+    // Enrich with profile fields the account page shows. created_at is read on
+    // its own: it used to be selected together with `avatar` and `provider`,
+    // which this install's users table does not have, so the whole query threw
+    // and every account page said "Member since --". The optional social-login
+    // columns are read separately, and their absence costs only themselves.
     let profile: any = {}
     try {
       profile = await db.selectFrom('users')
         .where('id', '=', (user as any).id)
-        .select(['avatar', 'provider', 'created_at'])
+        .select(['created_at'])
         .executeTakeFirst() ?? {}
     }
     catch {
       profile = {}
     }
+    try {
+      const social: any = await db.selectFrom('users')
+        .where('id', '=', (user as any).id)
+        .select(['avatar', 'provider'])
+        .executeTakeFirst()
+      profile = { ...profile, avatar: social?.avatar, provider: social?.provider }
+    }
+    catch {}
 
     return response.json({
       user: {

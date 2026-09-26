@@ -26,6 +26,7 @@
  */
 
 import { db } from '@stacksjs/database'
+import { isPlatformAdmin } from './access'
 import { DEFAULT_PLAN, PAID_PLAN, PLAN_FEATURES, PLAN_LIMITS, SELF_HOSTED_FEATURES, SELF_HOSTED_LIMITS, SELF_HOSTED_PLAN, billingEnabled, type PlanFeatures, type PlanLimits } from '../../config/plans'
 
 export interface ResolvedPlan {
@@ -97,6 +98,13 @@ export async function planForSite(siteId: string): Promise<ResolvedPlan> {
   const ownerId = await siteOwnerId(siteId)
   if (ownerId == null)
     return { plan: DEFAULT_PLAN, limits: PLAN_LIMITS[DEFAULT_PLAN]!, features: PLAN_FEATURES[DEFAULT_PLAN]! }
+
+  // A platform admin runs this install (app/Analytics/access.ts), and the sites
+  // they own are the operator's own, so they get what a self-hosted install
+  // gets: every feature, no limits, never billed. Only the flag on the row
+  // grants it, the same flag that grants admin access.
+  if (await isPlatformAdmin(ownerId))
+    return { plan: SELF_HOSTED_PLAN, limits: SELF_HOSTED_LIMITS, features: SELF_HOSTED_FEATURES }
 
   const pro = await userIsPro(ownerId)
   const plan = pro ? PAID_PLAN : DEFAULT_PLAN

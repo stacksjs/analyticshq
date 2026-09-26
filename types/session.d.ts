@@ -29,6 +29,8 @@ interface SessionUser {
 interface MeResponse {
   user: SessionUser
   pro?: boolean
+  /** Runs the install: every site, every feature, never billed (app/Analytics/access.ts). */
+  platformAdmin?: boolean
 }
 
 /**

@@ -162,3 +162,29 @@ describe('platform admins', () => {
     expect(block).toContain('!owner && member !== \'admin\' && await isPlatformAdmin(uid)')
   })
 })
+
+describe('what a platform admin is shown and given', () => {
+  test('their own sites get the unbilled, unlimited tier', () => {
+    const src = read('app/Analytics/entitlements.ts')
+    const i = src.indexOf('export async function planForSite')
+    const body = src.slice(i, src.indexOf('\n}\n', i))
+    expect(body).toContain('if (await isPlatformAdmin(ownerId))')
+    expect(body.indexOf('isPlatformAdmin(ownerId)')).toBeLessThan(body.indexOf('userIsPro(ownerId)'))
+    expect(body).toContain('SELF_HOSTED_FEATURES')
+  })
+
+  test('the account page says Admin, with nothing to upgrade to', () => {
+    const page = read('resources/views/account.stx')
+    expect(page).toContain(`admin.set(d.platformAdmin === true)`)
+    const adminBranch = page.slice(page.indexOf('@if (admin())\n          <StxLink'), page.indexOf('@elseif (pro())'))
+    expect(adminBranch).not.toContain('Upgrade')
+  })
+
+  test('member since survives a users table without the social columns', () => {
+    // created_at used to be selected with avatar and provider, which this
+    // install's users table lacks, so the whole query threw.
+    const me = read('app/Actions/MeAction.ts')
+    expect(me).toContain(`.select(['created_at'])`)
+    expect(me).not.toContain(`.select(['avatar', 'provider', 'created_at'])`)
+  })
+})
