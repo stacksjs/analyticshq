@@ -11,8 +11,12 @@ export default defineModel({
     useUuid: true,
   },
   attributes: {
+    // text, as the column is. Left to inference, the 512-character rule reads
+    // as varchar(512), and stacks 0.75.4 planned that change against the
+    // production column.
     type: {
       fillable: true,
+      type: 'text',
       validation: {
         rule: schema.string().required().max(512),
         message: {

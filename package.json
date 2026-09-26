@@ -86,21 +86,19 @@
   "dependencies": {
     "@bughq/stacks": "^0.2.2",
     "@loghq/stacks": "^0.2.6",
-    "@stacksjs/buddy": "^0.75.0",
-    "@stacksjs/logging": "^0.75.0",
+    "@stacksjs/buddy": "^0.75.5",
+    "@stacksjs/logging": "^0.75.5",
     "@stacksjs/stx": "^0.2.315",
     "@stacksjs/ts-cloud": "^0.16.11",
-    "@ts-analytics/tracking": "^0.1.15",
+    "@ts-analytics/tracking": "^0.1.17",
+    "bun-query-builder": "^0.3.1",
     "mmdb-lib": "^3.0.3",
-    "stacks": "^0.74.66",
+    "stacks": "^0.75.5",
     "stripe": "22.3.2",
     "ts-maps": "^0.3.15"
   },
   "devDependencies": {
     "better-dx": "^0.2.25"
-  },
-  "overrides": {
-    "bun-query-builder": "^0.1.44"
   },
   "git-hooks": {
     "pre-commit": {
