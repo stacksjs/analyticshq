@@ -23,7 +23,7 @@ const crumbs = [
         <h1>Watch speed and traffic in the same place.</h1>
         <p>Real-user LCP, INP, and CLS collected from the same script, shown next to your traffic. A slow page shows up before it quietly costs you visitors.</p>
         <div class="hero-actions">
-          <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
+          <StxLink class="btn primary" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
@@ -119,7 +119,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
+            <StxLink class="btn ghost" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

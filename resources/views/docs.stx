@@ -99,7 +99,7 @@ fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-
           <p>Add the script, watch the dashboard fill in. No cookie banner required.</p>
           <div class="cta-actions">
             <StxLink class="btn primary" to="/register">Get your site ID</StxLink>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
+            <StxLink class="btn ghost" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

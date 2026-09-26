@@ -359,13 +359,18 @@ describe('erasure and retention reach the new table', () => {
 
   test('value is a float column, not an integer', () => {
     // An integer column floors CLS to 0. The model generator produced exactly
-    // that, which is why there is no WebVital model.
+    // that from an undeclared type; the WebVital model declares 'double'.
     const migration = read('database/migrations/0000000047-create-web_vitals-table.sql')
     expect(migration).toMatch(/"value"\s+double precision/)
   })
 
-  test('there is no WebVital model to regenerate an integer column from', () => {
-    expect(() => readFileSync(join(ROOT, 'app/Models/WebVital.ts'), 'utf8')).toThrow()
+  test('the WebVital model declares value a float, so it cannot regenerate an integer column', () => {
+    // There was deliberately no model: the generator inferred `integer` from a
+    // number rule, which floors CLS to 0. The model now declares the type, and
+    // the generator emits `double precision` from it (checked against the
+    // production baseline when the model was added).
+    const model = readFileSync(join(ROOT, 'app/Models/WebVital.ts'), 'utf8')
+    expect(model).toMatch(/\bvalue: \{[^}]*type: 'double'/)
   })
 })
 

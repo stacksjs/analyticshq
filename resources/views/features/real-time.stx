@@ -56,7 +56,7 @@ const crumbs = [
         <h1>Watch your traffic as it happens.</h1>
         <p>See who is on your site right now, which pages hold their attention, and where they arrived from. The live view updates on its own, with no cookie set and no reload.</p>
         <div class="hero-actions">
-          <StxLink to="/dashboard" class="btn primary">See a live dashboard</StxLink>
+          <StxLink to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c" class="btn primary">See a live dashboard</StxLink>
           <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
@@ -125,7 +125,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
-            <StxLink to="/dashboard" class="btn ghost">See a live dashboard</StxLink>
+            <StxLink to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c" class="btn ghost">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

@@ -15,6 +15,7 @@
  * /compare/anything into an indexable soft-200. One file per real page keeps the
  * 404, and the duplication this was meant to remove is gone either way.
  */
+import { DEMO_DASHBOARD_PATH } from '../../app/Analytics/demo-link'
 
 export interface CompareRow {
   /** What is being compared. */
@@ -94,7 +95,7 @@ export interface Competitor {
   related: CompareRelated[]
 }
 
-const SEE_DASHBOARD: CompareLink = { to: '/dashboard', label: 'See a live dashboard' }
+const SEE_DASHBOARD: CompareLink = { to: DEMO_DASHBOARD_PATH, label: 'See a live dashboard' }
 const HOW_PRIVACY_WORKS: CompareLink = { to: '/features/privacy', label: 'How the privacy works' }
 
 export interface Crumb {

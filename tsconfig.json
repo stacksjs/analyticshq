@@ -41,6 +41,7 @@
     "app/**/*.ts",
     "routes/**/*.ts",
     "config/**/*.ts",
+    "database/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "cloud/**/*.ts"

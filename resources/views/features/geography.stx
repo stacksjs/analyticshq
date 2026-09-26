@@ -23,7 +23,7 @@ const crumbs = [
         <h1>See who visits, without tracking who they are.</h1>
         <p>Country, device, browser, and operating system. Country is resolved on your own server from a local database — the visitor's IP is never stored and never sent to anyone.</p>
         <div class="hero-actions">
-          <StxLink class="btn primary" to="/dashboard">See a live dashboard</StxLink>
+          <StxLink class="btn primary" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
         </div>
       </section>
@@ -137,7 +137,7 @@ const crumbs = [
           <h2>Your numbers. Your visitors' privacy. Both intact.</h2>
           <div class="cta-actions">
             <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
-            <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
+            <StxLink class="btn ghost" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           </div>
         </div>
       </section>

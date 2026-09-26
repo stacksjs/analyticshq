@@ -49,7 +49,7 @@ const crumbs = [
         <p>Real-time visitors, traffic sources, conversions, and Core Web Vitals, in one screen. All from a single cookieless script under 2 KB, with exact numbers and no consent banner in the way.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/#install">Get your script tag</StxLink>
-          <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
+          <StxLink class="btn ghost" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
         </div>
       </section>
 

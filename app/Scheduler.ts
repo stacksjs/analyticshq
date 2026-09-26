@@ -35,6 +35,14 @@ export default function () {
   schedule
     .job('RunAnalyticsAlerts')
     .hourly()
+
+  // The public demo every "Live demo" link opens (app/Analytics/demo.ts). Hourly
+  // so its "today" fills in through the day and its year rolls forward; a run
+  // rebuilds only the last few days, in a couple of seconds. --skip-models keeps
+  // this to the one application seeder on a production database.
+  schedule
+    .command('bun node_modules/@stacksjs/buddy/dist/cli.js seed --only-seeders DemoSiteSeeder --skip-models')
+    .hourly()
 }
 
 process.on('SIGINT', () => {

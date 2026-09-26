@@ -88,7 +88,7 @@ function pickFramework(e: Event): void {
             </p>
             <div class="d3 enter hero-actions">
               <a class="btn primary" href="#install">Get your script tag</a>
-              <StxLink class="btn ghost" to="/dashboard">See a live dashboard</StxLink>
+              <StxLink class="btn ghost" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
             </div>
           </div>
 

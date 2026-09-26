@@ -84,6 +84,12 @@ describe('the schema differ cannot narrow a column either', () => {
     ['Goal.ts', 'default_amount_minor', 'bigint'],
     ['Conversion.ts', 'amount_minor', 'bigint'],
     ['CustomEvent.ts', 'properties', 'text'],
+    // text in production; its max(512) rule would otherwise infer varchar(512).
+    ['Subscription.ts', 'type', 'text'],
+    // Floats, not the integer a number rule infers. An integer column floors
+    // CLS to 0, which is why web_vitals had no model until it could say so.
+    ['WebVital.ts', 'value', 'double'],
+    ['SearchQuery.ts', 'position', 'double'],
   ]
 
   for (const [file, column, type] of pinned) {

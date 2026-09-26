@@ -26,7 +26,7 @@
       <StxLink to="/features">Features</StxLink>
       <StxLink to="/pricing">Pricing</StxLink>
       <StxLink to="/use-cases">Use cases</StxLink>
-      <StxLink to="/dashboard">Live demo</StxLink>
+      <StxLink to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">Live demo</StxLink>
     </div>
 
     <div class="footer-col">
@@ -55,7 +55,7 @@
       <StxLink to="/docs">Documentation</StxLink>
       <StxLink to="/features/privacy">Privacy by design</StxLink>
       <StxLink to="/features/web-vitals">Core Web Vitals</StxLink>
-      <StxLink to="/dashboard">Live demo</StxLink>
+      <StxLink to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">Live demo</StxLink>
     </div>
   </div>
   <div class="footer-bottom">
