@@ -1,12 +1,20 @@
 /* analyticshq marketing surface — shared design tokens + components.
   Extracted from the landing so every marketing page (landing, feature
-  pages, use-cases) stays visually identical. Dark-locked, Geist, mint accent. */
+  pages, use-cases) stays visually identical. Geist, mint accent.
+
+  Dark by default, light when the reader's OS asks for it or when they picked
+  light with the dashboard's toggle: config/ui.ts app.colorMode writes the
+  choice to <html data-theme> on every page before first paint, so the
+  attribute wins over the media query in both directions. Every colour below
+  the palette resolves through a token -- including the inline SVG product
+  illustrations, which use style="fill:var(--...)" for exactly this reason. */
       :root {
         color-scheme: dark;
         --void: #0a0c0e;
         --surface: #101317;
         --surface-2: #15191e;
         --ink: #eef2f3;
+        --ink-2: #c9cfd2;
         --muted: #9aa4a9;
         --faint: #7b878c;
         --line: rgba(233, 238, 240, 0.09);
@@ -15,6 +23,66 @@
         --accent-ink: #04201c;
         --accent-soft: rgba(70, 211, 192, 0.10);
         --accent-line: rgba(70, 211, 192, 0.34);
+        --accent-glow: rgba(70, 211, 192, 0.18);
+        /* Labels drawn ON the translucent accent bars in the SVG illustrations.
+          Dark in both themes: the bars fade toward the surface, so white text
+          would wash out on the lighter ones. */
+        --viz-on-accent: #04201c;
+        --nav-bg: rgba(10, 12, 14, 0.72);
+        --shadow-pop: 0 24px 60px rgba(0, 0, 0, 0.55);
+        --code-ink: #d6deeb;
+        --code-str: #b5cea8;
+        --danger: #f87171;
+      }
+      /* One light set, written twice: the media query covers auto mode (and a
+        reader with scripts off), the attribute covers an explicit choice. */
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          color-scheme: light;
+          --void: #fafbfb;
+          --surface: #ffffff;
+          --surface-2: #f3f5f5;
+          --ink: #0c1214;
+          --ink-2: #2c3538;
+          --muted: #4e5a5f;
+          --faint: #66737a;
+          --line: rgba(12, 18, 20, 0.08);
+          --line-strong: rgba(12, 18, 20, 0.14);
+          --accent: #0f7c72;
+          --accent-ink: #ffffff;
+          --accent-soft: rgba(15, 124, 114, 0.08);
+          --accent-line: rgba(15, 124, 114, 0.32);
+          --accent-glow: rgba(15, 124, 114, 0.22);
+          --nav-bg: rgba(250, 251, 251, 0.78);
+          --shadow-pop: 0 18px 48px rgba(12, 18, 20, 0.14);
+          --code-ink: #1f2a2e;
+          --code-str: #3b7a2f;
+          --danger: #c93434;
+        }
+      }
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --void: #fafbfb;
+        --surface: #ffffff;
+        --surface-2: #f3f5f5;
+        --ink: #0c1214;
+        --ink-2: #2c3538;
+        --muted: #4e5a5f;
+        --faint: #66737a;
+        --line: rgba(12, 18, 20, 0.08);
+        --line-strong: rgba(12, 18, 20, 0.14);
+        --accent: #0f7c72;
+        --accent-ink: #ffffff;
+        --accent-soft: rgba(15, 124, 114, 0.08);
+        --accent-line: rgba(15, 124, 114, 0.32);
+        --accent-glow: rgba(15, 124, 114, 0.22);
+        --nav-bg: rgba(250, 251, 251, 0.78);
+        --shadow-pop: 0 18px 48px rgba(12, 18, 20, 0.14);
+        --code-ink: #1f2a2e;
+        --code-str: #3b7a2f;
+        --danger: #c93434;
+      }
+      :root {
         --r: 12px;
         --r-sm: 8px;
         --sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -49,7 +117,7 @@
         z-index: -1;
         content: "";
         pointer-events: none;
-        background: radial-gradient(58rem 40rem at 82% -8%, rgba(70, 211, 192, 0.045), transparent 62%);
+        background: radial-gradient(58rem 40rem at 82% -8%, color-mix(in srgb, var(--accent) 4.5%, transparent), transparent 62%);
       }
 
       a { color: inherit; text-decoration: none; }
@@ -97,7 +165,7 @@
         top: 0;
         z-index: 30;
         border-bottom: 1px solid var(--line);
-        background: rgba(10, 12, 14, 0.72);
+        background: var(--nav-bg);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
       }
@@ -192,7 +260,7 @@
         background: var(--surface-2);
         border: 1px solid var(--line-strong);
         border-radius: var(--r);
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        box-shadow: var(--shadow-pop);
       }
       .nav-menu-panel a {
         padding: 0.6rem 0.7rem;
@@ -229,7 +297,7 @@
       }
       .btn.primary:hover {
         transform: translateY(-1px);
-        box-shadow: 0 8px 24px rgba(70, 211, 192, 0.18);
+        box-shadow: 0 8px 24px var(--accent-glow);
       }
       .btn.ghost:hover { border-color: var(--accent-line); }
       .btn:active { transform: scale(0.985); }
@@ -301,7 +369,7 @@
         height: 7px;
         border-radius: 50%;
         background: var(--accent);
-        box-shadow: 0 0 0 0 rgba(70, 211, 192, 0.5);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent);
         animation: pulse 2.4s ease-out infinite;
       }
       .panel-tag {
@@ -501,7 +569,7 @@
         line-height: 1.7;
       }
       .code pre .tok { color: var(--accent); }
-      .code pre .str { color: #b5cea8; }
+      .code pre .str { color: var(--code-str); }
       /* Framework picker in the code-bar (HTML / Vue / Nuxt / React / Next). */
       .code-lang {
         appearance: none;
@@ -519,7 +587,7 @@
         background-repeat: no-repeat;
         background-position: right 0.55rem center;
       }
-      .code-lang:hover { border-color: var(--line-strong); color: #fff; }
+      .code-lang:hover { border-color: var(--line-strong); color: var(--ink); }
       .code-lang:focus-visible { outline: none; border-color: var(--accent); }
       .code-lang option { background: var(--surface-2); color: var(--ink); }
       .code-note {
@@ -661,9 +729,9 @@
       @keyframes enter-up { to { opacity: 1; transform: none; } }
 
       @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(70, 211, 192, 0.45); }
-        70% { box-shadow: 0 0 0 8px rgba(70, 211, 192, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(70, 211, 192, 0); }
+        0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+        70% { box-shadow: 0 0 0 8px transparent; }
+        100% { box-shadow: 0 0 0 0 transparent; }
       }
 
       /* motion: scroll reveal via CSS scroll-driven animation, visible fallback if unsupported */
@@ -794,7 +862,7 @@
       a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
 
       /* feature-page visuals: trackless bars, vitals tiles, code body */
-      .code-body { margin: 0; padding: 1.1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: #d6deeb; }
+      .code-body { margin: 0; padding: 1.1rem 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: var(--code-ink); }
       .bar-row { display: grid; grid-template-columns: 132px 1fr 46px; align-items: center; gap: 0.9rem; padding: 0.5rem 0; }
       .bar-row + .bar-row { border-top: 1px solid var(--line); }
       .bar-label { color: var(--muted); font-size: 0.88rem; }
@@ -810,6 +878,25 @@
       @media (max-width: 560px) { .vitals { grid-template-columns: 1fr; } .bar-row { grid-template-columns: 110px 1fr 40px; } }
 
       /* login link beside the Sign up nav button */
+      /* Theme toggle. Shows the theme you would switch TO: a sun on dark, a moon
+        on light. Keyed off <html data-theme> (set before first paint), with the
+        sun as the default because the unset state renders dark. */
+      .theme-toggle {
+        display: inline-grid; place-items: center;
+        width: 36px; height: 36px; margin: 0 1.1rem 0 1.4rem; padding: 0;
+        border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+        background: transparent; color: var(--muted); cursor: pointer;
+        transition: color 0.16s ease, border-color 0.16s ease;
+      }
+      .theme-toggle:hover { color: var(--ink); border-color: var(--accent-line); }
+      .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .theme-toggle .ic-moon { display: none; }
+      :root[data-theme="light"] .theme-toggle .ic-sun { display: none; }
+      :root[data-theme="light"] .theme-toggle .ic-moon { display: block; }
+      @media (max-width: 860px) {
+        .theme-toggle { margin: 0 0.9rem 0 auto; }
+        .nav-menu { margin-left: 0.75rem; }
+      }
       .nav-login { color: var(--muted); font-size: 0.9rem; transition: color 0.16s ease; }
       .nav-login:hover { color: var(--ink); }
       .nav-cta { margin-left: 0.95rem; }
@@ -835,7 +922,7 @@
         display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.2rem;
         width: 528px; padding: 0.6rem;
         background: var(--surface-2); border: 1px solid var(--line-strong);
-        border-radius: var(--r); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        border-radius: var(--r); box-shadow: var(--shadow-pop);
         opacity: 0; visibility: hidden; transform: translateY(6px); pointer-events: none;
         transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
       }

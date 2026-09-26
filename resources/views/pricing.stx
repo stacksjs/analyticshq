@@ -83,7 +83,7 @@ async function upgrade(): Promise<void> {
   .plan-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.92rem; color: var(--ink); }
   .plan-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
   .plan .btn { width: 100%; justify-content: center; margin-top: 1.75rem; }
-  .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: #f87171; }
+  .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: var(--danger); }
   .self-host { margin: 2.75rem auto 0; text-align: center; color: var(--faint); font-size: 0.85rem; }
 
   @media (max-width: 640px) {

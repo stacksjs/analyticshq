@@ -26,6 +26,18 @@ import type { PageSession } from '../../app/Support/session'
 /** Who is signed in, as the layout resolved it. stx's @auth / @guest read it too. */
 const { auth } = defineProps<{ auth: PageSession }>()
 </script>
+<script client>
+// The same store the dashboard's toggle drives (resources/stores/theme.ts), so a
+// choice made on either side carries to the other. Only the click needs script:
+// which icon shows is keyed off <html data-theme> in /marketing.css, which the
+// pre-paint boot has already set, so the button never renders the wrong glyph
+// while hydration catches up.
+const theme = useStore('theme') as { toggle: () => void }
+
+function toggleTheme(): void {
+  theme.toggle()
+}
+</script>
 <nav class="nav">
   <div class="nav-inner shell">
     <StxLink to="/" class="brand" aria-label="analyticshq home">
@@ -67,6 +79,11 @@ const { auth } = defineProps<{ auth: PageSession }>()
           data-no-router would be noise. --}}
       <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
     </div>
+
+    <button type="button" class="theme-toggle" @click="toggleTheme" aria-label="Toggle light or dark theme" title="Toggle theme">
+      <svg class="ic-sun" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"></path></svg>
+      <svg class="ic-moon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"></path></svg>
+    </button>
 
     {{-- Signed in or not, from the session the marketing layout resolves (stx's
         @auth reads auth.check). A signed-in reader is offered their dashboard,

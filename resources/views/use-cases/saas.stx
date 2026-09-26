@@ -38,24 +38,24 @@ const crumbs = [
             <span class="panel-tag">Sample data</span>
           </div>
           <svg viewBox="0 0 360 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 612 signups to 289 activated users, a 3.4 percent visitor-to-activated rate" style="display:block;width:100%;height:auto;margin-top:1.1rem">
-            <path d="M20,100 L340,100 L286,120 L74,120 Z" fill="#46d3c0" fill-opacity="0.07"></path>
-            <path d="M74,164 L286,164 L244,184 L116,184 Z" fill="#46d3c0" fill-opacity="0.07"></path>
+            <path d="M20,100 L340,100 L286,120 L74,120 Z" fill-opacity="0.07" style="fill:var(--accent)"></path>
+            <path d="M74,164 L286,164 L254,184 L106,184 Z" fill-opacity="0.07" style="fill:var(--accent)"></path>
 
-            <rect x="20" y="56" width="320" height="44" rx="8" fill="#46d3c0" fill-opacity="0.92"></rect>
-            <text x="36" y="84" fill="#04201c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">VISITORS</text>
-            <text x="324" y="85" text-anchor="end" fill="#04201c" font-family="'Geist',sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4">8,420</text>
+            <rect x="20" y="56" width="320" height="44" rx="8" fill-opacity="0.92" style="fill:var(--accent)"></rect>
+            <text x="36" y="84" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--viz-on-accent)">VISITORS</text>
+            <text x="324" y="85" text-anchor="end" font-family="'Geist',sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4" style="fill:var(--viz-on-accent)">8,420</text>
 
-            <rect x="74" y="120" width="212" height="44" rx="8" fill="#46d3c0" fill-opacity="0.58"></rect>
-            <text x="90" y="148" fill="#04201c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">SIGNUPS</text>
-            <text x="270" y="149" text-anchor="end" fill="#04201c" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4">612</text>
+            <rect x="74" y="120" width="212" height="44" rx="8" fill-opacity="0.58" style="fill:var(--accent)"></rect>
+            <text x="90" y="148" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--viz-on-accent)">SIGNUPS</text>
+            <text x="270" y="149" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" style="fill:var(--viz-on-accent)">612</text>
 
-            <rect x="116" y="184" width="128" height="44" rx="8" fill="#46d3c0" fill-opacity="0.34"></rect>
-            <text x="132" y="212" fill="#eef2f3" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">ACTIVATED</text>
-            <text x="228" y="213" text-anchor="end" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4">289</text>
+            <rect x="106" y="184" width="148" height="44" rx="8" fill-opacity="0.34" style="fill:var(--accent)"></rect>
+            <text x="122" y="212" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--ink)">ACTIVATED</text>
+            <text x="238" y="213" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" style="fill:var(--ink)">289</text>
 
-            <line x1="20" y1="250" x2="340" y2="250" stroke="rgba(233,238,240,0.09)"></line>
-            <text x="20" y="272" fill="#9aa4a9" font-family="'Geist Mono',ui-monospace,monospace" font-size="11">visitor &#8594; activated</text>
-            <text x="340" y="272" text-anchor="end" fill="#46d3c0" font-family="'Geist',sans-serif" font-size="15" font-weight="700">3.4%</text>
+            <line x1="20" y1="250" x2="340" y2="250" style="stroke:var(--line)"></line>
+            <text x="20" y="272" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" style="fill:var(--muted)">visitor &#8594; activated</text>
+            <text x="340" y="272" text-anchor="end" font-family="'Geist',sans-serif" font-size="15" font-weight="700" style="fill:var(--accent)">3.4%</text>
           </svg>
         </aside>
       </section>

@@ -38,47 +38,47 @@ const crumbs = [
             <span class="panel-tag">Sample data</span>
           </div>
           <svg viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Top articles ranked by readers over the last 30 days, with Core Web Vitals all in the good range" style="display:block;width:100%;height:auto;margin-top:1.1rem">
-            <text x="16" y="26" fill="#c9cfd2" font-family="'Geist',sans-serif" font-size="12" font-weight="600">The case against cookie banners</text>
-            <text x="344" y="26" text-anchor="end" fill="#eef2f3" font-family="'Geist Mono',monospace" font-size="11">18,410</text>
-            <rect x="16" y="34" width="328" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="16" y="34" width="328" height="10" rx="5" fill="#46d3c0" fill-opacity="0.92"></rect>
+            <text x="16" y="26" font-family="'Geist',sans-serif" font-size="12" font-weight="600" style="fill:var(--ink-2)">The case against cookie banners</text>
+            <text x="344" y="26" text-anchor="end" font-family="'Geist Mono',monospace" font-size="11" style="fill:var(--ink)">18,410</text>
+            <rect x="16" y="34" width="328" height="10" rx="5" style="fill:var(--line)"></rect>
+            <rect x="16" y="34" width="328" height="10" rx="5" fill-opacity="0.92" style="fill:var(--accent)"></rect>
 
-            <text x="16" y="70" fill="#9aa4a9" font-family="'Geist',sans-serif" font-size="12" font-weight="500">How we cut page weight in half</text>
-            <text x="344" y="70" text-anchor="end" fill="#c9cfd2" font-family="'Geist Mono',monospace" font-size="11">11,240</text>
-            <rect x="16" y="78" width="328" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="16" y="78" width="200" height="10" rx="5" fill="#46d3c0" fill-opacity="0.66"></rect>
+            <text x="16" y="70" font-family="'Geist',sans-serif" font-size="12" font-weight="500" style="fill:var(--muted)">How we cut page weight in half</text>
+            <text x="344" y="70" text-anchor="end" font-family="'Geist Mono',monospace" font-size="11" style="fill:var(--ink-2)">11,240</text>
+            <rect x="16" y="78" width="328" height="10" rx="5" style="fill:var(--line)"></rect>
+            <rect x="16" y="78" width="200" height="10" rx="5" fill-opacity="0.66" style="fill:var(--accent)"></rect>
 
-            <text x="16" y="114" fill="#9aa4a9" font-family="'Geist',sans-serif" font-size="12" font-weight="500">A field guide to referrers</text>
-            <text x="344" y="114" text-anchor="end" fill="#c9cfd2" font-family="'Geist Mono',monospace" font-size="11">7,880</text>
-            <rect x="16" y="122" width="328" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="16" y="122" width="141" height="10" rx="5" fill="#46d3c0" fill-opacity="0.48"></rect>
+            <text x="16" y="114" font-family="'Geist',sans-serif" font-size="12" font-weight="500" style="fill:var(--muted)">A field guide to referrers</text>
+            <text x="344" y="114" text-anchor="end" font-family="'Geist Mono',monospace" font-size="11" style="fill:var(--ink-2)">7,880</text>
+            <rect x="16" y="122" width="328" height="10" rx="5" style="fill:var(--line)"></rect>
+            <rect x="16" y="122" width="141" height="10" rx="5" fill-opacity="0.48" style="fill:var(--accent)"></rect>
 
-            <text x="16" y="158" fill="#9aa4a9" font-family="'Geist',sans-serif" font-size="12" font-weight="500">Why we left Google Analytics</text>
-            <text x="344" y="158" text-anchor="end" fill="#c9cfd2" font-family="'Geist Mono',monospace" font-size="11">5,120</text>
-            <rect x="16" y="166" width="328" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="16" y="166" width="92" height="10" rx="5" fill="#46d3c0" fill-opacity="0.34"></rect>
+            <text x="16" y="158" font-family="'Geist',sans-serif" font-size="12" font-weight="500" style="fill:var(--muted)">Why we left Google Analytics</text>
+            <text x="344" y="158" text-anchor="end" font-family="'Geist Mono',monospace" font-size="11" style="fill:var(--ink-2)">5,120</text>
+            <rect x="16" y="166" width="328" height="10" rx="5" style="fill:var(--line)"></rect>
+            <rect x="16" y="166" width="92" height="10" rx="5" fill-opacity="0.34" style="fill:var(--accent)"></rect>
 
-            <line x1="16" y1="200" x2="344" y2="200" stroke="rgba(233,238,240,0.09)"></line>
-            <text x="16" y="222" fill="#6d777c" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1.2">CORE WEB VITALS</text>
-            <text x="344" y="222" text-anchor="end" fill="#46d3c0" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="0.5">ALL GOOD</text>
+            <line x1="16" y1="200" x2="344" y2="200" style="stroke:var(--line)"></line>
+            <text x="16" y="222" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1.2" style="fill:var(--faint)">CORE WEB VITALS</text>
+            <text x="344" y="222" text-anchor="end" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="0.5" style="fill:var(--accent)">ALL GOOD</text>
 
             <g>
-              <rect x="16" y="236" width="104" height="48" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-              <circle cx="32" cy="256" r="3.5" fill="#46d3c0"></circle>
-              <text x="44" y="260" fill="#6d777c" font-family="'Geist Mono',monospace" font-size="9">LCP</text>
-              <text x="32" y="277" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">1.2s</text>
+              <rect x="16" y="236" width="104" height="48" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+              <circle cx="32" cy="256" r="3.5" style="fill:var(--accent)"></circle>
+              <text x="44" y="260" font-family="'Geist Mono',monospace" font-size="9" style="fill:var(--faint)">LCP</text>
+              <text x="32" y="277" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">1.2s</text>
             </g>
             <g>
-              <rect x="128" y="236" width="104" height="48" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-              <circle cx="144" cy="256" r="3.5" fill="#46d3c0"></circle>
-              <text x="156" y="260" fill="#6d777c" font-family="'Geist Mono',monospace" font-size="9">INP</text>
-              <text x="144" y="277" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">40ms</text>
+              <rect x="128" y="236" width="104" height="48" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+              <circle cx="144" cy="256" r="3.5" style="fill:var(--accent)"></circle>
+              <text x="156" y="260" font-family="'Geist Mono',monospace" font-size="9" style="fill:var(--faint)">INP</text>
+              <text x="144" y="277" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">40ms</text>
             </g>
             <g>
-              <rect x="240" y="236" width="104" height="48" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-              <circle cx="256" cy="256" r="3.5" fill="#46d3c0"></circle>
-              <text x="268" y="260" fill="#6d777c" font-family="'Geist Mono',monospace" font-size="9">CLS</text>
-              <text x="256" y="277" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">0.02</text>
+              <rect x="240" y="236" width="104" height="48" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+              <circle cx="256" cy="256" r="3.5" style="fill:var(--accent)"></circle>
+              <text x="268" y="260" font-family="'Geist Mono',monospace" font-size="9" style="fill:var(--faint)">CLS</text>
+              <text x="256" y="277" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">0.02</text>
             </g>
           </svg>
         </aside>

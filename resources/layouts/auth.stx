@@ -23,13 +23,27 @@
 
 @head
 <style>
+/* The marketing palette under this layout's token names, so signing in looks
+  like the site you came from -- dark by default, light when the OS asks or the
+  reader picked it (config/ui.ts app.colorMode writes <html data-theme> before
+  first paint; the attribute beats the media query either way). */
 :root {
   color-scheme: dark;
   --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
   --text: #eef2f3; --text-2: #9aa4a9; --text-3: #7b878c;
-  --accent: #46d3c0; --accent-ink: #04201c;
+  --accent: #46d3c0; --accent-ink: #04201c; --danger: #f87171;
   --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
 }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { color-scheme: light;
+    --bg: #fafbfb; --panel: #ffffff; --border: rgba(12,18,20,0.12);
+    --text: #0c1214; --text-2: #4e5a5f; --text-3: #66737a;
+    --accent: #0f7c72; --accent-ink: #ffffff; --danger: #c93434; }
+}
+:root[data-theme="light"] { color-scheme: light;
+  --bg: #fafbfb; --panel: #ffffff; --border: rgba(12,18,20,0.12);
+  --text: #0c1214; --text-2: #4e5a5f; --text-3: #66737a;
+  --accent: #0f7c72; --accent-ink: #ffffff; --danger: #c93434; }
 body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 .wordmark { font-weight: 700; letter-spacing: -0.03em; }
 .field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
@@ -38,8 +52,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .btn:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.6; cursor: default; }
-.err { background: color-mix(in srgb, #ef4444 12%, transparent); color: #ef4444; }
-.ok { background: color-mix(in srgb, #46d3c0 12%, transparent); color: var(--accent); }
+.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.ok { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .oauth-btn { border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); transition: border-color 0.15s ease, transform 0.12s ease; }
 .oauth-btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .oauth-btn:active { transform: translateY(1px); }

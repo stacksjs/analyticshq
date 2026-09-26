@@ -38,31 +38,31 @@ const crumbs = [
             <span class="panel-tag">Sample data</span>
           </div>
           <svg class="usecase-viz" viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Store revenue of $65.7k over the last 30 days from 742 orders, trending up, with revenue split across organic search, paid social, and email" style="display:block;width:100%;height:auto;margin-top:1.1rem">
-            <text x="4" y="14" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">REVENUE · LAST 30 DAYS</text>
-            <text x="4" y="48" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5">$65.7k</text>
-            <text x="4" y="66" font-family="'Geist Mono',monospace" font-size="10.5"><tspan fill="#46d3c0">▲ 18%</tspan><tspan fill="#9aa4a9"> vs last month · 742 orders</tspan></text>
+            <text x="4" y="14" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">REVENUE · LAST 30 DAYS</text>
+            <text x="4" y="48" font-family="'Geist',sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5" style="fill:var(--ink)">$65.7k</text>
+            <text x="4" y="66" font-family="'Geist Mono',monospace" font-size="10.5"><tspan style="fill:var(--accent)">▲ 18%</tspan><tspan style="fill:var(--muted)"> vs last month · 742 orders</tspan></text>
 
-            <path d="M8,186 L8,166 L46,158 L84,162 L122,138 L160,144 L198,120 L236,126 L274,102 L312,108 L344,88 L344,186 Z" fill="#46d3c0" fill-opacity="0.13"></path>
-            <polyline points="8,166 46,158 84,162 122,138 160,144 198,120 236,126 274,102 312,108 344,88" fill="none" stroke="#46d3c0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
-            <circle cx="344" cy="88" r="4.5" fill="#46d3c0"></circle>
-            <line x1="8" y1="186" x2="352" y2="186" stroke="rgba(233,238,240,0.09)" stroke-width="1"></line>
+            <path d="M8,186 L8,166 L46,158 L84,162 L122,138 L160,144 L198,120 L236,126 L274,102 L312,108 L344,88 L344,186 Z" fill-opacity="0.13" style="fill:var(--accent)"></path>
+            <polyline points="8,166 46,158 84,162 122,138 160,144 198,120 236,126 274,102 312,108 344,88" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+            <circle cx="344" cy="88" r="4.5" style="fill:var(--accent)"></circle>
+            <line x1="8" y1="186" x2="352" y2="186" stroke-width="1" style="stroke:var(--line)"></line>
 
-            <text x="4" y="212" fill="#6d777c" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1">REVENUE BY CHANNEL</text>
+            <text x="4" y="212" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1" style="fill:var(--faint)">REVENUE BY CHANNEL</text>
 
-            <text x="8" y="230" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">Organic search</text>
-            <text x="352" y="230" text-anchor="end" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$28.4k</text>
-            <rect x="8" y="234" width="344" height="8" rx="4" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="8" y="234" width="344" height="8" rx="4" fill="#46d3c0" fill-opacity="0.92"></rect>
+            <text x="8" y="230" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Organic search</text>
+            <text x="352" y="230" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$28.4k</text>
+            <rect x="8" y="234" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
+            <rect x="8" y="234" width="344" height="8" rx="4" fill-opacity="0.92" style="fill:var(--accent)"></rect>
 
-            <text x="8" y="256" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">Paid social</text>
-            <text x="352" y="256" text-anchor="end" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$16.2k</text>
-            <rect x="8" y="260" width="344" height="8" rx="4" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="8" y="260" width="196" height="8" rx="4" fill="#46d3c0" fill-opacity="0.58"></rect>
+            <text x="8" y="256" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Paid social</text>
+            <text x="352" y="256" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$16.2k</text>
+            <rect x="8" y="260" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
+            <rect x="8" y="260" width="196" height="8" rx="4" fill-opacity="0.58" style="fill:var(--accent)"></rect>
 
-            <text x="8" y="282" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">Email</text>
-            <text x="352" y="282" text-anchor="end" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$12.5k</text>
-            <rect x="8" y="286" width="344" height="8" rx="4" fill="rgba(233,238,240,0.07)"></rect>
-            <rect x="8" y="286" width="151" height="8" rx="4" fill="#46d3c0" fill-opacity="0.4"></rect>
+            <text x="8" y="282" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Email</text>
+            <text x="352" y="282" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$12.5k</text>
+            <rect x="8" y="286" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
+            <rect x="8" y="286" width="151" height="8" rx="4" fill-opacity="0.4" style="fill:var(--accent)"></rect>
           </svg>
         </aside>
       </section>

@@ -32,15 +32,15 @@ const crumbs = [
         <div class="usecases">
 
           <StxLink class="usecase" to="/use-cases/saas">
-            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 289 activated users" style="display:block;width:100%;height:168px;background:#101317">
-              <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
-              <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">SIGNUP FUNNEL</text>
-              <rect x="54" y="52" width="372" height="26" rx="6" fill="#46d3c0" fill-opacity="0.92"></rect>
-              <rect x="110" y="90" width="260" height="26" rx="6" fill="#46d3c0" fill-opacity="0.58"></rect>
-              <rect x="165" y="128" width="150" height="26" rx="6" fill="#46d3c0" fill-opacity="0.36"></rect>
-              <text x="240" y="70" text-anchor="middle" fill="#04201c" font-family="'Geist',sans-serif" font-size="13" font-weight="600">8,420 visitors</text>
-              <text x="240" y="108" text-anchor="middle" fill="#04201c" font-family="'Geist',sans-serif" font-size="13" font-weight="600">612 signups</text>
-              <text x="240" y="146" text-anchor="middle" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">289 activated</text>
+            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 289 activated users" style="display:block;width:100%;height:168px;background:var(--surface)">
+              <rect x="6" y="6" width="468" height="156" rx="10" style="fill:var(--surface-2);stroke:var(--line)"></rect>
+              <text x="26" y="34" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">SIGNUP FUNNEL</text>
+              <rect x="54" y="52" width="372" height="26" rx="6" fill-opacity="0.92" style="fill:var(--accent)"></rect>
+              <rect x="110" y="90" width="260" height="26" rx="6" fill-opacity="0.58" style="fill:var(--accent)"></rect>
+              <rect x="165" y="128" width="150" height="26" rx="6" fill-opacity="0.36" style="fill:var(--accent)"></rect>
+              <text x="240" y="70" text-anchor="middle" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--viz-on-accent)">8,420 visitors</text>
+              <text x="240" y="108" text-anchor="middle" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--viz-on-accent)">612 signups</text>
+              <text x="240" y="146" text-anchor="middle" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">289 activated</text>
             </svg>
             <div class="usecase-body">
               <h3>SaaS</h3>
@@ -50,13 +50,13 @@ const crumbs = [
           </StxLink>
 
           <StxLink class="usecase" to="/use-cases/ecommerce">
-            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Revenue trending upward over the last 30 days" style="display:block;width:100%;height:168px;background:#101317">
-              <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
-              <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">REVENUE · LAST 30 DAYS</text>
-              <path d="M40,146 L40,112 L92,120 L144,96 L196,104 L248,78 L300,86 L352,60 L404,68 L448,44 L448,146 Z" fill="#46d3c0" fill-opacity="0.13"></path>
-              <polyline points="40,112 92,120 144,96 196,104 248,78 300,86 352,60 404,68 448,44" fill="none" stroke="#46d3c0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
-              <circle cx="448" cy="44" r="4.5" fill="#46d3c0"></circle>
-              <text x="26" y="58" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="20" font-weight="700" letter-spacing="-0.5">$65.7k</text>
+            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Revenue trending upward over the last 30 days" style="display:block;width:100%;height:168px;background:var(--surface)">
+              <rect x="6" y="6" width="468" height="156" rx="10" style="fill:var(--surface-2);stroke:var(--line)"></rect>
+              <text x="26" y="34" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">REVENUE · LAST 30 DAYS</text>
+              <path d="M40,146 L40,112 L92,120 L144,96 L196,104 L248,78 L300,86 L352,60 L404,68 L448,44 L448,146 Z" fill-opacity="0.13" style="fill:var(--accent)"></path>
+              <polyline points="40,112 92,120 144,96 196,104 248,78 300,86 352,60 404,68 448,44" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+              <circle cx="448" cy="44" r="4.5" style="fill:var(--accent)"></circle>
+              <text x="26" y="58" font-family="'Geist',sans-serif" font-size="20" font-weight="700" letter-spacing="-0.5" style="fill:var(--ink)">$65.7k</text>
             </svg>
             <div class="usecase-body">
               <h3>Ecommerce</h3>
@@ -66,26 +66,26 @@ const crumbs = [
           </StxLink>
 
           <StxLink class="usecase" to="/use-cases/agencies">
-            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Three client sites, each with its own visitor trend" style="display:block;width:100%;height:168px;background:#101317">
-              <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
-              <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">CLIENT SITES</text>
+            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Three client sites, each with its own visitor trend" style="display:block;width:100%;height:168px;background:var(--surface)">
+              <rect x="6" y="6" width="468" height="156" rx="10" style="fill:var(--surface-2);stroke:var(--line)"></rect>
+              <text x="26" y="34" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">CLIENT SITES</text>
               <g>
-                <rect x="26" y="48" width="136" height="104" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-                <text x="40" y="70" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">northwind.co</text>
-                <polyline points="40,132 62,120 84,124 106,104 128,110 148,88" fill="none" stroke="#46d3c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-                <text x="40" y="94" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">12,480</text>
+                <rect x="26" y="48" width="136" height="104" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+                <text x="40" y="70" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">northwind.co</text>
+                <polyline points="40,132 62,120 84,124 106,104 128,110 148,88" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+                <text x="40" y="94" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">12,480</text>
               </g>
               <g>
-                <rect x="172" y="48" width="136" height="104" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-                <text x="186" y="70" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">lumen-studio</text>
-                <polyline points="186,128 208,118 230,122 252,112 274,116 294,100" fill="none" stroke="#46d3c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-                <text x="186" y="94" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">7,920</text>
+                <rect x="172" y="48" width="136" height="104" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+                <text x="186" y="70" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">lumen-studio</text>
+                <polyline points="186,128 208,118 230,122 252,112 274,116 294,100" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+                <text x="186" y="94" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">7,920</text>
               </g>
               <g>
-                <rect x="318" y="48" width="136" height="104" rx="8" fill="#101317" stroke="rgba(233,238,240,0.09)"></rect>
-                <text x="332" y="70" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="9.5">harbor-goods</text>
-                <polyline points="332,126 354,128 376,118 398,120 420,112 440,116" fill="none" stroke="#46d3c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-                <text x="332" y="94" fill="#eef2f3" font-family="'Geist',sans-serif" font-size="13" font-weight="600">5,140</text>
+                <rect x="318" y="48" width="136" height="104" rx="8" style="fill:var(--surface);stroke:var(--line)"></rect>
+                <text x="332" y="70" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">harbor-goods</text>
+                <polyline points="332,126 354,128 376,118 398,120 420,112 440,116" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+                <text x="332" y="94" font-family="'Geist',sans-serif" font-size="13" font-weight="600" style="fill:var(--ink)">5,140</text>
               </g>
             </svg>
             <div class="usecase-body">
@@ -96,19 +96,19 @@ const crumbs = [
           </StxLink>
 
           <StxLink class="usecase" to="/use-cases/publishers">
-            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Top articles ranked by readers over the last 30 days" style="display:block;width:100%;height:168px;background:#101317">
-              <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
-              <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">TOP ARTICLES · 30 DAYS</text>
-              <g font-family="'Geist Mono',monospace" font-size="10" fill="#9aa4a9">
+            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Top articles ranked by readers over the last 30 days" style="display:block;width:100%;height:168px;background:var(--surface)">
+              <rect x="6" y="6" width="468" height="156" rx="10" style="fill:var(--surface-2);stroke:var(--line)"></rect>
+              <text x="26" y="34" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">TOP ARTICLES · 30 DAYS</text>
+              <g font-family="'Geist Mono',monospace" font-size="10" style="fill:var(--muted)">
                 <text x="26" y="59">Against cookie banners</text>
-                <rect x="26" y="66" width="428" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-                <rect x="26" y="66" width="428" height="10" rx="5" fill="#46d3c0" fill-opacity="0.92"></rect>
+                <rect x="26" y="66" width="428" height="10" rx="5" style="fill:var(--line)"></rect>
+                <rect x="26" y="66" width="428" height="10" rx="5" fill-opacity="0.92" style="fill:var(--accent)"></rect>
                 <text x="26" y="95">Cutting page weight in half</text>
-                <rect x="26" y="102" width="428" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-                <rect x="26" y="102" width="262" height="10" rx="5" fill="#46d3c0" fill-opacity="0.66"></rect>
+                <rect x="26" y="102" width="428" height="10" rx="5" style="fill:var(--line)"></rect>
+                <rect x="26" y="102" width="262" height="10" rx="5" fill-opacity="0.66" style="fill:var(--accent)"></rect>
                 <text x="26" y="131">A field guide to referrers</text>
-                <rect x="26" y="138" width="428" height="10" rx="5" fill="rgba(233,238,240,0.07)"></rect>
-                <rect x="26" y="138" width="184" height="10" rx="5" fill="#46d3c0" fill-opacity="0.44"></rect>
+                <rect x="26" y="138" width="428" height="10" rx="5" style="fill:var(--line)"></rect>
+                <rect x="26" y="138" width="184" height="10" rx="5" fill-opacity="0.44" style="fill:var(--accent)"></rect>
               </g>
             </svg>
             <div class="usecase-body">
@@ -119,18 +119,18 @@ const crumbs = [
           </StxLink>
 
           <StxLink class="usecase" to="/use-cases/developers">
-            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A live stream of custom events arriving in real time" style="display:block;width:100%;height:168px;background:#101317">
-              <rect x="6" y="6" width="468" height="156" rx="10" fill="#15191e" stroke="rgba(233,238,240,0.09)"></rect>
-              <text x="26" y="34" fill="#6d777c" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">CUSTOM EVENTS</text>
-              <circle cx="410" cy="30" r="4" fill="#46d3c0"></circle>
-              <text x="422" y="34" fill="#46d3c0" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="0.5">LIVE</text>
-              <polyline points="30,120 74,124 118,100 162,108 206,82 250,92 294,66 338,76 382,52 426,60 452,42" fill="none" stroke="#46d3c0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
-              <circle cx="118" cy="100" r="3" fill="#46d3c0"></circle>
-              <circle cx="206" cy="82" r="3" fill="#46d3c0"></circle>
-              <circle cx="294" cy="66" r="3" fill="#46d3c0"></circle>
-              <circle cx="382" cy="52" r="3" fill="#46d3c0"></circle>
-              <circle cx="452" cy="42" r="5" fill="#46d3c0"></circle>
-              <text x="30" y="150" fill="#9aa4a9" font-family="'Geist Mono',monospace" font-size="10.5">analyticshq('plan_upgraded', { to: 'pro' })</text>
+            <svg class="usecase-viz" viewBox="0 0 480 168" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A live stream of custom events arriving in real time" style="display:block;width:100%;height:168px;background:var(--surface)">
+              <rect x="6" y="6" width="468" height="156" rx="10" style="fill:var(--surface-2);stroke:var(--line)"></rect>
+              <text x="26" y="34" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">CUSTOM EVENTS</text>
+              <circle cx="410" cy="30" r="4" style="fill:var(--accent)"></circle>
+              <text x="422" y="34" font-family="'Geist Mono',monospace" font-size="11" letter-spacing="0.5" style="fill:var(--accent)">LIVE</text>
+              <polyline points="30,120 74,124 118,100 162,108 206,82 250,92 294,66 338,76 382,52 426,60 452,42" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+              <circle cx="118" cy="100" r="3" style="fill:var(--accent)"></circle>
+              <circle cx="206" cy="82" r="3" style="fill:var(--accent)"></circle>
+              <circle cx="294" cy="66" r="3" style="fill:var(--accent)"></circle>
+              <circle cx="382" cy="52" r="3" style="fill:var(--accent)"></circle>
+              <circle cx="452" cy="42" r="5" style="fill:var(--accent)"></circle>
+              <text x="30" y="150" font-family="'Geist Mono',monospace" font-size="10.5" style="fill:var(--muted)">analyticshq('plan_upgraded', { to: 'pro' })</text>
             </svg>
             <div class="usecase-body">
               <h3>Developers</h3>
