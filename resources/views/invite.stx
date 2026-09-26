@@ -27,43 +27,54 @@
  */
 import { db } from '@stacksjs/database'
 import { hashToken, inviteRefusal } from '../../app/Analytics/invites'
+import { text } from '../../app/Support/rows'
+import type { Row } from '../../app/Support/rows'
+import type { InviteRow } from '../../app/Analytics/invites'
 
+// A capability URL must never be indexed, and must not travel in a Referer.
 useSeoMeta({
   title: 'Your invitation - analyticshq',
-  // A capability URL must never be indexed, and must not travel in a Referer.
   robots: 'noindex, nofollow',
-  referrer: 'no-referrer',
 })
+// The referrer policy is a plain meta tag, so it goes through useHead. It used to
+// be a `referrer` key on useSeoMeta above, which stx does not read: the key was
+// dropped without a word and the page shipped with no referrer policy at all.
+useHead({ meta: [{ name: 'referrer', content: 'no-referrer' }] })
 
-const queryParams = typeof query !== 'undefined' ? query : {}
+// stx types `query` as `any`; annotated so the token read from it is not.
+const queryParams: Record<string, string | undefined> = typeof query !== 'undefined' ? query : {}
 const token = String(queryParams.token || '')
 
 const IS_PG = (process.env.DB_CONNECTION || 'postgres') === 'postgres'
-const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
+const pgq = (sql: string, params?: unknown[]): Promise<Row[]> => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
 
 // Who is reading this page, if anyone. Same cookie path the dashboard uses.
-let viewer = null
+let viewer: { email?: unknown } | null = null
 const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
 if (authToken) {
   try {
     const { Auth } = await import('@stacksjs/auth')
-    viewer = await Auth.getUserFromToken(authToken)
+    viewer = (await Auth.getUserFromToken(authToken)) ?? null
   }
   catch { viewer = null }
 }
 
-let invite = null
+/** The invitation row, read column by column: the fields inviteRefusal decides on, plus the site it names. */
+let invite: (InviteRow & { site_id: string, site_name: string | null }) | null = null
 let siteName = ''
 if (token) {
   try {
     // By hash. The raw token is never stored, so a token that is not ours simply
     // matches nothing and no comparison happens.
-    invite = (await pgq(
+    const row = (await pgq(
       `SELECT i.id, i.site_id, i.email, i.role, i.expires_at, i.accepted_at, s.name AS site_name
        FROM site_invites i LEFT JOIN sites s ON s.id = i.site_id
        WHERE i.token_hash = ? LIMIT 1`,
       [hashToken(token)],
-    ))?.[0] ?? null
+    ))?.[0]
+    invite = row
+      ? { site_id: String(row.site_id), email: String(row.email), role: String(row.role), expires_at: text(row.expires_at), accepted_at: text(row.accepted_at), site_name: text(row.site_name) }
+      : null
     siteName = invite?.site_name || invite?.site_id || ''
   }
   catch { invite = null }
@@ -150,7 +161,7 @@ async function accept(): Promise<void> {
 
       @elseif (state === 'signed_out')
         <h2 class="mb-2 font-semibold text-lg">You have been invited to {{ siteName }}</h2>
-        <p class="mb-5 text-sm text-text-2">Sign in as <span class="mono">{{ invite.email }}</span> to accept. If you do not have an account yet, create one with that address.</p>
+        <p class="mb-5 text-sm text-text-2">Sign in as <span class="mono">{{ invite?.email }}</span> to accept. If you do not have an account yet, create one with that address.</p>
         <StxLink to="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block mb-2 w-full text-center btn primary">Sign in</StxLink>
         <StxLink to="/register?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn ghost">Create an account</StxLink>
 
@@ -158,7 +169,7 @@ async function accept(): Promise<void> {
         <h2 class="mb-2 font-semibold text-lg">This invitation is for someone else</h2>
         {{-- Names the invited address only to a reader who is already signed in,
             so it cannot be harvested by opening the link alone. --}}
-        <p class="mb-5 text-sm text-text-2">It was sent to <span class="mono">{{ invite.email }}</span>, and you are signed in as <span class="mono">{{ viewer.email }}</span>. Sign in as the invited address to accept it.</p>
+        <p class="mb-5 text-sm text-text-2">It was sent to <span class="mono">{{ invite?.email }}</span>, and you are signed in as <span class="mono">{{ viewer?.email }}</span>. Sign in as the invited address to accept it.</p>
         <StxLink to="/login?redirect={{ encodeURIComponent(returnTo) }}" class="block w-full text-center btn primary">Switch account</StxLink>
 
       @elseif (state === 'expired')

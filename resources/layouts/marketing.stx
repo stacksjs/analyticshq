@@ -65,7 +65,7 @@ const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
     must wrap all three pieces of chrome -- nav, main and footer -- exactly as it did
     in index.stx. --}}
 <div class="site-content">
-  @include('site-nav')
+  <SiteNav :auth="auth" />
 
   {{-- The single router container. Pages must NOT declare their own <main>: fragment
       extraction slices from the first <main> to the LAST </main>, so a second one

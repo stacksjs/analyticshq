@@ -70,9 +70,9 @@ const comparison = [
 // that had been renamed seven weeks earlier, so tests/unit/install.test.ts now
 // asserts this file agrees with that module on the package name.
 const framework = state('html')
-const FILE_FOR = { html: 'index.html', stacks: 'config/ui.ts', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
+const FILE_FOR: Record<string, string> = { html: 'index.html', stacks: 'config/ui.ts', vue: 'main.ts', react: 'index.html', nuxt: 'nuxt.config.ts', next: 'app/layout.tsx' }
 function pickFramework(e: Event): void {
-  framework.set(e.target.value)
+  framework.set((e.target as HTMLSelectElement).value)
 }
 </script>
 
@@ -247,7 +247,7 @@ createApp(App)
               would get a document the router cannot swap. Production serves docs.stx
               directly (no proxy in production-server.js; dist/docs.html is built), so
               this opt-out is a dev artefact and should go once #37 removes the proxy.
-              Matches the same decision in resources/partials/site-nav.stx. --}}
+              Matches the same decision in resources/components/SiteNav.stx. --}}
           <StxLink class="btn ghost" to="/docs">Read the docs</StxLink>
             </div>
           </div>

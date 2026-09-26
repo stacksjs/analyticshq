@@ -65,6 +65,7 @@
     "changelog": "./buddy changelog",
     "generate": "./buddy generate",
     "typecheck": "bun x tsc --noEmit",
+    "typecheck:views": "bunx --bun stx typecheck 'resources/**/*.stx' --lib types/render-context.d.ts --lib types/dashboard.d.ts --lib types/session.d.ts --lib types/user.d.ts --lib types/env.d.ts --lib types/vendor.d.ts",
     "types:check": "bun tsc --noEmit",
     "types:fix": "./buddy types:fix",
     "test": "./buddy test",

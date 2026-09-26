@@ -18,7 +18,7 @@ const crumbs = [
 type BillingInterval = 'monthly' | 'yearly'
 interface CheckoutResponse { url?: string, error?: string }
 
-const interval: StxSignal<BillingInterval> = state('monthly')
+const interval: StxSignal<BillingInterval> = state('monthly' as BillingInterval)
 const err: StxSignal<string> = state('')
 const loading: StxSignal<boolean> = state(false)
 
@@ -41,8 +41,9 @@ async function upgrade(): Promise<void> {
     if (res.status === 401) { navigate('/login'); return }
     const data: CheckoutResponse = await res.json().catch(() => ({}))
     // Stripe is a different origin, so this is a real document load, not a routing
-    // failure -- navigate(url, true) is the declared form of exactly that.
-    if (res.ok && data.url) { navigate(data.url, true); return }
+    // failure -- { reload: true } is the declared form of exactly that (the legacy
+    // positional `true` meant the same at runtime but is not in the type).
+    if (res.ok && data.url) { navigate(data.url, { reload: true }); return }
     err.set(data.error || 'Checkout is not available yet.')
   }
   catch {

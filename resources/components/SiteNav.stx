@@ -1,8 +1,12 @@
-{{-- Shared marketing nav. Pull it into a page with the stx include directive
-    and the name "site-nav". One source of truth for the top nav across every
+{{-- Shared marketing nav, rendered once by the marketing layout as
+    <SiteNav :auth="auth" />. One source of truth for the top nav across every
     marketing page, with two CSS-only mega-menu dropdowns (Features, Use cases).
     No JS: panels reveal on hover and on keyboard focus via :focus-within
     (see the .mega rules in /marketing.css).
+
+    A component rather than an @include partial so `auth` is declared. As a partial
+    it read the layout's `auth` out of scope, which works but which nothing checked;
+    as a prop, the layout's call site is checked against PageSession.
 
     Internal destinations are StxLink, which the router matches unconditionally --
     it is the only form that gets hover prefetch and an active class. The
@@ -13,7 +17,15 @@
     and is removed. Note it would be ignored on an StxLink anyway: the router matches
     [data-stx-link] before shouldIntercept is ever consulted.
 
-    Two destinations stay plain <a> on purpose -- see the comments inline. --}}
+    Two destinations stay plain <a> on purpose -- see the comments inline.
+
+    The script block starts on this comment's closing line on purpose: stx drops
+    both, and a block on its own line would leave one more newline in the page. --}}<script server>
+import type { PageSession } from '../../app/Support/session'
+
+/** Who is signed in, as the layout resolved it. stx's @auth / @guest read it too. */
+const { auth } = defineProps<{ auth: PageSession }>()
+</script>
 <nav class="nav">
   <div class="nav-inner shell">
     <StxLink to="/" class="brand" aria-label="analyticshq home">
@@ -60,7 +72,7 @@
         @auth reads auth.check). A signed-in reader is offered their dashboard,
         not a sign-in form they would only be bounced back from. --}}
     @auth
-      <StxLink to="/account" class="nav-login" title="Signed in as {{ auth.user.email }}">Account</StxLink>
+      <StxLink to="/account" class="nav-login" title="Signed in as {{ auth.user?.email }}">Account</StxLink>
       <StxLink to="/dashboard" class="btn nav-cta primary sm">Dashboard</StxLink>
     @else
       <StxLink to="/login" class="nav-login">Log in</StxLink>

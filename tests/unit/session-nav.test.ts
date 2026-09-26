@@ -33,7 +33,7 @@ describe('the pages use it', () => {
   })
 
   test('the nav offers the dashboard to a signed-in reader, in both menus', () => {
-    const nav = read('resources/partials/site-nav.stx')
+    const nav = read('resources/components/SiteNav.stx')
     expect((nav.match(/^\s*@auth\s*$/gm) ?? []).length).toBe(2)
     expect((nav.match(/^\s*@endauth\s*$/gm) ?? []).length).toBe(2)
     const open = nav.search(/^\s*@auth\s*$/m)

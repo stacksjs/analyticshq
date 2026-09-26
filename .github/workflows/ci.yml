@@ -126,6 +126,12 @@ jobs:
       - name: Typecheck
         run: bunx --bun tsc --noEmit
 
+      # tsc cannot see inside .stx, so the templates' script blocks and {{ }}
+      # expressions are checked by stx's own checker. Through the package script
+      # so the --lib list of ambient types/ files lives in one place.
+      - name: Typecheck views
+        run: bun run typecheck:views
+
   test:
     runs-on: ${{ matrix.os }}
     permissions:

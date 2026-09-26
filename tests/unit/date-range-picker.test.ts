@@ -27,8 +27,11 @@ interface PickerMath {
   pickQuery: (search: string, sel: PickSelection) => string
 }
 
+// The slice is TypeScript, as the component's client block is; stx transpiles it
+// before it ships, so it is transpiled the same way here before it is evaluated.
+const pureJs = new Bun.Transpiler({ loader: 'ts' }).transformSync(pureSlice)
 // eslint-disable-next-line no-new-func
-const pure: PickerMath = new Function(`${pureSlice}\nreturn { pickYmd, pickParse, pickShift, pickShiftMonth, pickMonthOf, pickGrid, pickOrder, pickPreset, pickQuery }`)()
+const pure: PickerMath = new Function(`${pureJs}\nreturn { pickYmd, pickParse, pickShift, pickShiftMonth, pickMonthOf, pickGrid, pickOrder, pickPreset, pickQuery }`)()
 
 describe('date range picker: calendar grid', () => {
   test('six weeks starting on the Sunday on or before the 1st', () => {
@@ -134,7 +137,7 @@ describe('date range picker: wiring', () => {
     // A native <details> has no outside-click close, so the component adds a
     // transparent full-viewport backdrop behind the panel that closes it.
     expect(component).toContain('<div class="drp-backdrop" @click="pickClose"')
-    expect(component).toMatch(/function pickClose\(e\) \{[\s\S]*?closest\('details'\)[\s\S]*?removeAttribute\('open'\)/)
+    expect(component).toMatch(/function pickClose\(e(?:: Event)?\)(?:: void)? \{[\s\S]*?closest\('details'\)[\s\S]*?removeAttribute\('open'\)/)
     // It sits below the panel and above the sticky nav so a click on the panel
     // itself never reaches it, but a click on the page behind does.
     const backdrop = dashboard.match(/\.drp-backdrop\s*\{[^}]*\}/)?.[0] ?? ''

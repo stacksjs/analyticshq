@@ -29,6 +29,15 @@ import { TZ_COOKIE, validTimeZone, zonedKey, zoneLabel } from '../../app/Support
 import { DEFAULT_PLAN } from '../../config/plans'
 import { buildDeviceReport, buildReport, formatVital, RATING_COLOR, VITAL_THRESHOLDS } from '../../app/Analytics/vitals'
 import privacy from '../../config/privacy'
+import { num, text } from '../../app/Support/rows'
+import type { Row } from '../../app/Support/rows'
+import type { ChannelName } from '../../app/Support/dashboard-format'
+import type { ReachableSite, SiteRole } from '../../app/Analytics/access'
+import type { RegionCount } from '../../app/Analytics/regions'
+import type { CityCount } from '../../app/Analytics/cities'
+import type { LiveLocations, LivePoint } from '../../app/Analytics/live'
+import type { VisitorSummary } from '../../app/Analytics/visitors'
+import type { VitalAggregate, VitalDeviceAggregate, VitalDeviceRow, VitalRating, VitalReport } from '../../app/Analytics/vitals'
 
 
 // The serve layer injects the parsed query string onto the render context as `query`,
@@ -39,7 +48,10 @@ import privacy from '../../config/privacy'
 // Aliased rather than used directly because a standalone render (the SSG path, or
 // processDirectives called without a request) injects nothing, and a bare `query` would
 // be a ReferenceError there rather than an empty result.
-const queryParams = typeof query !== 'undefined' ? query : {}
+//
+// Annotated here because stx types `query` itself, as `any`, and no declaration
+// can narrow that; without this every value read from the URL would be `any` too.
+const queryParams: Record<string, string | undefined> = typeof query !== 'undefined' ? query : {}
 let siteId = queryParams.site || 'demo'
 // The period a bare /dashboard opens on. Ninety days: long enough to show a
 // trend, short enough that a new site's chart is not two-thirds empty line, which
@@ -55,7 +67,7 @@ const isAll = range === 'all'
 // Takes precedence over the preset; the picker below submits these.
 const qFrom = queryParams.from
 const qTo = queryParams.to
-const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)
+const isDate = (s: unknown): boolean => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}/.test(s)
 const isCustom = !isAll && isDate(qFrom) && isDate(qTo)
 const customFrom = isCustom ? String(qFrom).slice(0, 10) : ''
 const customTo = isCustom ? String(qTo).slice(0, 10) : ''
@@ -69,9 +81,9 @@ if (isCustom)
 // What the period control reads. A preset keeps its name and the days it resolves
 // to; 'all' has no start until loadData finds the earliest pageview, so it is
 // named alone. Dates are formatted in UTC because from/to are UTC day bounds.
-const RANGE_LABELS = { '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '1y': 'Last 365 days', 'all': 'All time' }
-const fmtDay = s => new Date(`${s.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
-const fmtSpan = (a, b) => a.slice(0, 4) === b.slice(0, 4)
+const RANGE_LABELS: Record<string, string> = { '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '1y': 'Last 365 days', 'all': 'All time' }
+const fmtDay = (s: string): string => new Date(`${s.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+const fmtSpan = (a: string, b: string): string => a.slice(0, 4) === b.slice(0, 4)
   ? `${fmtDay(a)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
   : `${fmtDay(a)}, ${a.slice(0, 4)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
 const rangeLabel = isCustom ? fmtSpan(customFrom, customTo) : isAll ? 'All time' : `${RANGE_LABELS[range] ?? 'Custom'} · ${fmtSpan(from, to)}`
@@ -91,7 +103,7 @@ let chartTz = 'UTC'
 let tzLabel = 'UTC'
 /** The zone the reader's browser reported, if it has, else null. */
 const savedTz = (() => {
-  const raw = typeof cookies !== 'undefined' ? cookies[TZ_COOKIE] : ''
+  const raw: unknown = typeof cookies !== 'undefined' ? cookies[TZ_COOKIE] : ''
   try {
     return validTimeZone(decodeURIComponent(String(raw || '')))
   }
@@ -121,7 +133,7 @@ const ranges = [
 // column (or the special 'channel' key, expanded below). CH_SEARCH/CH_SOCIAL are
 // defined here (moved up from near channelOf) so the channel expansion reuses the
 // exact same source sets as channelOf.
-const FILTERS = {
+const FILTERS: Record<string, { col: string | null, label: string }> = {
   path: { col: 'path', label: 'Path' },
   source: { col: 'referrer_source', label: 'Source' },
   referrer: { col: 'referrer', label: 'Referrer' },
@@ -148,10 +160,10 @@ const FILTERS = {
 // Search/Social = IN their source set; Direct = ''/'Direct'/NULL; Referral = the rest.
 // Parse only known, non-empty filter keys into activeFilters + build the SQL fragment
 // that gets baked into every WHERE ${filter} query below.
-const CHANNEL_NAMES = ['Search', 'Social', 'Direct', 'Referral']
-const activeFilters = []
+const CHANNEL_NAMES: ChannelName[] = ['Search', 'Social', 'Direct', 'Referral']
+const activeFilters: Array<{ key: string, label: string, value: string }> = []
 let filterSql = ''
-const filterParams = []
+const filterParams: string[] = []
 // Session-constant dimensions (country/device/browser/os are identical on every
 // page_view of a session). ONLY these are safe to apply inside the entry/exit-page
 // window subqueries: the per-pageview-varying keys (path/source/channel/campaign/
@@ -164,7 +176,7 @@ const filterParams = []
 // City too: resolved from the same one address, once per visit.
 const SESSION_DIMENSIONS = new Set(['country', 'region', 'city', 'device', 'browser', 'os'])
 let sessionFilterSql = ''
-const sessionFilterParams = []
+const sessionFilterParams: string[] = []
 for (const key of Object.keys(FILTERS)) {
   const raw = queryParams[key]
   if (raw == null)
@@ -175,9 +187,12 @@ for (const key of Object.keys(FILTERS)) {
   const def = FILTERS[key]
   if (key === 'channel') {
     const name = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
-    if (!CHANNEL_NAMES.includes(name))
+    // find() rather than includes(): it hands back the name as a ChannelName, which
+    // is what channelPredicate takes, with no cast.
+    const channel = CHANNEL_NAMES.find(c => c === name)
+    if (!channel)
       continue
-    const pred = channelPredicate(name)
+    const pred = channelPredicate(channel)
     filterSql += pred.sql
     filterParams.push(...pred.params)
     activeFilters.push({ key, label: def.label, value: name })
@@ -204,14 +219,16 @@ function filterQuery(mutate: (q: URLSearchParams) => void): string {
   mutate(q)
   return `?${q.toString()}`
 }
-function addFilterUrl(key: string, value: string | number): string {
+// `value` is whatever the row holds, NULL included: a NULL referrer source links to
+// `source=null`, exactly as String() has always rendered it.
+function addFilterUrl(key: string, value: string | number | null | undefined): string {
   return filterQuery(q => q.set(key, String(value)))
 }
 function removeFilterUrl(key: string): string {
   return filterQuery(q => q.delete(key))
 }
 // Toggle the compare overlay while preserving site + range + active filters.
-function compareToggleUrl() {
+function compareToggleUrl(): string {
   return filterQuery(q => compare ? q.delete('compare') : q.set('compare', '1'))
 }
 // --------------------------------------------------------------------------
@@ -222,24 +239,24 @@ function compareToggleUrl() {
 // string if it isn't the expected shape.
 
 let kpis = { views: 0, visitors: 0, sessions: 0 }
-let series = []
-let prevSeries = []
-let pages = []
-let referrers = []
-let referrerUrls = []
-let countries = []
-let countryMap = []
-let regions = []
-let cities = []
-let devices = []
-let browsers = []
-let systems = []
-let channelRows = []
-let campaigns = []
-let utmSources = []
-let utmMediums = []
-let utmContents = []
-let utmTerms = []
+let series: SeriesRow[] = []
+let prevSeries: SeriesRow[] = []
+let pages: PageRow[] = []
+let referrers: SourceRow[] = []
+let referrerUrls: ReferrerUrlRow[] = []
+let countries: CountryRow[] = []
+let countryMap: CountryRow[] = []
+let regions: RegionCount[] = []
+let cities: CityCount[] = []
+let devices: DeviceRow[] = []
+let browsers: BrowserRow[] = []
+let systems: OsRow[] = []
+let channelRows: SourceRow[] = []
+let campaigns: CampaignRow[] = []
+let utmSources: SourceRow[] = []
+let utmMediums: MediumRow[] = []
+let utmContents: ContentRow[] = []
+let utmTerms: TermRow[] = []
 let bounceRate = 0
 let avgDuration = 0
 let prevViews = 0
@@ -249,30 +266,30 @@ let prevBounce = 0
 let prevAvgDuration = 0
 let liveNow = 0
 // Where the live visitors are, for the Live now strip. See app/Analytics/live.ts.
-let liveWhere = { locations: [], more: 0, unknown: 0 }
+let liveWhere: LiveLocations = { locations: [], more: 0, unknown: 0 }
 /** Where live visitors are, for the pulsing dots on the map (app/Analytics/live.ts livePoints). */
-let livePlaces = []
-let goals = []
-let events = []
-let outboundLinks = []
-let fileDownloads = []
-let entryPages = []
-let exitPages = []
+let livePlaces: LivePoint[] = []
+let goals: GoalRow[] = []
+let events: EventRow[] = []
+let outboundLinks: LinkRow[] = []
+let fileDownloads: LinkRow[] = []
+let entryPages: EntryPageRow[] = []
+let exitPages: ExitPageRow[] = []
 // Core Web Vitals (#41). Always the full five metrics — buildReport pads the ones
 // with no samples, so the panel can distinguish "no data yet" from "withheld".
-let vitals = []
+let vitals: VitalReport[] = []
 // Search Console queries (#25). Aggregate SEO data with no visitor dimension --
 // see the migration for why it sits outside the erasure path.
-let searchQueries = []
+let searchQueries: SearchQueryRow[] = []
 // The same five, split by device class (#43). Always desktop/mobile/tablet, plus
 // an `unknown` row only when rows predating migration 48 are still in range.
-let vitalsByDevice = []
+let vitalsByDevice: VitalDeviceRow[] = []
 let live = false
 
 // Server-side auth + owner scoping (bughq pattern). The switcher and setup panel
 // are rendered from the current user's OWN sites, resolved server-side from the
 // HttpOnly auth-token cookie, which LoginAction sets server-side on sign-in.
-let user = null
+let user: { id: string | number, email?: unknown, name?: unknown } | null = null
 // Who is signed in, for the account menu. Display only: server-rendered into the
 // menu and never bridged to the client block.
 let accountEmail = ''
@@ -281,15 +298,15 @@ let accountName = ''
 // "Site settings" item opens the section: a link, so no script has to reach into
 // the page to flip a <details>, and it survives a reload or a shared URL.
 const settingsOpen = queryParams.settings === 'open'
-let ownedSites = []
-let activeSiteRecord = null
+let ownedSites: ReachableSite[] = []
+let activeSiteRecord: SiteRecord | null = null
 // This site's disclosure floor: the install's, unless an operator set one for
 // the site (app/Analytics/segment-floor.ts). Resolved once the site is known.
 let siteFloor = privacy.minSegmentSize
 // Runs the install: the switcher lists every site, not only this user's.
 let platformAdmin = false
 
-function siteDomains(site) {
+function siteDomains(site: SiteRecord | null): string[] {
   if (!site?.domains)
     return []
   if (Array.isArray(site.domains))
@@ -303,7 +320,7 @@ function siteDomains(site) {
   }
 }
 
-function siteLabel(site) {
+function siteLabel(site: SiteRecord): string {
   const label = siteDomains(site)[0] || site?.name || site?.id || 'Untitled site'
   // A platform admin's list holds everyone's sites, several of them with the
   // same name, so each says whose it is. Nobody else ever gets owner_email.
@@ -319,10 +336,10 @@ let viewGranted = false
 // share mode. Carried to the client so the UI can hide controls a viewer cannot
 // use — a convenience only, never the check: every endpoint re-resolves the role
 // server-side on each request.
-let activeRole = null
+let activeRole: SiteRole | null = null
 // Team panel state, resolved once the read gate has granted.
-let teamMembers = []
-let teamInvites = []
+let teamMembers: Awaited<ReturnType<typeof listSiteMembers>> = []
+let teamInvites: InviteListRow[] = []
 let teamIsPro = false
 // Does this site's plan include the CSV importer? Server-resolved so the panel is
 // right before any JS runs; the endpoint answers 402 whatever this says.
@@ -348,7 +365,7 @@ let visitorTimelines = false
 /** Install ceiling for the window. Below 2, the toggle says the server does not allow it. */
 const visitorTimelinesAllowed = privacy.maxVisitorWindowDays >= 2
 /** Most recent visitors in range and under the active filters, for the Visitors panel. */
-let recentVisitors = []
+let recentVisitors: VisitorSummary[] = []
 /** Whether this install's ceiling reaches city. Same reasoning as regionGeoAllowed. */
 const cityGeoAllowed = geoPermits(privacy.geo.granularity, 'city')
 // Share mode = viewing via a valid ?share= token (read-only; no management UI).
@@ -357,10 +374,26 @@ let shareMode = false
 // UI can show/copy/revoke the link. Bridged into the client block.
 let __shareToken = ''
 
+// Raw rows, read into the shapes in types/dashboard.d.ts as each query returns.
+// `db.unsafe` answers Record<string, unknown>, and Postgres hands COUNT(*) back as
+// a string, so every field is read for what it is (app/Support/rows.ts) rather
+// than cast to what the SQL should produce. Text columns keep their NULLs -- a
+// panel renders a NULL referrer source as an empty label, and so it still does.
+// Counts become numbers, which changes nothing a reader sees: every consumer below
+// already passed them through Number() before doing arithmetic or formatting.
+const toSeriesRow = (r: Row): SeriesRow => ({ day: String(r.day), views: num(r.views), visitors: num(r.visitors) })
+const toSourceRow = (r: Row): SourceRow => ({ source: text(r.source), views: num(r.views) })
+const toCountryRow = (r: Row): CountryRow => ({ country: text(r.country), views: num(r.views) })
+const toVitalAggregate = (r: Row): VitalAggregate => ({ metric: String(r.metric), p75: r.p75 == null ? null : Number(r.p75), samples: Number(r.samples) })
+const toVitalDeviceAggregate = (r: Row): VitalDeviceAggregate => ({ ...toVitalAggregate(r), device: text(r.device) })
+const toLinkRow = (r: Row): LinkRow => ({ url: eventUrl(text(r.properties)), clicks: Number(r.clicks || 0), visitors: Number(r.visitors || 0) })
+/** Only the three columns the share-view query selects; the caller's own sites are ReachableSite already. */
+const toSiteRecord = (r: Row | undefined): SiteRecord | null => r ? { id: String(r.id), name: text(r.name), domains: r.domains } : null
+
 // Race all DB work against a short timeout: if PostgreSQL isn't reachable, a
 // TCP connect can hang far longer than a render should wait, so we bail to the
 // empty state after 5s rather than block the page.
-async function loadData() {
+async function loadData(): Promise<void> {
   const { db } = await import('@stacksjs/database')
   // Postgres binds positional params as $1..$n, not MySQL's `?`. Rewrite each `?`
   // to `$n` in order so the `?`-style queries below — including the variable-length
@@ -368,7 +401,7 @@ async function loadData() {
   // run on Postgres unchanged. No-op on `?`-dialects (sqlite/mysql). No literal `?`
   // appears in any SQL string here, so the blanket rewrite is safe.
   const IS_PG = ((globalThis.process && globalThis.process.env && globalThis.process.env.DB_CONNECTION) || 'postgres') === 'postgres'
-  const pgq = (sql, params) => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
+  const pgq = (sql: string, params?: unknown[]): Promise<Row[]> => db.unsafe(IS_PG ? (() => { let i = 0; return sql.replace(/\?/g, () => `$${++i}`) })() : sql, params ?? [])
   // Server-authenticate from the auth-token cookie, so the switcher + setup panel
   // are scoped to the caller's OWN sites. LoginAction sets that cookie in its own
   // response, so it is present on the FIRST authenticated document request -- there
@@ -385,7 +418,9 @@ async function loadData() {
   if (authToken) {
     try {
       const { Auth } = await import('@stacksjs/auth')
-      user = await Auth.getUserFromToken(authToken)
+      // `?? null`: an unknown token resolves to undefined, and every read below
+      // only asks whether there is a user.
+      user = (await Auth.getUserFromToken(authToken)) ?? null
     }
     catch { user = null }
   }
@@ -406,10 +441,13 @@ async function loadData() {
     accountName = String(user.name ?? '').trim()
   }
   // Tolerant read of a site's settings JSON (holds the share token).
-  const readSettings = async (id) => {
+  const readSettings = async (id: string): Promise<Record<string, unknown>> => {
     try {
       const r = await pgq(`SELECT settings FROM sites WHERE id = ?`, [String(id)])
-      return JSON.parse(r?.[0]?.settings || '{}') || {}
+      const parsed: unknown = JSON.parse(String(r?.[0]?.settings || '{}'))
+      // Anything that is not an object reads as no settings, which is what
+      // `.share_token` on it (undefined) always meant.
+      return typeof parsed === 'object' && parsed !== null ? { ...parsed } : {}
     }
     catch {
       return {}
@@ -452,11 +490,13 @@ async function loadData() {
   if (!viewGranted)
     return
   activeSiteRecord = ownedSites.find(s => String(s.id) === String(siteId))
-    || (await pgq(`SELECT id, name, domains FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+    || toSiteRecord((await pgq(`SELECT id, name, domains FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0])
     || null
   // Owner (not a share viewer): surface any existing share token for the link UI.
+  // text(): the token is minted as a string; anything else was only ever read by
+  // interpolating it into the share URL, which stringifies it the same way.
   if (!shareMode)
-    __shareToken = (await readSettings(siteId)).share_token || ''
+    __shareToken = text((await readSettings(siteId)).share_token) || ''
 
   // Team: who can already reach this site, and who has been invited but has not
   // accepted yet. Resolved server-side and rendered with @foreach so the panel
@@ -474,7 +514,7 @@ async function loadData() {
         `SELECT id, email, role, expires_at FROM site_invites
          WHERE site_id = ? AND accepted_at IS NULL ORDER BY created_at DESC`,
         [String(siteId)],
-      )) ?? []
+      ) ?? []).map(r => ({ id: text(r.id), email: text(r.email), role: text(r.role), expires_at: text(r.expires_at) }))
       // Drives the paywall copy. The endpoints enforce independently — this only
       // decides whether to show an invite form or an upgrade prompt.
       //
@@ -529,7 +569,7 @@ async function loadData() {
   const bucketCol = chartTz === 'UTC'
     ? 'timestamp'
     : `to_char(timezone('${chartTz}', timestamp::timestamptz), 'YYYY-MM-DD"T"HH24:MI:SS')`
-  const bucket = len => `LEFT(${bucketCol}, ${len})`
+  const bucket = (len: number): string => `LEFT(${bucketCol}, ${len})`
   // 'all' range: anchor `from` at the site's earliest pageview, then pick the chart
   // granularity from the real span (month for multi-year so imported history is
   // legible). No data → default to last 30 days. prevFrom = from makes the prev
@@ -568,7 +608,7 @@ async function loadData() {
     `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors, COUNT(DISTINCT session_id) AS sessions FROM page_views WHERE ${filter}`, p))?.[0]
   kpis = { views: Number(row?.views ?? 0), visitors: Number(row?.visitors ?? 0), sessions: Number(row?.sessions ?? 0) }
   series = (await pgq(
-    `SELECT ${bucket(bucketLen)} AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} GROUP BY ${bucket(bucketLen)} ORDER BY day ASC`, p)) ?? []
+    `SELECT ${bucket(bucketLen)} AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} GROUP BY ${bucket(bucketLen)} ORDER BY day ASC`, p) ?? []).map(toSeriesRow)
   // Top pages by views, each LEFT JOINed to its entry-based bounce (GA-style): of the
   // sessions that LANDED on this page, the share that bounced. The bounce subquery reuses
   // the entry-page window (rn=1 + whole-session COUNT(*) OVER) under sessionFilter, so it
@@ -589,7 +629,8 @@ async function loadData() {
         FROM page_views WHERE ${sessionFilter}
       ) w WHERE w.rn = 1 GROUP BY path
     ) eb ON eb.path = pg.path
-    ORDER BY pg.views DESC`, [...p, ...sessionP])) ?? []
+    ORDER BY pg.views DESC`, [...p, ...sessionP]) ?? [])
+    .map(r => ({ path: text(r.path), views: num(r.views), visitors: num(r.visitors), entries: num(r.entries), bounces: num(r.bounces) }))
   // Entry / exit pages: the FIRST and LAST page_view of each session (the tracker
   // never updates sessions.exit_path, so derive from page_views like bounce rate).
   // ROW_NUMBER windows per session by time (id as a deterministic tiebreaker);
@@ -604,7 +645,8 @@ async function loadData() {
               ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp ASC, id ASC) AS rn,
               COUNT(*)    OVER (PARTITION BY session_id) AS pv
       FROM page_views WHERE ${sessionFilter}
-    ) t WHERE t.rn = 1 GROUP BY path ORDER BY entries DESC LIMIT 8`, sessionP)) ?? []
+    ) t WHERE t.rn = 1 GROUP BY path ORDER BY entries DESC LIMIT 8`, sessionP) ?? [])
+    .map(r => ({ path: text(r.path), entries: num(r.entries), visitors: num(r.visitors), bounces: num(r.bounces) }))
   // NOTE: the pv window is COUNT(*) OVER (PARTITION BY session_id) with NO ORDER BY on
   // purpose — the whole-partition frame yields the session's TOTAL page views on every
   // row (so the rn=1 entry row knows if pv=1 => bounced). Adding an ORDER BY here would
@@ -614,7 +656,8 @@ async function loadData() {
     `SELECT path, COUNT(*) AS exits, COUNT(DISTINCT visitor_id) AS visitors FROM (
       SELECT path, visitor_id, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp DESC, id DESC) AS rn
       FROM page_views WHERE ${sessionFilter}
-    ) t WHERE t.rn = 1 GROUP BY path ORDER BY exits DESC LIMIT 8`, sessionP)) ?? []
+    ) t WHERE t.rn = 1 GROUP BY path ORDER BY exits DESC LIMIT 8`, sessionP) ?? [])
+    .map(r => ({ path: text(r.path), exits: num(r.exits), visitors: num(r.visitors) }))
   // Core Web Vitals (#41). Site + range ONLY — deliberately NOT `filter`.
   //
   // web_vitals carries no country/device/browser column, so there is nothing for a
@@ -625,7 +668,7 @@ async function loadData() {
   vitals = buildReport((await pgq(
     `SELECT metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
-     GROUP BY metric`, [siteId, from, to])) ?? [], siteFloor)
+     GROUP BY metric`, [siteId, from, to]) ?? []).map(toVitalAggregate), siteFloor)
   // The device split (#43). A second query rather than one grouped by device and
   // rolled up in JS: the site-wide p75 is NOT the average of the three device
   // p75s, and cannot be recovered from them -- a percentile of percentiles is a
@@ -637,7 +680,7 @@ async function loadData() {
   vitalsByDevice = buildDeviceReport((await pgq(
     `SELECT device_type AS device, metric, percentile_disc(0.75) WITHIN GROUP (ORDER BY value) AS p75, COUNT(*) AS samples
      FROM web_vitals WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
-     GROUP BY 1, 2`, [siteId, from, to])) ?? [], siteFloor)
+     GROUP BY 1, 2`, [siteId, from, to]) ?? []).map(toVitalDeviceAggregate), siteFloor)
   // Search Console (#25). Site + range only, like vitals: search_queries carries
   // no country/device/browser column for a dimension filter to narrow.
   //
@@ -652,36 +695,42 @@ async function loadData() {
             SUM(position * impressions) / NULLIF(SUM(impressions), 0) AS position
      FROM search_queries WHERE site_id = ? AND date >= ? AND date <= ?
      GROUP BY query ORDER BY clicks DESC, impressions DESC LIMIT 10`,
-    [siteId, String(from).slice(0, 10), String(to).slice(0, 10)])) ?? []
+    [siteId, String(from).slice(0, 10), String(to).slice(0, 10)]) ?? [])
+    .map(r => ({ query: text(r.query), clicks: num(r.clicks), impressions: num(r.impressions), position: r.position == null ? null : Number(r.position) }))
   referrers = (await pgq(
-    `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source ORDER BY views DESC LIMIT 8`, p) ?? []).map(toSourceRow)
   // Top referrers: the actual referring URLs (full referrer), distinct from the normalized
   // referrer_source above (e.g. news.ycombinator.com/ vs "Hacker News"). Excludes empty/
   // direct. Filter-aware via the shared filter/p; referrer is a page_views column.
   referrerUrls = (await pgq(
-    `SELECT referrer AS url, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND referrer IS NOT NULL AND referrer != '' GROUP BY referrer ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT referrer AS url, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND referrer IS NOT NULL AND referrer != '' GROUP BY referrer ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ url: text(r.url), views: num(r.views), visitors: num(r.visitors) }))
   // All sources (no LIMIT) so each can be folded into a channel below.
   channelRows = (await pgq(
-    `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source`, p)) ?? []
+    `SELECT referrer_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} GROUP BY referrer_source`, p) ?? []).map(toSourceRow)
   campaigns = (await pgq(
-    `SELECT utm_campaign AS campaign, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_campaign IS NOT NULL AND utm_campaign != '' GROUP BY utm_campaign ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT utm_campaign AS campaign, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_campaign IS NOT NULL AND utm_campaign != '' GROUP BY utm_campaign ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ campaign: text(r.campaign), views: num(r.views) }))
   utmSources = (await pgq(
-    `SELECT utm_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_source IS NOT NULL AND utm_source != '' GROUP BY utm_source ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT utm_source AS source, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_source IS NOT NULL AND utm_source != '' GROUP BY utm_source ORDER BY views DESC LIMIT 8`, p) ?? []).map(toSourceRow)
   utmMediums = (await pgq(
-    `SELECT utm_medium AS medium, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_medium IS NOT NULL AND utm_medium != '' GROUP BY utm_medium ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT utm_medium AS medium, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_medium IS NOT NULL AND utm_medium != '' GROUP BY utm_medium ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ medium: text(r.medium), views: num(r.views) }))
   utmContents = (await pgq(
-    `SELECT utm_content AS content, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_content IS NOT NULL AND utm_content != '' GROUP BY utm_content ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT utm_content AS content, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_content IS NOT NULL AND utm_content != '' GROUP BY utm_content ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ content: text(r.content), views: num(r.views) }))
   utmTerms = (await pgq(
-    `SELECT utm_term AS term, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_term IS NOT NULL AND utm_term != '' GROUP BY utm_term ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT utm_term AS term, COUNT(*) AS views FROM page_views WHERE ${filter} AND utm_term IS NOT NULL AND utm_term != '' GROUP BY utm_term ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ term: text(r.term), views: num(r.views) }))
   countries = (await pgq(
-    `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country ORDER BY views DESC LIMIT 8`, p) ?? []).map(toCountryRow)
   // Same aggregate, no LIMIT: the list shows a top 8, the map shades every
   // country that has anything. No new exposure — /api/sites/{id}/countries
   // already serves an unfiltered breakdown, and the k-anonymity floor that
   // applies to FILTERED reports applies to this identically, because it is the
   // same `filter` clause.
   countryMap = (await pgq(
-    `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country`, p)) ?? []
+    `SELECT country, COUNT(*) AS views FROM page_views WHERE ${filter} AND country IS NOT NULL AND country != '' GROUP BY country`, p) ?? []).map(toCountryRow)
   // Regions, and unlike every other breakdown here this one is NOT limited in
   // SQL. The rows below the disclosure floor have to be summed into "Other", and
   // a LIMIT applied first would compute that total from the top eight instead of
@@ -693,24 +742,29 @@ async function loadData() {
   // dashboard does not grow a permanently blank card for a feature nobody asked
   // for.
   regions = (await pgq(
-    `SELECT region, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY views DESC`, p)) ?? []
+    `SELECT region, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY views DESC`, p) ?? [])
+    .map(r => ({ region: text(r.region), views: num(r.views), visitors: num(r.visitors) }))
   // Cities, unlimited in SQL for the same reason as regions: every row under the
   // floor has to reach the "Other" sum. Bounded by the towns this site actually
   // saw in the range. Empty, and the panel hidden, on every site that has not
   // opted in.
   cities = (await pgq(
-    `SELECT city, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND city IS NOT NULL AND city != '' GROUP BY city ORDER BY views DESC`, p)) ?? []
+    `SELECT city, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filter} AND city IS NOT NULL AND city != '' GROUP BY city ORDER BY views DESC`, p) ?? [])
+    .map(r => ({ city: text(r.city), views: num(r.views), visitors: num(r.visitors) }))
   devices = (await pgq(
-    `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT device_type AS device, COUNT(*) AS views FROM page_views WHERE ${filter} AND device_type IS NOT NULL AND device_type != '' GROUP BY device_type ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ device: text(r.device), views: num(r.views) }))
   browsers = (await pgq(
-    `SELECT browser, COUNT(*) AS views FROM page_views WHERE ${filter} AND browser IS NOT NULL AND browser != '' GROUP BY browser ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT browser, COUNT(*) AS views FROM page_views WHERE ${filter} AND browser IS NOT NULL AND browser != '' GROUP BY browser ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ browser: text(r.browser), views: num(r.views) }))
   systems = (await pgq(
-    `SELECT os, COUNT(*) AS views FROM page_views WHERE ${filter} AND os IS NOT NULL AND os != '' GROUP BY os ORDER BY views DESC LIMIT 8`, p)) ?? []
+    `SELECT os, COUNT(*) AS views FROM page_views WHERE ${filter} AND os IS NOT NULL AND os != '' GROUP BY os ORDER BY views DESC LIMIT 8`, p) ?? [])
+    .map(r => ({ os: text(r.os), views: num(r.views) }))
   // Bounce rate = share of sessions with exactly one page view (the tracker
   // doesn't maintain sessions.is_bounce, so derive it from page_views).
   const b = (await pgq(
     `SELECT COUNT(*) AS sessions, SUM((pv = 1)::int) AS bounced FROM (SELECT session_id, COUNT(*) AS pv FROM page_views WHERE ${filter} GROUP BY session_id) t`, p))?.[0]
-  bounceRate = Number(b?.sessions) ? Math.round((Number(b.bounced) / Number(b.sessions)) * 100) : 0
+  bounceRate = Number(b?.sessions) ? Math.round((Number(b?.bounced) / Number(b?.sessions)) * 100) : 0
   // Avg visit duration = mean over sessions of (last - first) page_view time, in seconds.
   // The timestamp column is an ISO-8601 varchar; cast it to timestamptz so Postgres can
   // do real time math (Fathom/Plausible-style). Single-page-view sessions contribute 0,
@@ -731,7 +785,7 @@ async function loadData() {
   // as the current series, over [prevFrom, from). Honors the full filter (pageview count).
   if (compare) {
     prevSeries = (await pgq(
-      `SELECT ${bucket(bucketLen)} AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filterPrev} GROUP BY ${bucket(bucketLen)} ORDER BY day ASC`, pp)) ?? []
+      `SELECT ${bucket(bucketLen)} AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors FROM page_views WHERE ${filterPrev} GROUP BY ${bucket(bucketLen)} ORDER BY day ASC`, pp) ?? []).map(toSeriesRow)
   }
   const prow = (await pgq(
     `SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors, COUNT(DISTINCT session_id) AS sessions FROM page_views WHERE ${filterPrev}`, pp))?.[0]
@@ -740,7 +794,7 @@ async function loadData() {
   prevSessions = Number(prow?.sessions ?? 0)
   const pb = (await pgq(
     `SELECT COUNT(*) AS sessions, SUM((pv = 1)::int) AS bounced FROM (SELECT session_id, COUNT(*) AS pv FROM page_views WHERE ${filterPrev} GROUP BY session_id) t`, pp))?.[0]
-  prevBounce = Number(pb?.sessions) ? Math.round((Number(pb.bounced) / Number(pb.sessions)) * 100) : 0
+  prevBounce = Number(pb?.sessions) ? Math.round((Number(pb?.bounced) / Number(pb?.sessions)) * 100) : 0
   const pad = (await pgq(
     `SELECT AVG(dur) AS avg_dur FROM (
       SELECT EXTRACT(EPOCH FROM (MAX(timestamp::timestamptz) - MIN(timestamp::timestamptz))) AS dur
@@ -773,7 +827,8 @@ async function loadData() {
     LEFT JOIN conversions c ON c.goal_id = g.id AND c.timestamp >= ? AND c.timestamp <= ?
     WHERE g.site_id = ? AND g.is_active = true
     GROUP BY g.id, g.name, g.value
-    ORDER BY conversions DESC, g.name ASC`, [from, to, siteId])) ?? []
+    ORDER BY conversions DESC, g.name ASC`, [from, to, siteId]) ?? [])
+    .map(r => ({ id: text(r.id), name: text(r.name), goal_value: num(r.goal_value), conversions: num(r.conversions), converters: num(r.converters), total_value: num(r.total_value) }))
   // Top custom events for this site in [from,to]: per event NAME, total count and
   // distinct visitors. Scoped by site+range only — NOT the page_views filter engine,
   // whose columns don't exist on custom_events (like Goals above). Grouped by NAME,
@@ -782,7 +837,8 @@ async function loadData() {
     `SELECT name, COUNT(*) AS events, COUNT(DISTINCT visitor_id) AS visitors
     FROM custom_events
     WHERE site_id = ? AND timestamp >= ? AND timestamp <= ?
-    GROUP BY name ORDER BY events DESC LIMIT 8`, [siteId, from, to])) ?? []
+    GROUP BY name ORDER BY events DESC LIMIT 8`, [siteId, from, to]) ?? [])
+    .map(r => ({ name: text(r.name), events: num(r.events), visitors: num(r.visitors) }))
   // Top outbound links / file downloads: the URLs behind the auto-tracked Outbound Link
   // and File Download events. GROUP BY the whole properties varchar (== GROUP BY url, since
   // the tracker sends only {url}) so it stays dialect-portable (no JSON_EXTRACT); eventUrl
@@ -792,13 +848,13 @@ async function loadData() {
     FROM custom_events
     WHERE site_id = ? AND name = ? AND timestamp >= ? AND timestamp <= ? AND properties IS NOT NULL
     GROUP BY properties ORDER BY clicks DESC LIMIT 8`, [siteId, 'Outbound Link', from, to])) ?? []
-  outboundLinks = outRows.map(r => ({ url: eventUrl(r.properties), clicks: Number(r.clicks || 0), visitors: Number(r.visitors || 0) }))
+  outboundLinks = outRows.map(toLinkRow)
   const dlRows = (await pgq(
     `SELECT properties, COUNT(*) AS clicks, COUNT(DISTINCT visitor_id) AS visitors
     FROM custom_events
     WHERE site_id = ? AND name = ? AND timestamp >= ? AND timestamp <= ? AND properties IS NOT NULL
     GROUP BY properties ORDER BY clicks DESC LIMIT 8`, [siteId, 'File Download', from, to])) ?? []
-  fileDownloads = dlRows.map(r => ({ url: eventUrl(r.properties), clicks: Number(r.clicks || 0), visitors: Number(r.visitors || 0) }))
+  fileDownloads = dlRows.map(toLinkRow)
   live = true
 }
 
@@ -850,7 +906,7 @@ try {
   else {
     await Promise.race([
       loadData(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('db timeout')), 5000)),
+      new Promise<never>((_resolve, reject) => setTimeout(() => reject(new Error('db timeout')), 5000)),
     ])
   }
 }
@@ -866,6 +922,15 @@ if (!vitals.length)
   vitals = buildReport([], siteFloor)
 if (!vitalsByDevice.length)
   vitalsByDevice = buildDeviceReport([], siteFloor)
+
+/**
+ * The colour for a vital's rating. Only reached inside a `value !== null` guard,
+ * where the rating is never null (buildReport sets both or neither); the '' is for
+ * the type, and matches what indexing RATING_COLOR with null rendered.
+ */
+function ratingColor(rating: VitalRating | null): string {
+  return rating ? RATING_COLOR[rating] : ''
+}
 
 // Whether the reader is looking at a narrowed view. The vitals panel is the one
 // report that cannot honour a filter, so it has to say so exactly when one is on.
@@ -1016,10 +1081,10 @@ const visitorRows = recentVisitors.map(v => ({
  * defensively — every writer normalizes now (app/Analytics/country.ts), but rows
  * predating that are still in the table and would silently miss the map.
  */
-const countryTotals = Object.fromEntries(
+const countryTotals: Record<string, number> = Object.fromEntries(
   countryMap
     .filter(c => c.country)
-    .map(c => [String(c.country).toUpperCase(), Number(c.views || 0)]),
+    .map((c): [string, number] => [String(c.country).toUpperCase(), Number(c.views || 0)]),
 )
 /**
  * `{ US: 'United States' }` for the map's tooltips, keyed like countryTotals.
@@ -1036,8 +1101,8 @@ const countryTotals = Object.fromEntries(
  * appear in the list, and so the only ones whose two labels can be compared.
  * Everything else falls back to the geometry's own name in the browser.
  */
-const countryNames = Object.fromEntries(
-  Object.keys(countryTotals).map(code => [code, countryName(code)]),
+const countryNames: Record<string, string> = Object.fromEntries(
+  Object.keys(countryTotals).map((code): [string, string] => [code, countryName(code)]),
 )
 const maxDevice = devices.reduce((m, d) => Math.max(m, Number(d.views || 0)), 0) || 1
 const maxBrowser = browsers.reduce((m, b) => Math.max(m, Number(b.views || 0)), 0) || 1
@@ -1060,11 +1125,13 @@ function goalRate(converters: number | string | null | undefined): number {
   return (Number(converters || 0) / kpis.visitors) * 100
 }
 
-const channelTotals = { Search: 0, Social: 0, Direct: 0, Referral: 0 }
+const channelTotals: Record<ChannelName, number> = { Search: 0, Social: 0, Direct: 0, Referral: 0 }
 for (const r of channelRows)
   channelTotals[channelOf(r.source)] += Number(r.views || 0)
-const channels = Object.keys(channelTotals)
-  .map(name => ({ name, views: channelTotals[name] }))
+// entries() walks the same keys in the same order keys() did, and hands back
+// each total beside its name rather than re-indexing by a plain string.
+const channels = Object.entries(channelTotals)
+  .map(([name, views]) => ({ name, views }))
   .filter(c => c.views > 0)
   .sort((a, b) => b.views - a.views)
 const maxChannel = channels.reduce((m, c) => Math.max(m, c.views), 0) || 1
@@ -1116,8 +1183,8 @@ function buildChart(rows: ChartRow[], prevRows: ChartRow[] | null): ChartGeometr
     prev.reduce((m, r) => Math.max(m, Number(r.views || 0)), 0),
     1,
   ))
-  const xFor = i => CHART.padX + ((i + 0.5) / n) * innerW
-  const yFor = v => top + (1 - Number(v || 0) / max) * plotH
+  const xFor = (i: number): number => CHART.padX + ((i + 0.5) / n) * innerW
+  const yFor = (v: number): number => top + (1 - Number(v || 0) / max) * plotH
   const pts = rows.map((r, i) => {
     const views = Number(r.views || 0)
     const visitors = Number(r.visitors || 0)
@@ -1137,7 +1204,7 @@ function buildChart(rows: ChartRow[], prevRows: ChartRow[] | null): ChartGeometr
       visTopPct: (yFor(visitors) / CHART.h) * 100,
     }
   })
-  const line = key => pts.map((pt, i) => `${i ? 'L' : 'M'}${pt.x.toFixed(1)} ${pt[key].toFixed(1)}`).join(' ')
+  const line = (key: 'vy' | 'uy'): string => pts.map((pt, i) => `${i ? 'L' : 'M'}${pt.x.toFixed(1)} ${pt[key].toFixed(1)}`).join(' ')
   const area = pts.length
     ? `M${pts[0].x.toFixed(1)} ${bottom} L${pts.map(pt => `${pt.x.toFixed(1)} ${pt.vy.toFixed(1)}`).join(' L')} L${pts[pts.length - 1].x.toFixed(1)} ${bottom} Z`
     : ''
@@ -1151,7 +1218,7 @@ function buildChart(rows: ChartRow[], prevRows: ChartRow[] | null): ChartGeometr
   // across the range, centred on their bucket's column like the hover dots.
   const yAxis = yTicks(max).map(t => ({ ...t, topPct: (yFor(t.value) / CHART.h) * 100 }))
   // First and last hug the plot edges instead of centring past them.
-  const xAxis = xTicks(rows.map(r => r.day), 5).map((t, i, all) => ({ ...t, anchor: i === 0 ? 'start' : i === all.length - 1 ? 'end' : 'mid' }))
+  const xAxis = xTicks(rows.map(r => r.day), 5).map((t, i, all): ChartXTick => ({ ...t, anchor: i === 0 ? 'start' : i === all.length - 1 ? 'end' : 'mid' }))
   return { pts, viewsLine: line('vy'), visitorsLine: line('uy'), area, prevLine, bottom, yAxis, xAxis, firstDay: pts[0]?.day, lastDay: pts[pts.length - 1]?.day, firstLabel: pts[0]?.label, lastLabel: pts[pts.length - 1]?.label, ...CHART }
 }
 // Fill every bucket in the range so the x-axis is time-proportional: buckets with
@@ -1160,13 +1227,13 @@ function buildChart(rows: ChartRow[], prevRows: ChartRow[] | null): ChartGeometr
 // point. Steps hour/day/month to match the query's LEFT(timestamp, N) bucket;
 // `day` holds the raw bucket key (matches the query alias + Map lookup + CSV),
 // `label` is the display form ('MM-DD HH:00' hourly, 'YYYY-MM-DD' daily, 'YYYY-MM' monthly).
-function densify(rows: ChartRow[], fromISO: string, toISO: string): ChartRow[] {
+function densify(rows: SeriesRow[], fromISO: string, toISO: string): ChartRow[] {
   const byKey = new Map(rows.map(r => [r.day, r]))
-  const out = []
+  const out: ChartRow[] = []
   const keyLen = granularity === 'hour' ? 13 : granularity === 'month' ? 7 : 10
   // Keys are the wall clock in chartTz, the same zone the query bucketed in, or
   // no bucket would ever be found for a reader outside UTC.
-  const keys = []
+  const keys: string[] = []
   if (granularity === 'hour') {
     // Walk real hours and read each one's local label. Across a DST change a
     // label can repeat or be skipped, which is what the local clock did too.
@@ -1426,8 +1493,13 @@ function switchSite(e: Event): void {
 // bypasses that is not reachable through the two-parameter navigate() the runtime
 // exposes. { reload: true } skips the router outright by design, and `replace` keeps
 // the load off the history stack exactly as location.reload() did.
+//
+// `fullPath` is optional in the annotation only because stx.d.ts leaves it out of
+// useRoute()'s return type. The client runtime has always returned it (pathname +
+// search + hash), so the `?? route.path` fallback exists for the type and never runs.
 function refreshFromServer(): void {
-  navigate(useRoute().fullPath, { replace: true, reload: true })
+  const route: ReturnType<typeof useRoute> & { fullPath?: string } = useRoute()
+  navigate(route.fullPath ?? route.path, { replace: true, reload: true })
 }
 
 async function addGoal(e: SubmitEvent): Promise<void> {
@@ -1436,13 +1508,16 @@ async function addGoal(e: SubmitEvent): Promise<void> {
     return
   goalError.set('')
   goalBusy.set(true)
-  const form = e.target
+  const form = e.target as HTMLFormElement
+  // namedItem() is what `form.elements.name` resolved to; spelled out because the
+  // DOM types only index the collection by number.
+  const field = (name: string): HTMLInputElement | HTMLSelectElement => form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement
   const payload = {
-    name: form.elements.name.value.trim(),
-    type: form.elements.type.value,
-    pattern: form.elements.pattern.value.trim(),
-    match_type: form.elements.match.value,
-    value: form.elements.value.value,
+    name: field('name').value.trim(),
+    type: field('type').value,
+    pattern: field('pattern').value.trim(),
+    match_type: field('match').value,
+    value: field('value').value,
   }
   try {
     const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/goals`, {
@@ -1452,7 +1527,7 @@ async function addGoal(e: SubmitEvent): Promise<void> {
       refreshFromServer()
       return
     }
-    const d = await res.json().catch(() => ({}))
+    const d: { error?: string } = await res.json().catch(() => ({}))
     goalError.set(d.error || 'Could not create goal')
     goalBusy.set(false)
   }
@@ -1587,14 +1662,14 @@ async function importFromGa() {
         // so sending it on every chunk would delete the years we just imported.
         body: JSON.stringify({ property, key, from: start, to: end, replace: i === 0 }),
       })
-      const d = await res.json().catch(() => ({}))
+      const d: { error?: string, imported?: { pageViews?: number, sessions?: number }, warnings?: string[] } = await res.json().catch(() => ({}))
       if (!res.ok) {
         failure = d.error || 'The import failed.'
         break
       }
       pageViews += Number(d.imported?.pageViews ?? 0)
       sessions += Number(d.imported?.sessions ?? 0)
-      for (const w of (d.warnings ?? []) as string[]) {
+      for (const w of d.warnings ?? []) {
         // Same warning from twelve years is one warning worth reading.
         if (!warnings.includes(w))
           warnings.push(w)
@@ -1640,7 +1715,7 @@ async function toggleRegionGeo(): Promise<void> {
       headers: JSON_HEADERS,
       body: JSON.stringify({ regionGeo: next }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: { error?: string } = await res.json().catch(() => ({}))
     if (res.ok) {
       regionGeoOn.set(next)
       // Says what happens NEXT, not what happened: no historical row grows a
@@ -1679,7 +1754,7 @@ async function toggleCityGeo(): Promise<void> {
       headers: JSON_HEADERS,
       body: JSON.stringify({ cityGeo: next }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: { error?: string } = await res.json().catch(() => ({}))
     if (res.ok) {
       cityGeoOn.set(next)
       cityGeoMsg.set(next
@@ -1717,7 +1792,7 @@ async function toggleVisitorTimelines(): Promise<void> {
       headers: JSON_HEADERS,
       body: JSON.stringify({ visitorTimelines: next }),
     })
-    const data = await res.json().catch(() => ({}))
+    const data: { error?: string } = await res.json().catch(() => ({}))
     if (res.ok) {
       visitorTimelinesOn.set(next)
       visitorTimelinesMsg.set(next
@@ -2083,7 +2158,7 @@ async function createShare() {
   let failed = false
   try {
     const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/share`, { method: 'POST', credentials: 'same-origin' })
-    const d = await res.json().catch(() => ({}))
+    const d: { token?: string } = await res.json().catch(() => ({}))
     if (res.ok && d.token)
       shareUrl.set(shareLinkFor(d.token))
     else
@@ -2152,7 +2227,7 @@ async function sendInvite() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, role: inviteRole() }),
     })
-    const d = await res.json().catch(() => ({}))
+    const d: { error?: string } = await res.json().catch(() => ({}))
     if (res.ok) {
       inviteEmail.set('')
       inviteBusy.set(false)
@@ -2226,7 +2301,7 @@ function copyShare() {
 // is no directive for "save a file"); it isn't UI construction.
 function exportCsv() {
   const data = exportPayload
-  const cell = (v) => {
+  const cell = (v: unknown): string => {
     let s = v == null ? '' : String(v)
     // Formula-guard: a leading = + - @ (or tab/CR) is run as a formula by
     // Excel/Sheets; paths/referrers are visitor-controlled (CWE-1236).
@@ -2236,9 +2311,9 @@ function exportCsv() {
       return s
     return `"${s.split('"').join('""')}"`
   }
-  const row = (cells) => cells.map(cell).join(',')
-  const L = []
-  const section = (header, items, pick) => {
+  const row = (cells: readonly unknown[]): string => cells.map(cell).join(',')
+  const L: string[] = []
+  const section = <T,>(header: string[], items: readonly T[] | null | undefined, pick: (it: T) => unknown[]): void => {
     L.push(row(header));
     (items || []).forEach(it => L.push(row(pick(it))))
     L.push('')
@@ -2302,7 +2377,7 @@ function exportCsv() {
 onMount(() => {
   fetch('/api/me', { credentials: 'same-origin' })
     .then(r => r.ok ? r.json() : null)
-    .then(d => { if (d && d.pro) isPro.set(true) })
+    .then((d: MeResponse | null) => { if (d && d.pro) isPro.set(true) })
     .catch(() => {})
 
   // Chart in the reader's timezone. The server only knows it once the browser
@@ -2339,7 +2414,9 @@ onMount(() => {
   //
   // useInterval rather than setInterval: it registers an onDestroy hook, which
   // stx drains on SPA navigation, so leaving the dashboard stops the timers.
-  const apply = (d) => {
+  // What /realtime answers and the stream pushes: the server's live snapshot. Each
+  // field is checked before it is used, so a partial one updates what it carries.
+  const apply = (d: { current?: number, where?: typeof liveWhere, points?: typeof livePlaces } | null): void => {
     if (d && typeof d.current === 'number')
       liveCount.set(d.current)
     if (d && d.where && Array.isArray(d.where.locations))
@@ -3184,7 +3261,7 @@ select.panel:hover { border-color: var(--accent); }
       </div>
 
       {{-- Top sources --}}
-      <BreakdownPanel title="Top sources" :rows="referrers" labelKey="source" valueKey="views" :max="maxRef" filterKey="source" empty="No sources yet." />
+      <BreakdownPanel title="Top sources" :rows="referrers" labelKey="source" valueKey="views" :max="maxRef" filterKey="source" empty="No sources yet." :addFilterUrl="addFilterUrl" />
     </div>
 
     {{-- Core Web Vitals (#41). Directly under the pages report because that
@@ -3210,25 +3287,25 @@ select.panel:hover { border-color: var(--accent); }
         </span>
       </div>
       <div class="grid gap-4 grid-cols-2 md:grid-cols-5">
-        @foreach (vitals as v)
+        @foreach (vitals as vital)
           <div>
             <div class="flex gap-1.5 items-baseline">
-              <span class="font-medium text-text-3 text-xs tracking-wider uppercase">{{ v.metric }}</span>
-              @if (v.value !== null)
-                <span class="text-xs" style="color: {{ RATING_COLOR[v.rating] }}" title="{{ v.rating }}">●</span>
+              <span class="font-medium text-text-3 text-xs tracking-wider uppercase">{{ vital.metric }}</span>
+              @if (vital.value !== null)
+                <span class="text-xs" style="color: {{ ratingColor(vital.rating) }}" title="{{ vital.rating }}">●</span>
               @endif
             </div>
-            @if (v.value !== null)
-              <div class="mt-1 font-semibold tabular-nums text-lg mono">{{ formatVital(v.metric, v.value) }}</div>
-              <div class="text-text-3 text-xs mono">{{ Number(v.samples).toLocaleString() }} samples</div>
-            @elseif (v.suppressed)
+            @if (vital.value !== null)
+              <div class="mt-1 font-semibold tabular-nums text-lg mono">{{ formatVital(vital.metric, vital.value) }}</div>
+              <div class="text-text-3 text-xs mono">{{ Number(vital.samples).toLocaleString() }} samples</div>
+            @elseif (vital.suppressed)
               {{-- Withheld, not missing. A p75 over fewer than k visitors is that
                   visitor's phone rather than a statistic (#40's reasoning). --}}
               <div class="mt-1 text-sm text-text-3">Too few visits</div>
-              <div class="text-text-3 text-xs mono">{{ Number(v.samples).toLocaleString() }} of {{ minSegmentSize }}</div>
+              <div class="text-text-3 text-xs mono">{{ Number(vital.samples).toLocaleString() }} of {{ minSegmentSize }}</div>
             @else
               <div class="mt-1 text-sm text-text-3">No data yet</div>
-              <div class="text-text-3 text-xs">good ≤ {{ formatVital(v.metric, VITAL_THRESHOLDS[v.metric][0]) }}</div>
+              <div class="text-text-3 text-xs">good ≤ {{ formatVital(vital.metric, VITAL_THRESHOLDS[vital.metric][0]) }}</div>
             @endif
           </div>
         @endforeach
@@ -3265,7 +3342,7 @@ select.panel:hover { border-color: var(--accent); }
                   @foreach (d.metrics as v)
                     <td class="pr-1 py-2 tabular-nums text-right mono">
                       @if (v.value !== null)
-                        <span style="color: {{ RATING_COLOR[v.rating] }}">{{ formatVital(v.metric, v.value) }}</span>
+                        <span style="color: {{ ratingColor(v.rating) }}">{{ formatVital(v.metric, v.value) }}</span>
                       @elseif (v.suppressed)
                         {{-- Withheld, and the title says how far under the floor
                             it is. Splitting by device divides the sample count,
@@ -3426,7 +3503,7 @@ select.panel:hover { border-color: var(--accent); }
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Top countries --}}
-      <BreakdownPanel title="Top countries" :rows="countryRows" labelKey="country" displayKey="label" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." />
+      <BreakdownPanel title="Top countries" :rows="countryRows" labelKey="country" displayKey="label" valueKey="views" :max="maxCountry" filterKey="country" empty="No country data yet." :addFilterUrl="addFilterUrl" />
 
       {{-- Top regions. Server-side @if, not a :show, because a site that never
           opted in has no region column values at all and should not grow a
@@ -3439,7 +3516,7 @@ select.panel:hover { border-color: var(--accent); }
           "Other" row carries an empty `region`, so it filters to nothing rather
           than to a state — which is the point of it. --}}
       @if (regionGeo || cityGeo)
-        <BreakdownPanel :title="regionTitle" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." />
+        <BreakdownPanel :title="regionTitle" :rows="regionRows" labelKey="region" displayKey="label" valueKey="views" :max="maxRegion" filterKey="region" empty="No region data yet. If this stays empty, your server is running the country-level geo database, which carries no states or provinces." :addFilterUrl="addFilterUrl" />
       @endif
 
       {{-- Top cities. Server-side @if for the same reason as regions: a site that
@@ -3447,11 +3524,11 @@ select.panel:hover { border-color: var(--accent); }
           `filterKey="city"` matches the FILTERS entry, and the "Other" row
           carries an empty city so it filters to nothing. --}}
       @if (cityGeo)
-        <BreakdownPanel :title="cityTitle" :rows="cityRows" labelKey="city" displayKey="label" valueKey="views" :max="maxCity" filterKey="city" empty="No city data yet. If this stays empty, your server is running the country-level geo database, which carries no cities." />
+        <BreakdownPanel :title="cityTitle" :rows="cityRows" labelKey="city" displayKey="label" valueKey="views" :max="maxCity" filterKey="city" empty="No city data yet. If this stays empty, your server is running the country-level geo database, which carries no cities." :addFilterUrl="addFilterUrl" />
       @endif
 
       {{-- Devices --}}
-      <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." />
+      <BreakdownPanel title="Devices" :rows="devices" labelKey="device" valueKey="views" :max="maxDevice" filterKey="device" empty="No device data yet." :addFilterUrl="addFilterUrl" />
     </div>
 
     {{-- Visitors. Only for a site whose owner turned on "Remember returning
@@ -3484,10 +3561,10 @@ select.panel:hover { border-color: var(--accent); }
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- Browsers --}}
-      <BreakdownPanel title="Browsers" :rows="browsers" labelKey="browser" valueKey="views" :max="maxBrowser" filterKey="browser" empty="No browser data yet." />
+      <BreakdownPanel title="Browsers" :rows="browsers" labelKey="browser" valueKey="views" :max="maxBrowser" filterKey="browser" empty="No browser data yet." :addFilterUrl="addFilterUrl" />
 
       {{-- Operating systems --}}
-      <BreakdownPanel title="Operating systems" :rows="systems" labelKey="os" valueKey="views" :max="maxSystem" filterKey="os" empty="No OS data yet." />
+      <BreakdownPanel title="Operating systems" :rows="systems" labelKey="os" valueKey="views" :max="maxSystem" filterKey="os" empty="No OS data yet." :addFilterUrl="addFilterUrl" />
     </div>
 
     {{-- Referrer channels: Search / Social / Direct / Referral --}}
@@ -3644,16 +3721,16 @@ select.panel:hover { border-color: var(--accent); }
 
     <div class="grid gap-6 md:grid-cols-2 mt-6">
       {{-- UTM sources --}}
-      <BreakdownPanel title="Campaign sources" :rows="utmSources" labelKey="source" valueKey="views" :max="maxUtmSource" filterKey="utmsource" empty="No campaign source data yet." />
+      <BreakdownPanel title="Campaign sources" :rows="utmSources" labelKey="source" valueKey="views" :max="maxUtmSource" filterKey="utmsource" empty="No campaign source data yet." :addFilterUrl="addFilterUrl" />
 
       {{-- UTM mediums --}}
-      <BreakdownPanel title="Campaign mediums" :rows="utmMediums" labelKey="medium" valueKey="views" :max="maxUtmMedium" filterKey="utmmedium" empty="No campaign medium data yet." />
+      <BreakdownPanel title="Campaign mediums" :rows="utmMediums" labelKey="medium" valueKey="views" :max="maxUtmMedium" filterKey="utmmedium" empty="No campaign medium data yet." :addFilterUrl="addFilterUrl" />
 
       {{-- UTM content --}}
-      <BreakdownPanel title="Campaign content" :rows="utmContents" labelKey="content" valueKey="views" :max="maxUtmContent" filterKey="utmcontent" empty="No campaign content data yet." />
+      <BreakdownPanel title="Campaign content" :rows="utmContents" labelKey="content" valueKey="views" :max="maxUtmContent" filterKey="utmcontent" empty="No campaign content data yet." :addFilterUrl="addFilterUrl" />
 
       {{-- UTM terms --}}
-      <BreakdownPanel title="Campaign terms" :rows="utmTerms" labelKey="term" valueKey="views" :max="maxUtmTerm" filterKey="utmterm" empty="No campaign term data yet." />
+      <BreakdownPanel title="Campaign terms" :rows="utmTerms" labelKey="term" valueKey="views" :max="maxUtmTerm" filterKey="utmterm" empty="No campaign term data yet." :addFilterUrl="addFilterUrl" />
     </div>
 
     @else
@@ -4187,19 +4264,30 @@ select.panel:hover { border-color: var(--accent); }
   if (!host) return
 
   const totalsEl = document.querySelector('[data-country-totals]')
-  let totals = {}
+  let totals: Record<string, number> = {}
   try { totals = JSON.parse(totalsEl?.getAttribute('data-country-totals') || '{}') }
   catch (_) { return }
   const values = Object.values(totals)
   if (!values.length) return
   const max = Math.max.apply(null, values)
 
-  let TsMap, GeoJSON, EPSG4326, Marker, DivIcon, LayerGroup, world
+  let TsMap: TsMapsModule['TsMap']
+  let GeoJSON: TsMapsModule['GeoJSON']
+  let EPSG4326: TsMapsModule['EPSG4326']
+  let Marker: TsMapsModule['Marker']
+  let DivIcon: TsMapsModule['DivIcon']
+  let LayerGroup: TsMapsModule['LayerGroup']
+  let world: WorldGeometry
   try {
     // Loaded in parallel: 340KB of engine and 170KB of geometry, neither of
     // which blocks anything else on the page.
-    const [mod, geo] = await Promise.all([
-      import('/vendor/ts-maps.js'),
+    //
+    // `as string` widens the specifier, which is all it does: TypeScript cannot
+    // resolve a root-relative URL as a module, and a widened specifier makes it
+    // an ordinary runtime URL. The transpiled import is the same text. The module
+    // is typed by the annotation instead (types/vendor.d.ts).
+    const [mod, geo]: [TsMapsModule, WorldGeometry] = await Promise.all([
+      import('/vendor/ts-maps.js' as string),
       fetch('/vendor/world-countries.geojson').then(r => r.json()),
     ])
     ;({ TsMap, GeoJSON, EPSG4326, Marker, DivIcon, LayerGroup } = mod)
@@ -4225,8 +4313,8 @@ select.panel:hover { border-color: var(--accent); }
    * for these sites, and a linear ramp renders every other country as
    * indistinguishable near-black.
    */
-  function styleFor(t) {
-    return function (f) {
+  function styleFor(t: ReturnType<typeof tokens>): (f: WorldFeature) => object {
+    return function (f: WorldFeature) {
       const n = totals[f.id] || 0
       return {
         color: t.border,
@@ -4237,7 +4325,8 @@ select.panel:hover { border-color: var(--accent); }
     }
   }
 
-  let map, layer
+  let map: InstanceType<TsMapsModule['TsMap']>
+  let layer: InstanceType<TsMapsModule['GeoJSON']>
   try {
     map = new TsMap(host, {
       // Equirectangular. The Mercator default inflates Greenland and Russia to
@@ -4270,15 +4359,20 @@ select.panel:hover { border-color: var(--accent); }
   // country's tooltip and its row in the list below disagree on one screen.
   // Only countries with traffic are sent, so the geometry's own name is the
   // fallback for everything else -- those have no row to disagree with.
-  let serverNames = {}
+  let serverNames: Record<string, string> = {}
   try { serverNames = JSON.parse(totalsEl?.getAttribute('data-country-names') || '{}') }
   catch (_) { serverNames = {} }
-  const names = {}
+  const names: Record<string, string> = {}
   for (const f of world.features)
     names[f.id] = serverNames[f.id] || (f.properties && f.properties.name) || f.id
 
-  layer.eachLayer(function (l) {
-    const code = l.feature && l.feature.id
+  // One layer per feature. ts-maps types it as a bare Layer: `feature` is set on
+  // each by the GeoJSON layer, and bindTooltip is only present when the tooltip
+  // module is, which is why the body checks for it.
+  layer.eachLayer(function (l: InstanceType<TsMapsModule['Layer']> & { feature?: WorldFeature, bindTooltip?: (content: string, options?: object) => unknown }) {
+    // String() is what indexing and URLSearchParams did to it anyway; every
+    // feature in the vendored geometry carries a string id.
+    const code = String(l.feature && l.feature.id)
     const n = totals[code] || 0
     if (l.bindTooltip)
       l.bindTooltip(`${names[code] || code}: ${n.toLocaleString()}`, { sticky: true })
@@ -4303,14 +4397,14 @@ select.panel:hover { border-color: var(--accent); }
   //
   // The client block keeps [data-live-points] current from the live stream;
   // this only watches it, so a new visitor's dot appears within about a second.
-  const LIVE_FALLBACK = { SG: [1.35, 103.82], HK: [22.32, 114.17], MT: [35.9, 14.45], MC: [43.74, 7.42], BH: [26.07, 50.56], MO: [22.2, 113.55], LU: [49.61, 6.13], AD: [42.51, 1.52], LI: [47.16, 9.55], SM: [43.94, 12.46] }
-  const centroids = {}
+  const LIVE_FALLBACK: Record<string, [number, number]> = { SG: [1.35, 103.82], HK: [22.32, 114.17], MT: [35.9, 14.45], MC: [43.74, 7.42], BH: [26.07, 50.56], MO: [22.2, 113.55], LU: [49.61, 6.13], AD: [42.51, 1.52], LI: [47.16, 9.55], SM: [43.94, 12.46] }
+  const centroids: Record<string, [number, number]> = {}
   for (const f of world.features) {
     const g = f.geometry
     if (!g)
       continue
     const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []
-    let best = null
+    let best: [number, number] | null = null
     let bestArea = 0
     for (const poly of polys) {
       const ring = poly[0] || []
@@ -4341,7 +4435,7 @@ select.panel:hover { border-color: var(--accent); }
   function drawLive() {
     if (!dots || !Marker || !DivIcon)
       return
-    let live = []
+    let live: Array<{ country: string, label?: string, visitors: number, at?: [number, number] | null }> = []
     try { live = JSON.parse(liveEl?.getAttribute('data-live-points') || '[]') }
     catch (_) { live = [] }
     dots.clearLayers()
@@ -4353,7 +4447,7 @@ select.panel:hover { border-color: var(--accent); }
       const size = Math.round(9 + 7 * Math.sqrt((Number(l.visitors) || 0) / top))
       const place = l.label || names[l.country] || serverNames[l.country] || l.country
       const who = `${place}: ${l.visitors} online now`
-      const pin = new Marker(at, {
+      const pin: InstanceType<TsMapsModule['Marker']> & { bindTooltip?: (content: string) => unknown } = new Marker(at, {
         icon: new DivIcon({ className: 'live-pin', html: '<i></i>', iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
         keyboard: false,
         title: who,

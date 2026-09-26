@@ -8,7 +8,19 @@
   The two optional blocks are `c.sectionIntro` (a paragraph under the "where we go
   further" heading) and `c.aside` (an honest note on what the competitor does
   better, between the grid and that heading). Only three pages carry either.
---}}
+
+  A component rather than an @include partial so that both inputs are declared.
+  A partial reads whatever its includer happens to have in scope, which nothing
+  checks; declared props are checked at every <ComparePage> tag by
+  `bun run typecheck:views`.
+
+  The script block starts on this comment's closing line on purpose: stx drops
+  both, and a block on its own line would leave one more newline in the page.
+--}}<script server>
+import type { Competitor, Crumb } from '../data/competitors'
+
+const { c, crumbs } = defineProps<{ c: Competitor, crumbs: Crumb[] }>()
+</script>
 @include('breadcrumbs', { crumbs })
 
 <section class="feat-hero shell">

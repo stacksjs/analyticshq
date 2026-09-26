@@ -9,8 +9,10 @@
     `rows` is the server-side array and `max` the bar denominator, both passed with
     `:` so they arrive as values rather than strings. `labelKey`/`valueKey` are field
     names on each row, so one component serves collections with different shapes.
-    `addFilterUrl` is NOT a prop -- it is the parent view's server function, and it
-    stays callable inside a component's scope.
+    `addFilterUrl` is the parent view's server function, passed in the same way. It
+    used to be read from the parent's scope, which a component can see at render
+    time but which nothing declared; as a prop, every call site is checked against
+    the signature below.
 
     `displayKey` is optional and changes only what is RENDERED. Where a row's stored
     value and its readable form differ -- country, which is stored as an ISO code and
@@ -19,7 +21,34 @@
     to `labelKey` and the eight other panels are unaffected.
 
     Panels carrying more than one metric (Top pages, Entry/Exit pages) keep their own
-    markup; folding a variable metric list in here would cost more than it saves. --}}
+    markup; folding a variable metric list in here would cost more than it saves.
+
+    The script block starts on the comment's closing line on purpose: stx drops
+    both, and a block on its own line would leave one more newline in the page. --}}<script server>
+/** Any breakdown row: the panel reads its fields by name, through the keys below. */
+type BreakdownRow = { [field: string]: string | number | null | undefined }
+
+interface BreakdownPanelProps {
+  title: string
+  rows: BreakdownRow[]
+  /** The field whose value the filter link carries. */
+  labelKey: string
+  /** The field rendered as the label, when it differs from labelKey. */
+  displayKey?: string
+  valueKey: string
+  /** The bar denominator: the largest value in the panel, or 1. */
+  max: number
+  /** The filter this panel's rows apply, e.g. `source` or `country`. */
+  filterKey: string
+  /** What the panel says when there are no rows. */
+  empty: string
+  /** Set the label in the mono face. */
+  mono?: boolean
+  addFilterUrl: (key: string, value: string | number | null | undefined) => string
+}
+
+const { title, rows, labelKey, displayKey, valueKey, max, filterKey, empty, mono, addFilterUrl } = defineProps<BreakdownPanelProps>()
+</script>
 <div class="p-5 panel reveal">
   <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">{{ title }}</h2>
   @forelse (rows as row)

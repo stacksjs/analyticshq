@@ -8,11 +8,9 @@
  * loader DELETES every single-line import before transpiling, so a store that imported
  * its types would look correct in the editor and lose them at runtime.
  *
- * Worth knowing what these are worth: tsc cannot see inside .stx, so an annotation
- * written in a <script server> block is erased by the transpiler and verified by
- * nothing. Only .ts files on the tsconfig include path -- types/ and
- * resources/stores/ -- are actually checked. Treat a wrong annotation in a .stx file
- * as a real defect; no compiler will catch it for you.
+ * tsc cannot see inside .stx. The templates are checked against this file by
+ * `bun run typecheck:views` instead, which hands it to `stx typecheck` with `--lib`
+ * (and runs in CI beside tsc), so an annotation in a .stx block is verified too.
  */
 
 /** The authenticated user as /api/me returns it. */

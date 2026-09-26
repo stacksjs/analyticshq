@@ -18,18 +18,21 @@ import { timelinesEnabled, visitorTimeline } from '../../app/Analytics/visitors'
 import { channelOf, fmtDuration } from '../../app/Support/dashboard-format'
 import { clockMs, gap, money, placeLabel, plural, stampSeconds, timeAgo, visitorLabel } from '../../app/Support/visitor-format'
 import { TZ_COOKIE, validTimeZone } from '../../app/Support/timezone'
+import { text } from '../../app/Support/rows'
+import type { SiteRole } from '../../app/Analytics/access'
+import type { TimelineItem, VisitorTimeline } from '../../app/Analytics/visitors'
 
 // `query` is injected per render, the way the dashboard reads it. Guarded, since
-// a standalone render injects nothing.
-const queryParams = typeof query !== 'undefined' ? query : {}
+// a standalone render injects nothing, and annotated because stx types it `any`.
+const queryParams: Record<string, string | undefined> = typeof query !== 'undefined' ? query : {}
 const siteParam = String(queryParams.site ?? '')
 const idParam = String(queryParams.id ?? '')
 
 let authed = false
 let view = 'forbidden'
-let role = null
+let role: SiteRole | null = null
 let siteName = ''
-let timeline = null
+let timeline: VisitorTimeline | null = null
 
 const authToken = (typeof cookies !== 'undefined' ? cookies['auth-token'] : '') || ''
 if (authToken) {
@@ -47,7 +50,7 @@ if (authToken) {
           domain = (JSON.parse(String(site?.domains || '[]')) || [])[0] || ''
         }
         catch {}
-        siteName = domain || site?.name || siteParam
+        siteName = domain || text(site?.name) || siteParam
         if (!(await timelinesEnabled(siteParam)))
           view = 'off'
         else {
@@ -85,7 +88,7 @@ const summary = timeline
       pageviews: plural(timeline.totals.pageviews, 'page view'),
       events: plural(timeline.totals.events, 'event'),
       conversions: plural(timeline.totals.conversions, 'conversion'),
-      revenue: timeline.totals.revenue_minor ? money(timeline.totals.revenue_minor, timeline.visits.flatMap(v => v.items).find(i => i.kind === 'conversion' && i.currency)?.currency) : '',
+      revenue: timeline.totals.revenue_minor ? money(timeline.totals.revenue_minor, timeline.visits.flatMap(v => v.items).find((i): i is Extract<TimelineItem, { kind: 'conversion' }> => i.kind === 'conversion' && !!i.currency)?.currency) : '',
       firstSource: timeline.visits[0]?.source || 'Direct',
       places: [...new Set(timeline.visits.map(v => placeLabel(v.country, v.city)))].join(', '),
       tech: [...new Set(timeline.visits.map(v => [v.device, v.browser, v.os].filter(Boolean).join(' · ')).filter(Boolean))].join(', '),
@@ -227,7 +230,10 @@ async function eraseThisVisitor(): Promise<void> {
         <h1 class="mb-2 font-semibold text-lg">This visitor could not be loaded</h1>
         <p class="text-sm text-text-2">Something went wrong reading the data. Try again in a moment.</p>
       </div>
-    @else
+    {{-- `view` is 'ok' by now, which is exactly when there is a summary. Said as
+        the condition rather than a bare @else so the markup below is checked
+        against a summary that exists. --}}
+    @elseif (summary)
       <section class="mb-6 p-6 panel" data-visitor-summary>
         <div class="flex flex-wrap gap-4 items-start justify-between">
           <div>

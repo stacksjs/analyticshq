@@ -1,5 +1,5 @@
 <script server>
-import { competitors, crumbsFor } from '../data/competitors'
+import { competitors, crumbsFor } from '../../data/competitors'
 
 const c = competitors.plausible
 const crumbs = crumbsFor(c)
@@ -10,5 +10,5 @@ useSeoMeta(c.meta)
 @extends('marketing')
 
 @section('content')
-      @include('compare-page', { c, crumbs })
+      <ComparePage :c="c" :crumbs="crumbs" />
 @endsection

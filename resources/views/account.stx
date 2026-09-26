@@ -21,6 +21,10 @@ if (authToken) {
   }
   catch { authed = false }
 }
+
+// The one value the client block reads. Declared rather than left to the implicit
+// bridge, which scraped the same name but handed it over untyped.
+defineClientPayload({ authed })
 </script>
 
 <script client>

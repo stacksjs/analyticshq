@@ -323,12 +323,12 @@ describe('the promise the site makes', () => {
     // This feature was in the mega-menu, the footer, the homepage and a full
     // feature page for weeks with no implementation behind it. This test is what
     // makes deleting the implementation break something.
-    expect(read('resources/partials/site-nav.stx')).toContain('/features/web-vitals')
+    expect(read('resources/components/SiteNav.stx')).toContain('/features/web-vitals')
     expect(code('public/script.js')).toContain('PerformanceObserver')
   })
 
   test('the three metrics named in the nav copy are the three we collect', () => {
-    const nav = read('resources/partials/site-nav.stx')
+    const nav = read('resources/components/SiteNav.stx')
     expect(nav).toContain('LCP, INP, and CLS')
     const metrics: readonly string[] = VITAL_METRICS
     for (const metric of ['LCP', 'INP', 'CLS'])
