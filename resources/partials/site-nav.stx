@@ -56,8 +56,16 @@
       <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
     </div>
 
-    <StxLink to="/login" class="nav-login">Log in</StxLink>
-    <StxLink to="/register" class="btn nav-cta primary sm">Sign up</StxLink>
+    {{-- Signed in or not, from the session the marketing layout resolves (stx's
+        @auth reads auth.check). A signed-in reader is offered their dashboard,
+        not a sign-in form they would only be bounced back from. --}}
+    @auth
+      <StxLink to="/account" class="nav-login" title="Signed in as {{ auth.user.email }}">Account</StxLink>
+      <StxLink to="/dashboard" class="btn nav-cta primary sm">Dashboard</StxLink>
+    @else
+      <StxLink to="/login" class="nav-login">Log in</StxLink>
+      <StxLink to="/register" class="btn nav-cta primary sm">Sign up</StxLink>
+    @endauth
 
     <details class="nav-menu">
       <summary aria-label="Open menu"><span class="burger" aria-hidden="true"></span></summary>
@@ -85,8 +93,13 @@
         <StxLink to="/compare" activeClass="nav-current">Compare</StxLink>
         <StxLink to="/docs" activeClass="nav-current">Docs</StxLink>
         <a href="https://github.com/stacksjs/analyticshq">GitHub</a>
-        <StxLink to="/login">Log in</StxLink>
-        <StxLink to="/register" class="btn primary sm">Sign up</StxLink>
+        @auth
+          <StxLink to="/account">Account</StxLink>
+          <StxLink to="/dashboard" class="btn primary sm">Dashboard</StxLink>
+        @else
+          <StxLink to="/login">Log in</StxLink>
+          <StxLink to="/register" class="btn primary sm">Sign up</StxLink>
+        @endauth
       </div>
     </details>
   </div>

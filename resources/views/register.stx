@@ -1,4 +1,11 @@
 <script server>
+// Signed in already? Then this page offers the dashboard rather than a form
+// (see the @auth block below). stx's @auth reads `auth`; the shared helper
+// resolves it from the session cookie (app/Support/session.ts).
+import { sessionFrom } from '../../app/Support/session'
+
+const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
+
 useSeoMeta({
   title: "Create your account - analyticshq",
   // Auth-walled. Without this these pages were advertised as indexable while
@@ -61,6 +68,17 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 @extends('auth')
 
 @section('content')
+@auth
+<div class="max-w-sm w-full text-center" data-signed-in>
+  <StxLink to="/" class="text-2xl wordmark">analyticshq</StxLink>
+  <p class="mt-6 text-sm text-text-2">You are signed in as <span class="font-medium text-text">{{ auth.user.email }}</span>.</p>
+  <div class="flex flex-col gap-2.5 mt-6">
+    <StxLink to="/dashboard" class="py-2.5 w-full font-semibold text-sm btn">Go to your dashboard</StxLink>
+    <StxLink to="/account" class="py-2.5 w-full font-medium text-sm oauth-btn">Account</StxLink>
+  </div>
+  <p class="mt-5 text-text-3 text-xs">To create an account with a different account, log out from your account page first.</p>
+</div>
+@else
 <div class="max-w-sm w-full">
   <div class="mb-8 text-center">
     <StxLink to="/" class="text-2xl wordmark">analyticshq</StxLink>
@@ -108,4 +126,5 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     <StxLink to="/login" class="font-medium text-accent">Sign in</StxLink>
   </p>
 </div>
+@endauth
 @endsection

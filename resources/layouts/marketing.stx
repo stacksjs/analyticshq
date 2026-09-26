@@ -21,6 +21,17 @@
     and the app shell makes the router do a full-document swap, which is the only
     path that carries stylesheet links across a navigation. --}}
 
+<script server>
+// Who is signed in, for the nav's @auth / @guest directives, which read
+// `auth.check` and `auth.user` from the render context. Nothing fills that in
+// on its own, so the layout does it once for every marketing page, through the
+// shared helper (app/Support/session.ts). These pages render per request
+// (Cache-Control: no-store), so one reader's nav is never served to another.
+import { sessionFrom } from '../../app/Support/session'
+
+const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
+</script>
+
 @head
 {{-- Marketing-only. Deliberately NOT in config/ui.ts app.head, which is global and
     would push these onto the 5 app/auth pages that intentionally do without them. --}}
