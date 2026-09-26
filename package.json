@@ -86,8 +86,8 @@
   "dependencies": {
     "@bughq/stacks": "^0.2.2",
     "@loghq/stacks": "^0.2.6",
-    "@stacksjs/buddy": "^0.74.66",
-    "@stacksjs/logging": "^0.74.66",
+    "@stacksjs/buddy": "^0.75.0",
+    "@stacksjs/logging": "^0.75.0",
     "@stacksjs/stx": "^0.2.287",
     "@stacksjs/ts-cloud": "^0.16.11",
     "@ts-analytics/tracking": "^0.1.15",
