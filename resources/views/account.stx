@@ -120,7 +120,7 @@ onMount(() => {
 .btn-ghost { border: 1px solid var(--border); color: var(--text); }
 .btn-ghost:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .badge { border: 1px solid var(--border); border-radius: 999px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); }
-.badge-pro { border-color: var(--accent); color: var(--accent); }
+.badge-pro { border-color: var(--accent); color: var(--accent-text); }
 .avatar { border-radius: 999px; object-fit: cover; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 .row { border-top: 1px solid var(--border); }
 .skeleton { background: color-mix(in srgb, var(--text-3) 20%, transparent); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
@@ -134,6 +134,7 @@ onMount(() => {
   <header class="flex items-center justify-between mx-auto px-5 md:px-6 h-16 max-w-3xl">
     <StxLink to="/" class="text-lg wordmark">analyticshq</StxLink>
     <div class="flex gap-2.5 items-center">
+      <ThemeToggle />
       @if (authed)
         <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
         <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
@@ -163,7 +164,7 @@ onMount(() => {
         @if (avatarUrl())
           <img class="h-14 w-14 avatar" :src="avatarUrl()" alt="" width="56" height="56">
         @else
-          <div class="grid place-items-center h-14 w-14 avatar" style="color: var(--accent); font-weight: 700; font-size: 1.25rem">{{ initialCh() }}</div>
+          <div class="grid place-items-center h-14 w-14 avatar" style="color: var(--accent-text); font-weight: 700; font-size: 1.25rem">{{ initialCh() }}</div>
         @endif
         <div class="min-w-0">
           @if (loaded())

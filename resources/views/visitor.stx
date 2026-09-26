@@ -177,7 +177,7 @@ async function eraseThisVisitor(): Promise<void> {
 .btn { border-radius: 10px; border: 1px solid var(--border); color: var(--text); font-weight: 600; transition: border-color 0.15s ease, transform 0.12s ease; }
 .btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
 .btn:active { transform: translateY(1px); }
-.btn-danger:hover { border-color: #d14b4b; color: #d14b4b; }
+.btn-danger:hover { border-color: var(--bad); color: var(--bad); }
 .stat-label { color: var(--text-3); font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
 .visit + .visit { margin-top: 12px; }
 .step { border-left: 1px solid var(--border); }
@@ -198,10 +198,13 @@ async function eraseThisVisitor(): Promise<void> {
           <span class="text-sm text-text-3 truncate">{{ siteName }}</span>
         @endif
       </div>
-      <StxLink to="{{ dashboardHref }}" class="flex gap-1.5 items-center px-3 py-1.5 text-sm btn">
-        <i class="i-hugeicons-arrow-left-01" aria-hidden="true"></i>
-        Back to dashboard
-      </StxLink>
+      <div class="flex gap-2.5 items-center">
+        <ThemeToggle />
+        <StxLink to="{{ dashboardHref }}" class="flex gap-1.5 items-center px-3 py-1.5 text-sm btn">
+          <i class="i-hugeicons-arrow-left-01" aria-hidden="true"></i>
+          Back to dashboard
+        </StxLink>
+      </div>
     </header>
 
     @if (!authed)
@@ -249,7 +252,7 @@ async function eraseThisVisitor(): Promise<void> {
             </button>
           @endif
         </div>
-        <p class="mt-3 text-sm" :show="eraseMsg()" style="display:none; color:#d14b4b">{{ eraseMsg() }}</p>
+        <p class="mt-3 text-sm" :show="eraseMsg()" style="display:none; color:var(--bad)">{{ eraseMsg() }}</p>
 
         <div class="grid gap-4 grid-cols-2 md:grid-cols-4 mt-6">
           <div>

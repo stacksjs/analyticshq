@@ -1,0 +1,22 @@
+{{-- Light / dark toggle for the app and auth pages, which had none: only the
+    marketing nav and the dashboard header could switch, so a reader on /account,
+    a visitor profile or /login was stuck with whatever those left behind.
+
+    Drives the same store as the other two (resources/stores/theme.ts), so a choice
+    made anywhere carries everywhere. Which glyph shows is keyed off <html
+    data-theme>, which the pre-paint boot has already written, so the button never
+    shows the wrong icon while hydration catches up. The .theme-toggle-btn rules
+    live in the app and auth layouts, next to the tokens they read.
+
+    The script block starts on this comment's closing line on purpose: stx drops
+    both, and a block on its own line would leave one more newline in the page. --}}<script client>
+const theme = useStore('theme') as { toggle: () => void }
+
+function toggleTheme(): void {
+  theme.toggle()
+}
+</script>
+<button type="button" class="theme-toggle-btn" @click="toggleTheme" aria-label="Toggle light or dark theme" title="Toggle theme">
+  <i class="i-hugeicons-sun-03 ic-sun" aria-hidden="true"></i>
+  <i class="i-hugeicons-moon-02 ic-moon" aria-hidden="true"></i>
+</button>

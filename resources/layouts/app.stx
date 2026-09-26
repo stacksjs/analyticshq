@@ -33,22 +33,45 @@
 /* analyticshq - Geist display + Geist Mono for numerics.
   One accent (emerald), off-black/off-white, auto light+dark, radius lock 12px. */
 :root {
+  color-scheme: light;
   --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
   --text: #0b1220; --text-2: #4b5563; --text-3: #667085; --accent: #059669; --accent-ink: #04120d; --bar: rgba(5,150,105,0.16);
+  --accent-text: #047857; --good: #047857; --bad: #c93434; --warn: #b45309;
   --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
   --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+/* --accent is a fill: behind --accent-ink it clears 4.5:1, but as small text on
+  the light page it is 3.6:1, so text in the accent colour uses --accent-text.
+  --good / --bad / --warn are the delta, error and warning colours, which were
+  Tailwind 500s written inline and read at 2-4:1 on the light palette. Each
+  clears 4.5:1 on --bg and --panel in its own theme. color-scheme makes the
+  native controls (the site switcher, date inputs, checkboxes, scrollbars) match
+  the page instead of staying light on the dark palette. */
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-    --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #7b879a; --accent: #34d399; --accent-ink: #04120d; --bar: rgba(52,211,153,0.18); }
+  :root { color-scheme: dark; --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
+    --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #7b879a; --accent: #34d399; --accent-ink: #04120d; --bar: rgba(52,211,153,0.18);
+    --accent-text: #34d399; --good: #34d399; --bad: #f87171; --warn: #fbbf24; }
 }
-:root[data-theme="dark"] { --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
-  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #7b879a; --accent: #34d399; --accent-ink: #04120d; --bar: rgba(52,211,153,0.18); }
-:root[data-theme="light"] { --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
-  --text: #0b1220; --text-2: #4b5563; --text-3: #667085; --accent: #059669; --accent-ink: #04120d; --bar: rgba(5,150,105,0.16); }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
+  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #7b879a; --accent: #34d399; --accent-ink: #04120d; --bar: rgba(52,211,153,0.18);
+  --accent-text: #34d399; --good: #34d399; --bad: #f87171; --warn: #fbbf24; }
+:root[data-theme="light"] { color-scheme: light; --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
+  --text: #0b1220; --text-2: #4b5563; --text-3: #667085; --accent: #059669; --accent-ink: #04120d; --bar: rgba(5,150,105,0.16);
+  --accent-text: #047857; --good: #047857; --bad: #c93434; --warn: #b45309; }
 
 body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
 .wordmark { font-weight: 700; letter-spacing: -0.03em; }
+/* ThemeToggle (resources/components/ThemeToggle.stx). Shows the theme you would
+  switch TO: a sun on dark, a moon on light, keyed off the data-theme the
+  pre-paint boot writes. */
+.theme-toggle-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text-2); cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease; }
+.theme-toggle-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.theme-toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle-btn i { width: 1rem; height: 1rem; }
+.theme-toggle-btn .ic-moon, :root[data-theme="light"] .theme-toggle-btn .ic-sun { display: none; }
+:root[data-theme="light"] .theme-toggle-btn .ic-moon { display: block; }
 </style>
 @stack('styles')
 @endhead

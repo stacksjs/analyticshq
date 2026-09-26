@@ -3161,7 +3161,7 @@ select.panel:hover { border-color: var(--accent); }
             <div class="mb-2 font-medium text-text-3 text-xs tracking-wider uppercase kpi-label">{{ kpi.label }}</div>
             <div class="font-semibold text-3xl tracking-tight kpi-value mono">{{ kpi.value }}</div>
             @if (kpi.delta !== null)
-              <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? '#10b981' : '#ef4444' }}">
+              <div class="mt-1.5 font-medium text-xs mono" style="color: {{ (kpi.delta >= 0) === kpi.goodUp ? 'var(--good)' : 'var(--bad)' }}">
                 {{ kpi.delta >= 0 ? '▲' : '▼' }} {{ Math.abs(kpi.delta) }}% <span class="text-text-3">vs prev</span>
               </div>
             @endif
@@ -3290,7 +3290,7 @@ select.panel:hover { border-color: var(--accent); }
             {{-- Said out loud rather than left to be assumed. Vitals are stored
                 with the metric, the path and the time and nothing else, so there
                 is no dimension for the active filter to narrow. --}}
-            · <span style="color: #f59e0b">not affected by the active filter</span>
+            · <span style="color: var(--warn)">not affected by the active filter</span>
           @endif
         </span>
       </div>
@@ -3387,7 +3387,7 @@ select.panel:hover { border-color: var(--accent); }
           <span class="text-text-3 text-xs">
             from Google Search Console
             @if (vitalsFiltered)
-              · <span style="color: #f59e0b">not affected by the active filter</span>
+              · <span style="color: var(--warn)">not affected by the active filter</span>
             @endif
           </span>
         </div>
@@ -3651,7 +3651,7 @@ select.panel:hover { border-color: var(--accent); }
         <input name="value" type="number" step="any" placeholder="Value" aria-label="Goal value" style="width:80px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font:500 13px/1.2 var(--sans,ui-sans-serif)">
         <button type="submit" :disabled="goalBusy()" style="padding:7px 13px;border-radius:8px;border:0;background:var(--accent);color:var(--accent-ink);font:600 13px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
-      <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:#ef4444">{{ goalError() }}</div>
+      <div class="mt-2 text-xs" :show="goalError()" style="display:none;color:var(--bad)">{{ goalError() }}</div>
       @endif
     </div>
 
@@ -3988,7 +3988,7 @@ select.panel:hover { border-color: var(--accent); }
               import that reads as a clean one becomes a mystery traffic drop
               months later. --}}
           <div class="mt-3" :show="gaWarnings().length" style="display:none">
-            <div x-for="w in gaWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, #f59e0b 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
+            <div x-for="w in gaWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
           </div>
 
           <p class="mt-4 text-text-3 text-xs">
@@ -4074,7 +4074,7 @@ select.panel:hover { border-color: var(--accent); }
                 line, for the same reason as the GA panel: a partial import that
                 reads as a clean one becomes a mystery traffic drop months later. --}}
             <div class="mt-3" :show="fathomWarnings().length" style="display:none">
-              <div x-for="w in fathomWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, #f59e0b 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
+              <div x-for="w in fathomWarnings()" class="mb-1.5 px-3 py-2 text-xs" style="border-radius:8px;border:1px solid color-mix(in srgb, var(--warn) 40%, var(--border)); color: var(--text-2)">{{ w }}</div>
             </div>
 
             <p class="mt-4 text-text-3 text-xs">
