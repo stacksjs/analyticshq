@@ -73,3 +73,23 @@ describe('the schema differ cannot drop a migrated column', () => {
       expect(stmt).toMatch(/IF NOT EXISTS/)
   })
 })
+
+describe('the schema differ cannot narrow a column either', () => {
+  // Without `type`, the differ infers a column from its validation rule: a
+  // number becomes `integer`, an unbounded string `varchar(255)`. These three
+  // are `bigint` and `text` in production, and stacks 0.75 planned to change
+  // them to the inferred types, which would overflow money amounts and
+  // truncate event properties. The deploy's destructive-change gate refused it.
+  const pinned: Array<[string, string, string]> = [
+    ['Goal.ts', 'default_amount_minor', 'bigint'],
+    ['Conversion.ts', 'amount_minor', 'bigint'],
+    ['CustomEvent.ts', 'properties', 'text'],
+  ]
+
+  for (const [file, column, type] of pinned) {
+    test(`${column} is declared ${type}`, () => {
+      const src = readFileSync(join(MODELS, file), 'utf8')
+      expect(src).toMatch(new RegExp(`\\b${column}: \\{[^}]*type: '${type}'`))
+    })
+  }
+})

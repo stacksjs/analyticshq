@@ -32,7 +32,9 @@ export default defineModel({
     name: { fillable: true, validation: { rule: schema.string().required().max(128) } },
     category: { fillable: true, validation: { rule: schema.string().optional().max(64) } },
     value: { fillable: true, validation: { rule: schema.number().optional() } },
-    properties: { fillable: true, validation: { rule: schema.string().optional() } },
+    // text, as the column is: serialized event properties have no 255-char
+    // bound, and a varchar(255) would truncate them.
+    properties: { fillable: true, type: 'text', validation: { rule: schema.string().optional() } },
     path: { fillable: true, validation: { rule: schema.string().optional() } },
     timestamp: { fillable: true, validation: { rule: schema.string().required().max(32) } },
   },

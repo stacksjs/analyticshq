@@ -37,7 +37,10 @@ export default defineModel({
     // deploy dropped them from production and every query naming them failed.
     // bigint: minor units can exceed 32 bits, and a max past 2^31 is how the
     // differ is told so.
-    default_amount_minor: { fillable: true, validation: { rule: schema.number().optional().max(Number.MAX_SAFE_INTEGER) } },
+    // bigint, as the column is (migration 45): a money amount in minor units
+    // outgrows 32 bits. Without `type` the differ infers from the rule, and
+    // stacks 0.75 proposed narrowing it, which the deploy refused.
+    default_amount_minor: { fillable: true, type: 'bigint', validation: { rule: schema.number().optional().max(Number.MAX_SAFE_INTEGER) } },
     currency: { fillable: true, validation: { rule: schema.string().optional().max(3) } },
     is_active: { fillable: true, validation: { rule: schema.boolean().optional() }, factory: () => true },
   },
