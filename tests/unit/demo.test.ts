@@ -101,6 +101,21 @@ describe('the demo link', () => {
     expect(readFileSync(join(root, 'resources/data/competitors.ts'), 'utf8')).toContain('to: DEMO_DASHBOARD_PATH')
   })
 
+  test('a run that dies halfway is rebuilt, not mistaken for done', () => {
+    // The first production run was stopped partway, after the old seeder had
+    // already recorded demo_version, so the next run would have treated a
+    // partial year as complete. The version is now written after the rows.
+    const seeder = readFileSync(join(root, 'database/seeders/DemoSiteSeeder.ts'), 'utf8')
+    const code = seeder.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const lastWrite = code.lastIndexOf('SearchQuery.createMany')
+    const versionWrite = code.indexOf('demo_version: DEMO_VERSION')
+    expect(lastWrite).toBeGreaterThan(-1)
+    // Only recorded up front when it is already true, i.e. on an incremental run.
+    expect(code).toContain('...(full ? {} : { demo_version: DEMO_VERSION })')
+    expect(code.lastIndexOf('demo_version: DEMO_VERSION')).toBeGreaterThan(lastWrite)
+    expect(versionWrite).toBeGreaterThan(-1)
+  })
+
   test('the scheduler keeps it current', () => {
     const scheduler = readFileSync(join(root, 'app/Scheduler.ts'), 'utf8')
     expect(scheduler).toContain('seed --only-seeders DemoSiteSeeder --skip-models')

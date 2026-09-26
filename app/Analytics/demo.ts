@@ -41,7 +41,7 @@ export const DEMO_DAYS = 365
  * Bump when the generator changes shape. The seeder stores it on the site and
  * rebuilds every day when it differs, instead of only the last two.
  */
-export const DEMO_VERSION = 1
+export const DEMO_VERSION = 2
 
 export interface DemoGoal {
   id: string

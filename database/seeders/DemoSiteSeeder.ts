@@ -66,13 +66,19 @@ export default class DemoSiteSeeder extends Seeder {
     // The site first: every table below references it. No owner and no
     // members, so it is in nobody's site switcher; the share token in every
     // demo link is the only way in.
+    //
+    // demo_version is recorded only once the traffic is written (below). A
+    // run that dies halfway must leave the next one rebuilding the year, not
+    // mistaking a partial year for a finished one.
+    const kept = { ...settings }
+    delete kept.demo_version
     await Site.updateOrCreate({ id: DEMO_SITE_ID }, {
       name: DEMO_HOSTNAME,
       domains: JSON.stringify([`https://${DEMO_HOSTNAME}`]),
       timezone: 'UTC',
       currency: 'USD',
       is_active: true,
-      settings: JSON.stringify({ ...settings, share_token: DEMO_SHARE_TOKEN, demo_version: DEMO_VERSION }),
+      settings: JSON.stringify({ ...kept, share_token: DEMO_SHARE_TOKEN, ...(full ? {} : { demo_version: DEMO_VERSION }) }),
     })
     for (const { id, ...goal } of DEMO_GOALS)
       await Goal.updateOrCreate({ id }, { ...goal, site_id: DEMO_SITE_ID, is_active: true })
@@ -92,16 +98,28 @@ export default class DemoSiteSeeder extends Seeder {
       await Session.where('site_id', DEMO_SITE_ID).where('started_at', operator, stamp).delete()
     }
 
-    const days = []
-    for (let ago = from; ago >= 0; ago--)
-      days.push(buildDemoDay(now, ago))
+    // A day at a time, parents before children, so the seeder never holds
+    // more than a day of rows. The statements themselves are bounded by
+    // bun-query-builder 0.3.2: createMany writes power-of-two batches of at
+    // most 4096 parameters. Before that, a year of variously sized batches
+    // was over a thousand distinct statements, each cached as a prepared
+    // statement on the connection, and the Postgres backend holding them grew
+    // past a gigabyte. On production it shares a cgroup capped at 512MB with
+    // every other app's database, and it stalled all of them.
+    for (let ago = from; ago >= 0; ago--) {
+      const day = buildDemoDay(now, ago)
+      await Session.createMany(day.sessions)
+      await PageView.createMany(day.pageViews)
+      await CustomEvent.createMany(day.events)
+      await Conversion.createMany(day.conversions)
+      await WebVital.createMany(day.vitals)
+      await SearchQuery.createMany(day.searchQueries)
+    }
 
-    // Parents before children.
-    await Session.createMany(days.flatMap(d => d.sessions))
-    await PageView.createMany(days.flatMap(d => d.pageViews))
-    await CustomEvent.createMany(days.flatMap(d => d.events))
-    await Conversion.createMany(days.flatMap(d => d.conversions))
-    await WebVital.createMany(days.flatMap(d => d.vitals))
-    await SearchQuery.createMany(days.flatMap(d => d.searchQueries))
+    if (full) {
+      await Site.updateOrCreate({ id: DEMO_SITE_ID }, {
+        settings: JSON.stringify({ ...kept, share_token: DEMO_SHARE_TOKEN, demo_version: DEMO_VERSION }),
+      })
+    }
   }
 }
