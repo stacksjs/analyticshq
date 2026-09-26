@@ -2869,12 +2869,15 @@ select.panel:hover { border-color: var(--accent); }
   these rules restate it in the same chrome as .ga-tip below, so the map and the
   traffic chart answer a hover the same way. */
 /* The sea. ts-maps paints its container with --tsmap-tile-bg, a light grey
-  matched to a light basemap, and on init it calls
-  style.removeProperty('background-color') on that same element -- which wipes
-  the inline background:var(--bg) the markup sets. So in dark mode the map sat
-  in a pale grey slab. Pointing the engine's own token at ours fixes both
+  matched to a light basemap, so in dark mode the map sat in a pale grey slab.
+  (Before 0.3.15 it also removed the inline background:var(--bg) the markup
+  sets on the first zoom.) Pointing the engine's own token at ours fixes both
   themes, and a theme flip needs no script because it is plain CSS. */
 #country-map.tsmap-container { --tsmap-tile-bg: var(--bg); background: var(--bg); }
+/* Land with no visits, and the base every visited country's fill is mixed from
+  (styleFor in the map script). A step off the sea toward the text colour, so
+  it reads as land on either palette. */
+#country-map { --map-land: color-mix(in srgb, var(--text) 8%, var(--bg)); }
 
 #country-map .tsmap-tooltip {
   padding: 6px 9px; border-radius: 8px;
@@ -4303,62 +4306,28 @@ select.panel:hover { border-color: var(--accent); }
   }
   catch (_) { return }
 
-  // Read the theme tokens rather than hardcoding hex: the palette is defined once
-  // in resources/layouts/app.stx and flips on [data-theme]. ts-maps takes colors
-  // as JS options and has no CSS-variable support of its own, so unlike the
-  // hand-rolled traffic chart these have to be resolved and re-applied by hand.
-  function tokens() {
-    const s = getComputedStyle(document.documentElement)
-    const read = (name: string, fallback: string): string => s.getPropertyValue(name).trim() || fallback
-    return {
-      accent: read('--accent', '#059669'),
-      bg: read('--bg', '#fbfbfc'),
-      text: read('--text', '#0b1220'),
-    }
-  }
-
-  // Every fill is a solid colour mixed from the tokens, not the accent at some
-  // opacity. A translucent fill blends with whatever is behind the polygon --
-  // the page background, in dark mode near-black -- so a country with a few
-  // visits rendered darker than one with none. Mixing toward a land colour keeps
-  // the ramp monotonic in both themes.
-  // Hex (how the tokens are written) or rgb() (what mix() itself returns, so a
-  // mixed colour can be mixed again).
-  function rgbOf(color: string): [number, number, number] | null {
-    const rgb = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(color)
-    if (rgb)
-      return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])]
-    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color)
-    if (!m)
-      return null
-    const h = m[1].length === 3 ? m[1].replace(/./g, c => c + c) : m[1]
-    return [0, 2, 4].map(i => Number.parseInt(h.slice(i, i + 2), 16)) as [number, number, number]
-  }
-  function mix(a: string, b: string, t: number): string {
-    const x = rgbOf(a)
-    const y = rgbOf(b)
-    if (!x || !y)
-      return t < 0.5 ? a : b
-    return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`
-  }
-
   /**
-   * Fill for a country. sqrt rather than linear: one dominant market is the norm
-   * for these sites, and a linear ramp renders every other country as
+   * Fill for a country, written in the page's own tokens. ts-maps (0.3.15+)
+   * puts a var() colour on the path's style, where it resolves like any CSS,
+   * so a theme flip repaints the map with no script at all -- the tokens are
+   * defined once in resources/layouts/app.stx and flip on [data-theme].
+   *
+   * Every fill is opaque, mixed from --map-land toward --accent, never the
+   * accent at some opacity: a translucent fill blends with whatever is behind
+   * the polygon, and on the dark palette a country with a few visits rendered
+   * darker than one with none. sqrt rather than linear: one dominant market is
+   * the norm for these sites, and a linear ramp renders every other country as
    * indistinguishable from empty land.
    */
-  function styleFor(t: ReturnType<typeof tokens>): (f: WorldFeature) => object {
-    const land = mix(t.bg, t.text, 0.08)
-    return function (f: WorldFeature) {
-      const n = totals[f.id] || 0
-      return {
-        // Borders in the page background read as gaps between countries, which
-        // stays legible on either palette where a hairline token does not.
-        color: t.bg,
-        weight: 0.6,
-        fillColor: n ? mix(land, t.accent, 0.3 + Math.sqrt(n / max) * 0.7) : land,
-        fillOpacity: 1,
-      }
+  function styleFor(f: WorldFeature): object {
+    const n = totals[f.id] || 0
+    return {
+      // Borders in the page background read as gaps between countries, which
+      // stays legible on either palette where a hairline token does not.
+      color: 'var(--bg)',
+      weight: 0.6,
+      fillColor: n ? `color-mix(in srgb, var(--accent) ${Math.round((0.3 + Math.sqrt(n / max) * 0.7) * 100)}%, var(--map-land))` : 'var(--map-land)',
+      fillOpacity: 1,
     }
   }
 
@@ -4378,8 +4347,11 @@ select.panel:hover { border-color: var(--accent); }
       doubleClickZoom: false,
       pinchZoom: false,
       keyboard: false,
+      // The engine's own chrome (tooltip frame, focus ring) follows the page's
+      // [data-theme], not just the OS, so it agrees with the toggle.
+      theme: 'auto',
     })
-    layer = new GeoJSON(world, { style: styleFor(tokens()) })
+    layer = new GeoJSON(world, { style: styleFor })
     layer.addTo(map)
     // Antarctica is trimmed: fitting the layer's own bounds runs to -90 and
     // spends a fifth of a short panel on a landmass with no visitors.
@@ -4513,15 +4485,6 @@ select.panel:hover { border-color: var(--accent); }
       note.removeAttribute('hidden')
     }
   }
-
-  // Re-style on a theme flip. The colors came from computed CSS, and ts-maps
-  // holds them as plain JS options — nothing re-reads them on its own, so
-  // without this the map keeps the palette it was born with.
-  const themeWatch = new MutationObserver(function () {
-    try { layer.setStyle(styleFor(tokens())) }
-    catch (_) {}
-  })
-  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] })
 
   // A Leaflet-lineage map measures its container once. This panel can be sized
   // by a late font or a reveal animation, which leaves the map convinced it is

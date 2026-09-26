@@ -261,7 +261,9 @@ describe('countries read as names, and the tooltip is visible while doing it', (
   test('the stylesheet cannot leak past the map', () => {
     // It is loaded on a page it does not own, so every rule in it has to be
     // keyed on a class that exists only inside #country-map.
-    const css = readFileSync(join(root, 'public/vendor/ts-maps.css'), 'utf8')
+    // Comments stripped first: a comment's second line does not start with `*`,
+    // so line-by-line it read as the start of a selector.
+    const css = readFileSync(join(root, 'public/vendor/ts-maps.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
     const offenders: string[] = []
     let depth = 0
     let buf = ''
@@ -365,16 +367,16 @@ describe('the map talks to nothing but this origin', () => {
       expect({ opt, disabled: new RegExp(`${opt}:\\s*false`).test(s) }).toEqual({ opt, disabled: true })
   })
 
-  test('colors are read from the theme tokens, not hardcoded', () => {
-    // ts-maps takes polygon colours as JS options, not CSS, so unlike the
-    // hand-rolled traffic chart these must be resolved from the root and
-    // re-applied when [data-theme] flips.
+  test('colors are the theme tokens themselves, so a theme flip needs no script', () => {
+    // ts-maps 0.3.15 puts a var() path colour on style, where it resolves like
+    // any CSS. Before that the tokens were read with getComputedStyle, mixed in
+    // JS, and re-applied by a MutationObserver on [data-theme]; any hex here
+    // would bring back a map that stops following the toggle.
     const s = mapScript()
-    expect(s).toContain('getPropertyValue(name)')
-    for (const token of ['--accent', '--bg', '--text'])
-      expect(s).toContain(`'${token}'`)
-    expect(s).toContain('MutationObserver')
-    expect(s).toContain('data-theme')
+    for (const token of ['var(--accent)', 'var(--bg)', 'var(--map-land)'])
+      expect(s).toContain(token)
+    expect(s).not.toMatch(/#[0-9a-f]{3,6}\b/i)
+    expect(dashboard).toMatch(/#country-map\s*\{[^}]*--map-land:/)
   })
 
   test('the sea follows the theme, not the engine\'s light basemap grey', () => {

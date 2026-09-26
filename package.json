@@ -94,7 +94,7 @@
     "mmdb-lib": "^3.0.3",
     "stacks": "^0.74.66",
     "stripe": "22.3.2",
-    "ts-maps": "^0.3.7"
+    "ts-maps": "^0.3.15"
   },
   "devDependencies": {
     "better-dx": "^0.2.25"
