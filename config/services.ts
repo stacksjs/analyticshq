@@ -24,14 +24,14 @@ export default {
   github: {
     clientId: String(env.GITHUB_CLIENT_ID || ''),
     clientSecret: String(env.GITHUB_CLIENT_SECRET || ''),
-    redirectUrl: String(env.GITHUB_REDIRECT_URL || 'http://localhost:3000/auth/github/callback'),
+    redirectUrl: String(env.GITHUB_REDIRECT_URL || 'http://localhost:3000/api/auth/github/callback'),
     scopes: ['read:user', 'user:email'],
   },
 
   google: {
     clientId: String(env.GOOGLE_CLIENT_ID || ''),
     clientSecret: String(env.GOOGLE_CLIENT_SECRET || ''),
-    redirectUrl: String(env.GOOGLE_REDIRECT_URL || 'http://localhost:3000/auth/google/callback'),
+    redirectUrl: String(env.GOOGLE_REDIRECT_URL || 'http://localhost:3000/api/auth/google/callback'),
     scopes: ['profile', 'email'],
   },
 
@@ -43,21 +43,21 @@ export default {
     teamId: String(env.APPLE_TEAM_ID || ''),
     keyId: String(env.APPLE_KEY_ID || ''),
     privateKey: String(env.APPLE_PRIVATE_KEY || ''), // literal \n newlines allowed
-    redirectUrl: String(env.APPLE_REDIRECT_URL || 'http://localhost:3000/auth/apple/callback'),
+    redirectUrl: String(env.APPLE_REDIRECT_URL || 'http://localhost:3000/api/auth/apple/callback'),
     scopes: ['name', 'email'],
   },
 
   facebook: {
     clientId: String(env.FACEBOOK_CLIENT_ID || ''),
     clientSecret: String(env.FACEBOOK_CLIENT_SECRET || ''),
-    redirectUrl: String(env.FACEBOOK_REDIRECT_URL || 'http://localhost:3000/auth/facebook/callback'),
+    redirectUrl: String(env.FACEBOOK_REDIRECT_URL || 'http://localhost:3000/api/auth/facebook/callback'),
     scopes: ['email', 'public_profile'],
   },
 
   twitter: {
     clientId: String(env.TWITTER_CLIENT_ID || ''),
     clientSecret: String(env.TWITTER_CLIENT_SECRET || ''),
-    redirectUrl: String(env.TWITTER_REDIRECT_URL || 'http://localhost:3000/auth/twitter/callback'),
+    redirectUrl: String(env.TWITTER_REDIRECT_URL || 'http://localhost:3000/api/auth/twitter/callback'),
     scopes: ['tweet.read', 'users.read', 'offline.access'],
   },
 
