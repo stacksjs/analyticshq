@@ -19,3 +19,22 @@
  * extension point the view has kept since it could render outside the API server.
  */
 declare const preloaded: DashboardPreload | undefined
+
+/**
+ * Breadcrumb trail an including page hands to partials/breadcrumbs.stx with
+ * `@include('breadcrumbs', { crumbs })`.
+ *
+ * Same mechanism as `preloaded` above: an include's second argument becomes a
+ * render-context key, so inside the partial it arrives as a bare name with no
+ * declaration of its own to find.
+ *
+ * Unlike the names above this one is NOT optional, and deliberately so: it is
+ * read only inside that partial, which is only ever reached through an include
+ * that supplies it. Declaring it `| undefined` would push a guard into a file
+ * that cannot be rendered without it.
+ *
+ * The shape matches `Crumb` in resources/data/competitors.ts. It is restated
+ * rather than imported because a --lib file with an import stops being ambient
+ * and would take every declaration here out of scope.
+ */
+declare const crumbs: { name: string, href?: string, url?: string }[]
