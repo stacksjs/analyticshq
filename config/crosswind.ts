@@ -68,6 +68,28 @@ export default {
         'text-3': 'var(--text-3)',
         'accent': 'var(--accent)',
         'bar': 'var(--bar)',
+      
+        // --- @stacksjs/components' token vocabulary ------------------------
+        // The shipped components are written against their own semantic names
+        // (text-fg, bg-surface, border-line-strong, ...) used 300+ times across
+        // the 102 components. This palette satisfied `accent` and nothing else,
+        // so a component that imposes no colour of its own rendered half-styled
+        // - text fell back to inherit and panels had no background.
+        //
+        // Purely additive - none of these names appear in this app's markup, so
+        // no existing element changes. Does NOT fix <Button variant="primary">,
+        // which hard-codes bg-blue-500 - stacksjs/stx#1993. See status#20.
+        'surface': 'var(--panel)',
+        'surface-sunken': 'var(--bg)',
+        'surface-raised': 'color-mix(in srgb, var(--accent) 8%, var(--panel))',
+        'fg': 'var(--text)',
+        'fg-strong': 'var(--text)',
+        'fg-muted': 'var(--text-2)',
+        'fg-soft': 'var(--text-2)',
+        'fg-subtle': 'var(--text-3)',
+        'line': 'var(--border)',
+        'line-strong': 'color-mix(in srgb, var(--text-3) 55%, var(--border))',
+        'accent-solid': 'var(--accent)',
       },
     },
   },
