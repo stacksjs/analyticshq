@@ -180,8 +180,15 @@ describe('the dashboard panel is off until a site turns it on', () => {
   })
 
   test('inside one country the flag is dropped, since every row would repeat it', () => {
-    expect(view).toContain('regionCountry ? parts.subdivision : `${flag(parts.country)} ${parts.subdivision}`')
+    expect(view).toContain('regionCountry ? named : `${flag(parts.country)} ${named}`')
     expect(view).toContain('`Regions in ${countryName(regionCountry)}`')
+  })
+
+  test('a row is labelled by name, falling back to the code', () => {
+    // `PH-07` says nothing to a reader and `CA` beside a flag is equally
+    // Canada, so the panel prints the subdivision's name. A code the table
+    // cannot name keeps showing the code rather than inventing one.
+    expect(view).toContain('subdivisionName(r.region) ?? parts.subdivision')
   })
 
   test('the toggle is :checked + @change, never x-model', () => {

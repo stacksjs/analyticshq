@@ -17,7 +17,7 @@ import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUr
 import { installTargets } from '../../app/Analytics/install'
 import { listReachableSites, listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
-import { foldRegions, splitRegion } from '../../app/Analytics/regions'
+import { foldRegions, splitRegion, subdivisionName } from '../../app/Analytics/regions'
 import { cityLabel, foldCities, splitCity } from '../../app/Analytics/cities'
 import { liveSnapshot } from '../../app/Analytics/realtime'
 import { niceCeil, xTicks, yTicks } from '../../app/Support/chart-axis'
@@ -983,14 +983,20 @@ const countryRows = countries.map((c) => {
  * per-row floor when no other breakdown on this page does. The traffic still
  * counts in the total; what is withheld is which state it came from.
  *
- * ## Why the label is a code and not a name
+ * ## Why the label is a name and not a code
  *
  * `US-CA` is what the column holds, what addFilterUrl puts in the query string,
- * and what the filter matches, so the code has to survive on the row. Spelling
- * it out would mean shipping a table of every ISO 3166-2 subdivision name — some
- * four thousand of them — to render a panel that is off by default. The flag
- * carries the country and the code carries the state, which is how most of these
- * are written down anyway.
+ * and what the filter matches — none of which is affected by how the row reads.
+ *
+ * It used to read as the bare code, because spelling it out "would mean shipping
+ * a table of every ISO 3166-2 subdivision name". That table is already shipped:
+ * `subdivisions.json`, which geo.ts has needed since region geo started working
+ * at all. Read backwards it answers this question for nothing.
+ *
+ * The code was only ever legible by accident. `US-CA` passes for California to
+ * an American reader; `PH-07` says nothing to anyone, and a bare `CA` beside a
+ * flag is equally the code for Canada. A subdivision the table cannot name still
+ * shows its code, which is honest about not knowing rather than inventing.
  */
 const REGION_FLOOR = siteFloor
 const foldedRegions = foldRegions(regions, REGION_FLOOR, 8)
@@ -1013,7 +1019,8 @@ const regionRows = foldedRegions.rows.map((r) => {
   // built out of the wrong two letters.
   if (!parts)
     return { ...r, label: r.region }
-  return { ...r, label: regionCountry ? parts.subdivision : `${flag(parts.country)} ${parts.subdivision}` }
+  const named = subdivisionName(r.region) ?? parts.subdivision
+  return { ...r, label: regionCountry ? named : `${flag(parts.country)} ${named}` }
 })
 if (foldedRegions.other) {
   regionRows.push({
