@@ -30,6 +30,15 @@ defineClientPayload({})
 </script>
 <script client>
 // #region pure
+// ---- per-app configuration --------------------------------------------------
+// The only lines in this region that differ between the four HQ pickers; the
+// shared core below is kept byte-identical so a fix in one app ports cleanly.
+/** Spans analyticshq's server knows by name; these go out as ?range=, not ?from=&to=. */
+const PICK_SERVER_RANGES: string[] = ['7d', '30d', '90d', '1y', 'all']
+/** Query keys a period change clears, beyond the period keys themselves. */
+const PICK_RESET_KEYS: string[] = []
+
+// ---- shared core: byte-identical in analyticshq, bughq, loghq and statushq ---
 /** One day cell in a month grid. */
 interface PickCell { ymd: string, day: number, inMonth: boolean, future: boolean }
 /** A period: explicit local days, or a span the server knows by name (?range=). */
@@ -75,10 +84,11 @@ function pickOrder(a: string, b: string): { from: string, to: string } {
 /** What a preset means on a given local day. Server-native spans go out as ?range=. */
 function pickPreset(key: string, todayYmd: string): PickSelection | null {
   const { y, m } = pickParse(todayYmd)
+  if (PICK_SERVER_RANGES.includes(key))
+    return { range: key }
   switch (key) {
     case 'today': return { from: todayYmd, to: todayYmd }
     case 'yesterday': { const d = pickShift(todayYmd, -1); return { from: d, to: d } }
-    case '7d': case '30d': case '90d': case '1y': case 'all': return { range: key }
     case 'this-month': return { from: pickYmd(y, m, 1), to: todayYmd }
     case 'last-month': {
       const end = new Date(y, m, 0)
@@ -95,14 +105,17 @@ function pickQuery(search: string | Record<string, string>, sel: PickSelection):
   q.delete('from')
   q.delete('to')
   q.delete('range')
+  for (const key of PICK_RESET_KEYS)
+    q.delete(key)
   if (sel.range) {
     q.set('range', sel.range)
   }
-  else {
-    // String() is the coercion URLSearchParams applied anyway; it only shows here
-    // because `if (sel.range)` cannot rule out a range of '' for the type.
-    q.set('from', String(sel.from))
-    q.set('to', String(sel.to))
+  // The guard narrows the union, so from/to are strings here rather than
+  // possibly-undefined; it also means a malformed selection writes nothing
+  // instead of the string "undefined".
+  else if (sel.from && sel.to) {
+    q.set('from', sel.from)
+    q.set('to', sel.to)
   }
   return `?${q.toString()}`
 }
