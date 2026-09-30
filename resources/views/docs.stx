@@ -16,15 +16,19 @@ useSeoMeta({
   title: 'Docs - analyticshq',
   description: 'Ship analyticshq in one line: a first-party script under 2 KB, a one-function events API, and a read API for your numbers. No cookies, no consent banner, and no SDK to learn.',
 })
+
+// Drives BOTH the JSON-LD in the layout and the visible nav, so the two cannot
+// drift. Same contract as every other marketing page here.
+const crumbs = [
+  { name: "Home", href: "/", url: "https://analyticshq.org/" },
+  { name: "Docs" },
+]
 </script>
 
 @extends('marketing')
 
 @section('content')
-      <nav class="shell subnav" aria-label="Breadcrumb">
-        <StxLink to="/">Home</StxLink><span class="sep">/</span>
-        <span>Docs</span>
-      </nav>
+      @include('breadcrumbs', { crumbs })
 
       <section class="feat-hero shell">
         <span class="kicker">Docs</span>

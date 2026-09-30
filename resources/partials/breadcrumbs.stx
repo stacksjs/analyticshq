@@ -11,12 +11,9 @@
   by the marketing layout, because @push from inside an @include does not reach
   the parent's @stack — verified: the script tag simply disappears.
 --}}
-<nav class="shell subnav" aria-label="Breadcrumb">
-  @foreach (crumbs as crumb)
-    @if (crumb.href)
-      <StxLink to="{{ crumb.href }}">{{ crumb.name }}</StxLink><span class="sep" aria-hidden="true">/</span>
-    @else
-      <span aria-current="page">{{ crumb.name }}</span>
-    @endif
-  @endforeach
-</nav>
+{{-- The shipped <Breadcrumb> renders the same trail inside a real <ol>/<li>,
+     which the hand-written version above never had. aria-current on the last
+     item and aria-hidden on the separators are preserved by the component.
+     `crumbs` keeps its { name, href, url } shape because the layout's JSON-LD
+     reads the same array; only the visible nav is mapped. --}}
+<Breadcrumb className="shell subnav" :items="crumbs.map(c => ({ label: c.name, href: c.href }))" />
