@@ -94,7 +94,7 @@
     "bun-query-builder": "^0.3.2",
     "mmdb-lib": "^3.0.3",
     "stacks": "^0.75.5",
-    "stripe": "22.3.2",
+    "stripe": "23.0.0",
     "ts-maps": "^0.3.15"
   },
   "devDependencies": {
