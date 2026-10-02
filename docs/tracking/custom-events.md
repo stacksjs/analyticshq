@@ -9,14 +9,16 @@ Custom events describe meaningful actions that are not page views, such as compl
 
 ## Send an event
 
-After the tracker loads, call its event API with a stable event name and optional properties. Keep names short and product-oriented.
+After the tracker loads, call `window.analyticshq` with a stable event name and optional properties. Keep names short and product-oriented.
 
 ```js
-window.tsAnalytics?.track('Signup completed', {
+window.analyticshq?.('Signup completed', {
   plan: 'pro',
   source: 'pricing',
 })
 ```
+
+Pages that cannot run script can tag markup instead: any element with `data-analyticshq-event="Signup completed"` sends that event on click, and its other `data-analyticshq-*` attributes become properties.
 
 Framework integrations expose the same behavior through their typed helpers. For example, the Nuxt module auto-imports `useTsAnalytics()` and the Vue plugin provides a typed `track()` surface.
 
