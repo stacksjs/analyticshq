@@ -74,6 +74,10 @@ export default defineModel({
     // and device_type comes from the User-Agent, not from these.
     is_unique: { fillable: true, validation: { rule: schema.boolean().optional() }, factory: () => false },
     is_bounce: { fillable: true, validation: { rule: schema.boolean().optional() }, factory: () => false },
+    // The tracker's data-environment label (#60): `staging`, `production`...
+    // Normalized at /collect (app/Analytics/environment.ts), null when absent.
+    // Declared here so the schema differ keeps migration 59's column.
+    environment: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     time_on_page: { fillable: true, validation: { rule: schema.number().optional() } },
     timestamp: { fillable: true, validation: { rule: schema.string().required().max(32) } },
   },

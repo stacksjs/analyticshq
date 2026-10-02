@@ -20,6 +20,7 @@ import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app
 import { ASSIGNABLE_ROLES, isAssignableRole, listReachableSites, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
+import { normalizeEnvironment } from '../app/Analytics/environment'
 import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
 import { sendSiteInvite } from '../app/Mail/SiteInvite'
@@ -485,6 +486,10 @@ route.post('/collect', async (request) => {
   const { windowDays } = await siteGeoOptIns(String(siteId))
   const visitorId = hashVisitor(ip, ua, String(siteId), await getVisitorSalt(String(siteId), windowDays))
 
+  // The tracker's data-environment label (#60), on all three paths below.
+  // Normalized or dropped to null here, never a reason to refuse the beacon.
+  const environment = normalizeEnvironment(body.environment)
+
   // Core Web Vitals (#41), handled here and returned early.
   //
   // BEFORE the sessionization block on purpose. Vitals arrive as a second beacon
@@ -528,9 +533,9 @@ route.post('/collect', async (request) => {
     // rather than a loop: this fires on every page view, and five round-trips
     // where one will do is five times the ingest latency.
     if (samples.length) {
-      const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?, ?)`).join(', ')
-      const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow, vdevice])
-      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp, device_type) VALUES ${placeholders}`, params)
+      const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?)`).join(', ')
+      const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow, vdevice, environment])
+      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp, device_type, environment) VALUES ${placeholders}`, params)
         // Never 500 the public beacon, matching every other insert on this path.
         .catch(() => {})
     }
@@ -647,6 +652,7 @@ route.post('/collect', async (request) => {
       // none names them, and device_type comes from the User-Agent above.
       is_unique: false,
       is_bounce: false,
+      environment,
       timestamp: now,
     }).execute()
     // Open dashboards on this site see the visitor within a few hundred
@@ -669,6 +675,7 @@ route.post('/collect', async (request) => {
       name: String(event),
       properties: props,
       path,
+      environment,
       timestamp: now,
     }).execute().catch(() => {})
   }

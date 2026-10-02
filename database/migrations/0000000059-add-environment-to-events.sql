@@ -1,0 +1,36 @@
+-- The deployment environment a beacon came from (#60).
+--
+-- NOTE ON STYLE: no semicolons in these comments, and nothing after the last
+-- statement. See migration 48 for why the runner makes both matter.
+--
+-- WHAT WRITES IT
+--
+-- The tracker reads data-environment off its own script tag and sends it as
+-- the top-level "environment" key on every pageview, custom event and Web
+-- Vitals beacon. /collect normalizes it in app/Analytics/environment.ts before
+-- it reaches any of these columns. Trimmed, lowercased, and kept only when it
+-- is a short label of letters, digits, dot, dash or underscore. Anything else
+-- is stored as NULL rather than refusing the beacon.
+--
+-- It is metadata, not a switch. Whether a site reports from a given
+-- environment is decided before the snippet is injected, never here.
+--
+-- WHY varchar(32)
+--
+-- The normalizer's pattern caps a label at 32 characters, so the column can
+-- never truncate one. It is also the width the schema differ derives from the
+-- models' max(32) rule, so it has nothing to alter afterwards.
+--
+-- NULLABLE, WITH NO BACKFILL
+--
+-- Every row before this, and every row from a snippet without the attribute,
+-- has no environment we know of. Defaulting them to "production" would be
+-- inventing data. They stay NULL.
+--
+-- NO INDEX
+--
+-- Nothing reads these columns yet. An index would be paid for on the hottest
+-- write paths in the app and used by nothing until a report filters on it.
+ALTER TABLE "page_views" ADD COLUMN IF NOT EXISTS "environment" varchar(32);
+ALTER TABLE "custom_events" ADD COLUMN IF NOT EXISTS "environment" varchar(32);
+ALTER TABLE "web_vitals" ADD COLUMN IF NOT EXISTS "environment" varchar(32);

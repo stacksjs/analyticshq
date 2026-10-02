@@ -42,5 +42,9 @@ export default defineModel({
     timestamp: { fillable: true, validation: { rule: schema.string().required().max(32) } },
     // Nullable: measurements from before migration 48 have no device.
     device_type: { fillable: true, validation: { rule: schema.string().optional().max(16) } },
+    // The tracker's data-environment label (#60): `staging`, `production`...
+    // Normalized at /collect (app/Analytics/environment.ts), null when absent.
+    // Declared here so the schema differ keeps migration 59's column.
+    environment: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
   },
 })

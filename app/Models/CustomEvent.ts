@@ -36,6 +36,10 @@ export default defineModel({
     // bound, and a varchar(255) would truncate them.
     properties: { fillable: true, type: 'text', validation: { rule: schema.string().optional() } },
     path: { fillable: true, validation: { rule: schema.string().optional() } },
+    // The tracker's data-environment label (#60): `staging`, `production`...
+    // Normalized at /collect (app/Analytics/environment.ts), null when absent.
+    // Declared here so the schema differ keeps migration 59's column.
+    environment: { fillable: true, validation: { rule: schema.string().optional().max(32) } },
     timestamp: { fillable: true, validation: { rule: schema.string().required().max(32) } },
   },
 })
