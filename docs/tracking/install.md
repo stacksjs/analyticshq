@@ -95,5 +95,16 @@ export default function RootLayout({ children }) {
 | `data-site` | Required App ID |
 | `data-respect-dnt="false"` | Allows the browser tracker to run when DNT is set; server-side GPC protection still applies |
 | `data-vitals="false"` | Disables Core Web Vitals for this site |
+| `data-environment="staging"` | Optional. Labels every page view, custom event, and Web Vitals measurement with the environment it came from |
+
+### Environment label
+
+`data-environment` is metadata only. It never turns tracking on or off: decide which environments report before you add the script, and the tracker sends whatever label the tag carries. Stacks does this for you, checking `APP_ENV` against its allowlist before it injects the snippet.
+
+```html
+<script defer src="https://analyticshq.org/script.js" data-site="YOUR_APP_ID" data-environment="staging"></script>
+```
+
+The value travels as an `environment` field on each request to `/collect`, next to the event rather than inside its properties. AnalyticsHQ trims and lowercases it, then keeps it only when it is a short label: up to 32 characters of letters, digits, `.`, `-` and `_`, starting with a letter or digit. Anything else is discarded and the event is still recorded. Without the attribute, requests are exactly what they were before it existed.
 
 The dashboard always shows a snippet based on the current host or verified custom domain. Prefer it over a copied example.
