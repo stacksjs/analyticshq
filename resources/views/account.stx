@@ -161,11 +161,21 @@ onMount(() => {
 
     <section class="mb-5 p-6 card">
       <div class="flex gap-4 items-center">
-        @if (avatarUrl())
-          <img class="h-14 w-14 avatar" :src="avatarUrl()" alt="" width="56" height="56">
-        @else
+        <!--
+          The initial sits underneath and the photo covers it, rather than the two
+          being @if/@else on the URL. A URL existing is not the same as an image
+          loading: the provider's avatar can 404 or 403 from its host, and
+          branching on the URL alone left a broken one as an empty circle.
+          `onerror` is the native attribute, not stx's `@error`, because stx wires
+          25 event names and `error` is not among them -- an `@error` here would
+          render as an inert attribute and never fire.
+        -->
+        <div class="relative shrink-0 h-14 w-14">
           <div class="grid place-items-center h-14 w-14 avatar" style="color: var(--accent-text); font-weight: 700; font-size: 1.25rem">{{ initialCh() }}</div>
-        @endif
+          @if (avatarUrl())
+            <img class="absolute inset-0 h-14 w-14 avatar" :src="avatarUrl()" alt="" width="56" height="56" onerror="this.hidden = true">
+          @endif
+        </div>
         <div class="min-w-0">
           @if (loaded())
             <div class="font-semibold text-lg">{{ name() }}</div>
