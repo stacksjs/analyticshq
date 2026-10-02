@@ -8,10 +8,9 @@
  * loads.
  *
  * Being static also means the collect origin cannot be baked in server-side,
- * which is an improvement rather than a compromise: it is derived from this
- * script's own URL, so the same asset works unmodified when it is served from
- * the apex, from the legacy domain, from a customer's CNAME, or from localhost
- * in development — and it beacons back to whichever host served it.
+ * which is an improvement: it is derived from this script's own URL, so the
+ * same asset works unmodified from the apex, the legacy domain, a customer's
+ * CNAME, or localhost, and beacons back to whichever host served it.
  *
  * Embed with:
  *   <script defer src="https://analyticshq.org/script.js" data-site="SITE_ID"></script>
@@ -49,6 +48,9 @@
     if (dnt === '1' || dnt === 'yes' || n.globalPrivacyControl === true) return
   }
 
+  // data-environment (#60): metadata, never a switch. Unset is undefined, which JSON omits.
+  const env = s.getAttribute('data-environment') || undefined
+
   let endpoint
   try {
     endpoint = new URL(s.src, location.href).origin + '/collect'
@@ -68,6 +70,7 @@
         p: p || {},
         u: location.origin + location.pathname,
         r: d.referrer || '',
+        environment: env,
       }
       // Deliberately NOT sent (#10):
       //   t  — document.title. A title routinely carries page content, and on a
@@ -170,6 +173,7 @@
         p: vitals,
         u: location.origin + vpath,
         r: '',
+        environment: env,
       })
       try {
         // sendBeacon ONLY when the collector is same-origin.
@@ -179,11 +183,8 @@
         // `Access-Control-Allow-Origin: *`. /collect answers every origin with
         // the wildcard, deliberately — it is a public endpoint that must accept
         // beacons from any customer domain without an allowlist — so every
-        // cross-origin sendBeacon here was refused by the browser before it left:
-        //
-        //   Access to resource at 'https://analyticshq.org/collect' from origin
-        //   'https://easyotc.com' has been blocked by CORS policy: … must not be
-        //   the wildcard '*' when the request's credentials mode is 'include'.
+        // cross-origin sendBeacon here was refused by the browser before it left
+        // (the console error is quoted in tests/unit/tracker-transport.test.ts).
         //
         // It failed silently. sendBeacon returns true once the request is
         // QUEUED, not once it is delivered, so the `return` below was taken and

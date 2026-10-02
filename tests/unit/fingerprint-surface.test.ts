@@ -47,8 +47,10 @@ describe('the tracker does not collect a fingerprint surface (#10)', () => {
     // The wire keys, as the ingest names them.
     const body = code(tracker).slice(code(tracker).indexOf('const b = {'))
     const decl = body.slice(0, body.indexOf('}'))
-    for (const key of ['t:', 'sw:', 'sh:'])
-      expect(decl).not.toContain(key)
+    // Matched as whole keys: a plain substring check for `t:` also matches the
+    // tail of a legitimate key such as `environment:` (#60).
+    for (const key of ['t', 'sw', 'sh'])
+      expect(decl).not.toMatch(new RegExp(`(?:^|[\\s{,])${key}:`))
   })
 
   test('what the tracker still sends is unchanged', () => {
