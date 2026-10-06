@@ -138,21 +138,21 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
   </div>
 
   @if (error())
-    <div class="mb-4 px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
+    <div id="login-error" role="alert" class="mb-4 px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
   @endif
 
   {{-- Step 1: credentials. Hidden once a 2FA challenge is in flight. --}}
   <form @submit="handleSubmit" :show="!twoFactor()" class="space-y-4">
     <div>
       <label for="login-email" class="block mb-1.5 font-medium text-text-2 text-xs">Email</label>
-      <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="login-email" name="email" type="email" required autocomplete="email" placeholder="you@example.com" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
     </div>
     <div>
       <div class="flex items-baseline justify-between mb-1.5">
         <label for="login-password" class="font-medium text-text-2 text-xs">Password</label>
         <StxLink to="/forgot-password" class="text-text-3 text-xs hover:text-accent">Forgot?</StxLink>
       </div>
-      <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="login-password" name="password" type="password" required autocomplete="current-password" placeholder="••••••••" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
     </div>
 
     <label for="login-remember" class="flex gap-2 items-center text-sm text-text-3 cursor-pointer select-none">
@@ -169,7 +169,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
   <form @submit="handleVerify" :show="twoFactor()" style="display:none" class="space-y-4">
     <div>
       <label for="login-code" class="block mb-1.5 font-medium text-text-2 text-xs">Authentication code</label>
-      <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
       <p class="mt-1.5 text-text-3 text-xs">Enter the 6-digit code from your authenticator app.</p>
     </div>
     <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
@@ -179,7 +179,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
 
   <div :show="!twoFactor()">
     @if (oauthError())
-      <div class="mt-4 px-3 py-2 text-sm rounded-lg err">{{ oauthError() }}</div>
+      <div role="alert" class="mt-4 px-3 py-2 text-sm rounded-lg err">{{ oauthError() }}</div>
     @endif
 
     <div class="my-5 divider">or</div>
