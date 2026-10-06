@@ -100,16 +100,16 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 
   <form @submit="handleSubmit" class="space-y-4">
     @if (error())
-      <div class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
+      <div id="form-error" role="alert" class="px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
     @endif
 
     <div>
       <label for="site-name" class="block mb-1.5 font-medium text-text-2 text-xs">Site name</label>
-      <input id="site-name" name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="site-name" name="name" type="text" required autofocus placeholder="My Blog" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
     </div>
     <div>
       <label for="site-domain" class="block mb-1.5 font-medium text-text-2 text-xs">Domain <span class="text-text-3">(optional)</span></label>
-      <input id="site-domain" name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field">
+      <input id="site-domain" name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
     </div>
 
     <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
