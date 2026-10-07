@@ -3757,15 +3757,21 @@ select.panel:hover { border-color: var(--accent); }
         302): a signed-out visitor sees the Sign in CTA below, a signed-in user
         with no sites yet sees the empty state, and it is the server-side wall that
         keeps a bare curl from ever seeing another tenant's data. --}}
-    <div class="mt-6 p-10 text-center panel reveal">
+    <div class="mt-6 reveal">
       @if (user)
-        <h2 class="mb-2 font-semibold text-lg">No site to show yet</h2>
-        <p class="mb-5 text-sm text-text-2">Add a site to get a tracking snippet and start seeing analytics here.</p>
-        <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Add a site</StxLink>
+        <EmptyState
+          title="No site to show yet"
+          description="Add a site to get a tracking snippet and start seeing analytics here."
+        >
+          <StxLink to="/sites/new" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Add a site</StxLink>
+        </EmptyState>
       @else
-        <h2 class="mb-2 font-semibold text-lg">Sign in to view analytics</h2>
-        <p class="mb-5 text-sm text-text-2">This dashboard is private to the site owner.</p>
-        <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Sign in</StxLink>
+        <EmptyState
+          title="Sign in to view analytics"
+          description="This dashboard is private to the site owner."
+        >
+          <StxLink to="/login" class="inline-block px-4 py-2 font-semibold text-sm" style="border-radius:10px;background:var(--accent);color:var(--accent-ink);text-decoration:none">Sign in</StxLink>
+        </EmptyState>
       @endif
     </div>
     @endif

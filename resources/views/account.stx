@@ -148,10 +148,17 @@ onMount(() => {
     {{-- Signed-out gate. The SSR cookie read found no valid session, and a server
         block cannot 302, so render the sign-in panel in place of the account. --}}
     <div class="mx-auto px-5 py-16 md:px-6 max-w-3xl text-center">
+      {{-- `bare` inside the page's own .card: this page is built on that
+           class at its own radius, so the component supplies the layout and
+           the card keeps supplying the surface. --}}
       <div class="mx-auto p-10 max-w-md card">
-        <h1 class="mb-2 font-semibold text-xl">Sign in to your account</h1>
-        <p class="mb-6 text-sm text-text-2">Your account is private. Sign in to manage your plan and settings.</p>
-        <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn btn-primary">Sign in</StxLink>
+        <EmptyState
+          variant="bare"
+          title="Sign in to your account"
+          description="Your account is private. Sign in to manage your plan and settings."
+        >
+          <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn btn-primary">Sign in</StxLink>
+        </EmptyState>
       </div>
     </div>
   @else

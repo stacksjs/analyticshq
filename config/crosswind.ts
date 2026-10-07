@@ -59,6 +59,16 @@ export default {
 
   theme: {
     extend: {
+      borderRadius: {
+        /*
+         * `rounded-panel` is @stacksjs/components' radius role name:
+         * <EmptyState variant="panel"> renders `bg-panel rounded-panel
+         * ring-1 ring-line`. Without this it resolves to nothing and the
+         * panel renders square. 12px is this app's own `.panel` radius,
+         * the one dashboard.stx and visitor.stx both declare.
+         */
+        panel: '12px',
+      },
       colors: {
         'bg': 'var(--bg)',
         'panel': 'var(--panel)',
