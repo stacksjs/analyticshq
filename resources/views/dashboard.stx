@@ -1442,7 +1442,7 @@ async function logout(): Promise<void> {
     await fetch('/logout', { method: 'POST', credentials: 'same-origin' })
   }
   catch {}
-  window.location.assign('/login')
+  navigate('/login', { reload: true })
 }
 
 // Theme. The store owns persistence, the prefers-color-scheme listener and the
@@ -1570,6 +1570,7 @@ async function deleteGoal(id: string | number): Promise<void> {
 // production host. An absolute URL is required because this string gets copied to
 // someone else.
 function shareLinkFor(token: string): string {
+  // stx-strict-ignore-next-line window.location
   return `${window.location.origin}/dashboard?site=${encodeURIComponent(activeSiteId)}&share=${token}`
 }
 
@@ -1599,6 +1600,7 @@ function activeInstall(): { id: string, label: string, file: string, note: strin
 function installCode(): string {
   return String(activeInstall().code)
     .split('%ORIGIN%')
+    // stx-strict-ignore-next-line window.location
     .join(window.location.origin)
     .split('%TAG%')
     .join(`<${'scr'}${'ipt'}`)
@@ -2214,7 +2216,13 @@ const inviteBusy = state(false)
 
 /** Re-read the panel from the server after a change. */
 function reloadTeam() {
-  window.location.reload()
+  // A full document load of the current URL, routed. location.reload() is the
+  // natural call but window.location is prohibited and there is no reload
+  // composable, so useRoute() supplies the URL. replace keeps it out of the
+  // history, which is what location.reload() does.
+  const route = useRoute()
+  const query = new URLSearchParams(route.query).toString()
+  navigate(`${route.path}${query ? `?${query}` : ''}${route.hash}`, { replace: true, reload: true })
 }
 
 async function sendInvite() {

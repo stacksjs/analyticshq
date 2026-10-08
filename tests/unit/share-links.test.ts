@@ -50,12 +50,25 @@ describe('a share view does not demand a sign-in', () => {
     // decided on the server, which already granted the share view. So the
     // property is now stronger than "wrapped in @if (!shareMode)": no client
     // redirect to /login exists except the one the Log out button runs.
-    expect(dashboard).not.toMatch(/navigate\(\s*['"]\/login['"]/)
-
     const logout = dashboard.indexOf('async function logout(')
     expect(logout, 'the logout handler is gone').toBeGreaterThan(-1)
     const logoutEnd = dashboard.indexOf('\n}', logout)
-    for (const match of dashboard.matchAll(/location\.(?:assign|replace|href\s*=)\s*\(?\s*['"]\/login['"]/g))
+
+    // Both spellings, checked the same way. This used to ban navigate('/login')
+    // outright and position-check only the raw location forms. That stopped
+    // being the right shape once logout() migrated to navigate(), which is what
+    // the strict DOM rule requires of a client block: the ban would have failed
+    // the page for using the prescribed API. The property worth holding is about
+    // WHERE a redirect lives, not which API spells it, so both go through the
+    // position check now.
+    const redirects = [...dashboard.matchAll(
+      /(?:location\.(?:assign|replace|href\s*=)|navigate)\s*\(?\s*['"]\/login['"]/g,
+    )]
+
+    // And it must not pass by finding nothing: logout() is the one place that
+    // still has to redirect, so an empty match set means it is broken.
+    expect(redirects.length, 'no /login redirect anywhere, so logout() cannot work').toBeGreaterThan(0)
+    for (const match of redirects)
       expect(match.index! > logout && match.index! < logoutEnd, `a /login redirect outside logout() at offset ${match.index}`).toBe(true)
   })
 
