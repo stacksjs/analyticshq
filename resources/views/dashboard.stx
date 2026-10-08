@@ -2364,6 +2364,9 @@ function exportCsv() {
   const csv = `﻿${L.join('\r\n')}`
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
+  // A transient anchor to trigger a file download, not UI: there is no markup or
+  // directive equivalent for handing the browser a blob to save.
+  // stx-strict-ignore-next-line document.createElement
   const a = document.createElement('a')
   a.href = url
   a.download = `analyticshq-${data.site}-${data.range}.csv`
@@ -2376,6 +2379,7 @@ function exportCsv() {
   // revoke, and since an SPA swap keeps the document alive the blob URL would then leak
   // for the rest of the session. Cleanup is the one thing that must not be cancellable
   // by navigation. stx's guard flags this line; the guard is wrong about this one.
+  // stx-strict-ignore-next-line setTimeout
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
