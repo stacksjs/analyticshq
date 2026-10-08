@@ -65,7 +65,7 @@ async function logout(): Promise<void> {
     await fetch('/logout', { method: 'POST', credentials: 'same-origin' })
   }
   catch {}
-  window.location.assign('/login')
+  navigate('/login', { reload: true })
 }
 
 onMount(() => {
@@ -78,7 +78,7 @@ onMount(() => {
       if (r.status === 401) {
         // The cookie is gone or expired: leave for /login (the server-cleared
         // cookie means the SSR gate will show the signed-out panel there too).
-        window.location.assign('/login')
+        navigate('/login', { reload: true })
         return null
       }
       return r.json() as Promise<MeResponse>

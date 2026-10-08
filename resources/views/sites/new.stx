@@ -56,8 +56,8 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     const data: CreateSiteResponse = await res.json().catch(() => ({}))
     if (res.status === 401) {
       // The session cookie is gone or expired: leave for /login (a full navigation
-      // so the SSR gate re-resolves there too).
-      window.location.assign('/login')
+      // so the SSR gate re-resolves there too, which is what reload gives).
+      navigate('/login', { reload: true })
       return
     }
     if (!res.ok || !data.site || !data.site.id) {

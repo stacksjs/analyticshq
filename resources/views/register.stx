@@ -51,8 +51,9 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
 
     // The auth-token cookie the SERVER needs comes with the register response
     // itself (RegisterAction sets it, baseline 7-day tier). A full navigation
-    // then lands on the owner-scoped dashboard rather than the signed-out gate.
-    window.location.assign('/dashboard')
+    // then lands on the owner-scoped dashboard rather than the signed-out gate,
+    // which is what reload gets us: a document load, not a route swap.
+    navigate('/dashboard', { reload: true })
   }
   catch {
     error.set('Something went wrong. Please try again.')

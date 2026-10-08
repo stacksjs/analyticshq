@@ -70,8 +70,9 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     }
     // The auth-token cookie the SERVER reads to render the owner-scoped dashboard
     // arrives with THIS response (LoginAction sets it), so a full navigation lands
-    // on data rather than the signed-out gate.
-    window.location.assign('/dashboard')
+    // on data rather than the signed-out gate. reload bypasses the router, so
+    // this is a real document load and not a client-side route swap.
+    navigate('/dashboard', { reload: true })
   }
   catch {
     error.set('Something went wrong. Please try again.')
@@ -98,7 +99,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
     })
     const data: AuthResponse = await res.json().catch(() => ({}))
     if (res.ok && (data.token || data.access_token)) {
-      window.location.assign('/dashboard')
+      navigate('/dashboard', { reload: true })
       return
     }
     // Challenge tokens are single-use; a failed code sends the user back to step 1.

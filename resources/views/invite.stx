@@ -130,7 +130,7 @@ async function accept(): Promise<void> {
     if (res.ok && d.siteId) {
       // Straight into the site they were invited to, rather than a generic
       // dashboard that would make them hunt for it in the switcher.
-      window.location.href = `/dashboard?site=${encodeURIComponent(d.siteId)}`
+      navigate(`/dashboard?site=${encodeURIComponent(d.siteId)}`, { reload: true })
       return
     }
     failed.set(d.error || 'This invitation is no longer valid.')
