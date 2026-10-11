@@ -60,6 +60,8 @@ export default {
   theme: {
     extend: {
       borderRadius: {
+        control: '10px',
+        pill: '999px',
         /*
          * `rounded-panel` is @stacksjs/components' radius role name:
          * <EmptyState variant="panel"> renders `bg-panel rounded-panel
@@ -71,35 +73,87 @@ export default {
       },
       colors: {
         'bg': 'var(--bg)',
-        'panel': 'var(--panel)',
+        'panel': 'var(--panel, var(--surface))',
         'border': 'var(--border)',
         'text': 'var(--text)',
         'text-2': 'var(--text-2)',
         'text-3': 'var(--text-3)',
         'accent': 'var(--accent)',
         'bar': 'var(--bar)',
-      
-        // --- @stacksjs/components' token vocabulary ------------------------
-        // The shipped components are written against their own semantic names
-        // (text-fg, bg-surface, border-line-strong, ...) used 300+ times across
-        // the 102 components. This palette satisfied `accent` and nothing else,
-        // so a component that imposes no colour of its own rendered half-styled
-        // - text fell back to inherit and panels had no background.
-        //
-        // Purely additive - none of these names appear in this app's markup, so
-        // no existing element changes. Does NOT fix <Button variant="primary">,
-        // which hard-codes bg-blue-500 - stacksjs/stx#1993. See status#20.
-        'surface': 'var(--panel)',
-        'surface-sunken': 'var(--bg)',
-        'surface-raised': 'color-mix(in srgb, var(--accent) 8%, var(--panel))',
-        'fg': 'var(--text)',
-        'fg-strong': 'var(--text)',
-        'fg-muted': 'var(--text-2)',
-        'fg-soft': 'var(--text-2)',
-        'fg-subtle': 'var(--text-3)',
-        'line': 'var(--border)',
-        'line-strong': 'color-mix(in srgb, var(--text-3) 55%, var(--border))',
+
+        // Map the complete component vocabulary onto this app's palettes.
+        // Use theme entries, not layered preflight --stx-* declarations: the
+        // library emits unlayered role defaults that win over a preflight.
+        // Keep the existing theme bootstrap unchanged; these aliases follow
+        // the palette variables rather than the library's stock light/dark hues.
+        // Marketing names its tokens surface/ink/void, whereas app/auth use
+        // panel/text/bg. Fallbacks cover both without importing marketing CSS.
+        'surface': 'var(--panel, var(--surface))',
+        'surface-sunken': 'var(--bg, var(--void))',
+        'surface-raised': 'color-mix(in srgb, var(--accent) 8%, var(--panel, var(--surface)))',
+        'surface-hover': 'color-mix(in srgb, var(--text, var(--ink)) 6%, var(--panel, var(--surface)))',
+        'surface-raised-hover': 'color-mix(in srgb, var(--accent) 14%, var(--panel, var(--surface)))',
+        'surface-sunken-hover': 'color-mix(in srgb, var(--text, var(--ink)) 6%, var(--bg, var(--void)))',
+        'page': 'var(--bg, var(--void))',
+        'content': 'var(--panel, var(--surface))',
+        'field': 'var(--panel, var(--surface))',
+        'field-hover': 'color-mix(in srgb, var(--text, var(--ink)) 6%, var(--panel, var(--surface)))',
+        'fg': 'var(--text, var(--ink))',
+        'fg-strong': 'var(--text, var(--ink))',
+        'fg-muted': 'var(--text-2, var(--muted))',
+        'fg-soft': 'var(--text-2, var(--muted))',
+        'fg-subtle': 'var(--text-3, var(--faint))',
+        'line': 'var(--border, var(--line))',
+        'line-strong': 'color-mix(in srgb, var(--text-3, var(--faint)) 55%, var(--border, var(--line)))',
+        'line-hover': 'color-mix(in srgb, var(--text-2, var(--muted)) 70%, var(--border, var(--line)))',
+        // The dashboard distinguishes small accent text from its brighter fill.
+        'link': 'var(--accent-text, var(--accent))',
+        'link-hover': 'color-mix(in srgb, var(--accent-text, var(--accent)) 85%, var(--text, var(--ink)))',
         'accent-solid': 'var(--accent)',
+        // A stronger darkening drops the light dashboard's dark label below AA.
+        'accent-solid-hover': 'color-mix(in srgb, var(--accent) 95%, var(--text, var(--ink)))',
+        'accent-ink': 'var(--accent-ink)',
+        'accent-soft': 'color-mix(in srgb, var(--accent) 8%, var(--panel, var(--surface)))',
+        'accent-soft-ink': 'var(--accent-text, var(--accent))',
+
+        'success': 'var(--good, var(--accent))',
+        'success-solid': 'var(--good, var(--accent))',
+        'success-solid-hover': 'color-mix(in srgb, var(--good, var(--accent)) 92%, var(--text, var(--ink)))',
+        'success-ink': 'var(--panel, var(--surface))',
+        'success-soft': 'color-mix(in srgb, var(--good, var(--accent)) 8%, var(--panel, var(--surface)))',
+        'success-soft-ink': 'color-mix(in srgb, var(--good, var(--accent)) 85%, var(--text, var(--ink)))',
+        'danger': 'var(--bad, var(--danger))',
+        'danger-solid': 'var(--bad, var(--danger))',
+        'danger-solid-hover': 'color-mix(in srgb, var(--bad, var(--danger)) 92%, var(--text, var(--ink)))',
+        'danger-ink': 'var(--panel, var(--surface))',
+        'danger-soft': 'color-mix(in srgb, var(--bad, var(--danger)) 8%, var(--panel, var(--surface)))',
+        'danger-soft-ink': 'color-mix(in srgb, var(--bad, var(--danger)) 85%, var(--text, var(--ink)))',
+        'danger-fg': 'var(--bad, var(--danger))',
+        'danger-fg-subtle': 'var(--bad, var(--danger))',
+        'danger-line': 'var(--bad, var(--danger))',
+        'danger-focus': 'var(--bad, var(--danger))',
+        // Only the dashboard has amber. Auth/marketing use a deliberate neutral
+        // warning; info/secondary are neutral everywhere, not stock cyan/purple.
+        'warning': 'var(--warn, var(--text-2, var(--muted)))',
+        'warning-solid': 'var(--warn, var(--text-2, var(--muted)))',
+        'warning-solid-hover': 'color-mix(in srgb, var(--warn, var(--text-2, var(--muted))) 92%, var(--text, var(--ink)))',
+        'warning-ink': 'var(--panel, var(--surface))',
+        'warning-soft': 'color-mix(in srgb, var(--warn, var(--text-2, var(--muted))) 8%, var(--panel, var(--surface)))',
+        'warning-soft-ink': 'color-mix(in srgb, var(--warn, var(--text-2, var(--muted))) 85%, var(--text, var(--ink)))',
+        'info': 'var(--text-2, var(--muted))',
+        'info-solid': 'var(--text-2, var(--muted))',
+        'info-solid-hover': 'var(--text, var(--ink))',
+        'info-ink': 'var(--panel, var(--surface))',
+        'info-soft': 'color-mix(in srgb, var(--text, var(--ink)) 8%, var(--panel, var(--surface)))',
+        'info-soft-ink': 'var(--text-2, var(--muted))',
+        'secondary': 'var(--text-2, var(--muted))',
+        'secondary-solid': 'var(--text-2, var(--muted))',
+        'secondary-solid-hover': 'var(--text, var(--ink))',
+        'secondary-ink': 'var(--panel, var(--surface))',
+        'secondary-soft': 'color-mix(in srgb, var(--text, var(--ink)) 8%, var(--panel, var(--surface)))',
+        'secondary-soft-ink': 'var(--text-2, var(--muted))',
+        'inverse': 'var(--text, var(--ink))',
+        'inverse-ink': 'var(--bg, var(--void))',
       },
     },
   },
