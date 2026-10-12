@@ -55,6 +55,27 @@ export default {
       + '[transition:color_0.15s_ease,border-color_0.15s_ease] '
       + 'hover:text-text hover:border-accent '
       + '[&_svg]:w-[17px] [&_svg]:h-[17px]',
+
+    /*
+     * The placeholder a panel shows when its list came back empty: the
+     * `@empty` branch of a forelse, or the `@else` of the block that would
+     * otherwise have drawn the map. Thirteen sites carried
+     * `py-8 text-center text-sm text-text-3` as four separate utilities,
+     * byte-identical in every one, twelve of them in dashboard.stx.
+     *
+     * Expands to exactly those four and nothing else, so the generated rule
+     * carries the same four declarations the call sites already got. No `!`
+     * anywhere: this REPLACES the utilities rather than overriding a
+     * component's, so there is nothing of equal specificity to beat.
+     *
+     * Named outside the `panel-*` family on purpose, even though every one of
+     * these sits inside a `.panel`. `panel-head` and `panel-tag` belong to
+     * public/marketing.css, which is UNLAYERED and which only the marketing
+     * pages link: a shortcut sharing that prefix would work on a dashboard
+     * page and lose to marketing.css on a marketing one. A name that file has
+     * no claim on cannot be caught that way.
+     */
+    'empty-row': 'py-8 text-center text-sm text-text-3',
   },
 
   theme: {

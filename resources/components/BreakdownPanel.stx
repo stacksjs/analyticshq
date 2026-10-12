@@ -58,6 +58,6 @@ const { title, rows, labelKey, displayKey, valueKey, max, filterKey, empty, mono
       <span class="relative font-medium tabular-nums mono">{{ Number(row[valueKey]).toLocaleString() }}</span>
     </StxLink>
   @empty
-    <div class="py-8 text-center text-sm text-text-3">{{ empty }}</div>
+    <div class="empty-row">{{ empty }}</div>
   @endforelse
 </div>

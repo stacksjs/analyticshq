@@ -3286,7 +3286,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </StxLink>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No pages yet.</div>
+          <div class="empty-row">No pages yet.</div>
         @endforelse
       </div>
 
@@ -3461,7 +3461,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </div>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No entry pages yet.</div>
+          <div class="empty-row">No entry pages yet.</div>
         @endforelse
       </div>
 
@@ -3478,7 +3478,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </div>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No exit pages yet.</div>
+          <div class="empty-row">No exit pages yet.</div>
         @endforelse
       </div>
     </div>
@@ -3527,7 +3527,7 @@ select.panel:hover { border-color: var(--accent); }
             display:none. --}}
         <p data-country-missing hidden class="mt-2 text-text-3 text-xs"></p>
       @else
-        <div class="py-8 text-center text-sm text-text-3">No country data yet.</div>
+        <div class="empty-row">No country data yet.</div>
       @endif
     </div>
 
@@ -3584,7 +3584,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </StxLink>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No visitors in this range yet.</div>
+          <div class="empty-row">No visitors in this range yet.</div>
         @endforelse
       </div>
     @endif
@@ -3610,7 +3610,7 @@ select.panel:hover { border-color: var(--accent); }
           </span>
         </StxLink>
       @empty
-        <div class="py-8 text-center text-sm text-text-3">No channel data yet.</div>
+        <div class="empty-row">No channel data yet.</div>
       @endforelse
     </div>
 
@@ -3629,7 +3629,7 @@ select.panel:hover { border-color: var(--accent); }
           </span>
         </StxLink>
       @empty
-        <div class="py-8 text-center text-sm text-text-3">No referrers yet.</div>
+        <div class="empty-row">No referrers yet.</div>
       @endforelse
     </div>
 
@@ -3652,7 +3652,7 @@ select.panel:hover { border-color: var(--accent); }
           </span>
         </div>
       @empty
-        <div class="py-8 text-center text-sm text-text-3">No goals yet.</div>
+        <div class="empty-row">No goals yet.</div>
       @endforelse
       {{-- Add-goal management form (owner-only; hidden for share viewers): POST
           /api/sites/{site}/goals via @submit=addGoal. Pattern is the event NAME for
@@ -3694,7 +3694,7 @@ select.panel:hover { border-color: var(--accent); }
           </span>
         </div>
       @empty
-        <div class="py-8 text-center text-sm text-text-3">No events yet.</div>
+        <div class="empty-row">No events yet.</div>
       @endforelse
     </div>
 
@@ -3714,7 +3714,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </div>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No outbound clicks yet.</div>
+          <div class="empty-row">No outbound clicks yet.</div>
         @endforelse
       </div>
 
@@ -3730,7 +3730,7 @@ select.panel:hover { border-color: var(--accent); }
             </span>
           </div>
         @empty
-          <div class="py-8 text-center text-sm text-text-3">No downloads yet.</div>
+          <div class="empty-row">No downloads yet.</div>
         @endforelse
       </div>
     </div>
@@ -3745,7 +3745,7 @@ select.panel:hover { border-color: var(--accent); }
           <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
         </StxLink>
       @empty
-        <div class="py-8 text-center text-sm text-text-3">No campaign data yet.</div>
+        <div class="empty-row">No campaign data yet.</div>
       @endforelse
     </div>
 
