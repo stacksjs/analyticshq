@@ -76,6 +76,23 @@ export default {
      * no claim on cannot be caught that way.
      */
     'empty-row': 'py-8 text-center text-sm text-text-3',
+
+    /*
+     * The box an inline form notice sits in: the error banner above a form and
+     * the confirmation that replaces it. Nine sites across the five auth-shaped
+     * views spelled `px-3 text-sm rounded-lg` out in full, identically.
+     *
+     * The COLOUR is not in here. `.err` and `.ok` live in the auth layout's own
+     * style block and already carry the tint and the text colour, so this is
+     * the geometry only and the two compose: `class="mb-4 py-2 notice-box err"`.
+     *
+     * The vertical padding is not in here either, and that is deliberate rather
+     * than an oversight. Errors sit at py-2 and confirmations at py-3 across
+     * this app, bughq and loghq alike, so it is a real axis at the call site;
+     * folding in the more common one would mean `!py-3` on a third of the
+     * sites, which is worse than leaving one utility visible.
+     */
+    'notice-box': 'px-3 text-sm rounded-lg',
   },
 
   theme: {

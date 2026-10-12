@@ -139,7 +139,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
   </div>
 
   @if (error())
-    <div id="login-error" role="alert" class="mb-4 px-3 py-2 text-sm rounded-lg err">{{ error() }}</div>
+    <div id="login-error" role="alert" class="mb-4 py-2 err notice-box">{{ error() }}</div>
   @endif
 
   {{-- Step 1: credentials. Hidden once a 2FA challenge is in flight. --}}
@@ -180,7 +180,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
 
   <div :show="!twoFactor()">
     @if (oauthError())
-      <div role="alert" class="mt-4 px-3 py-2 text-sm rounded-lg err">{{ oauthError() }}</div>
+      <div role="alert" class="mt-4 py-2 err notice-box">{{ oauthError() }}</div>
     @endif
 
     <div class="my-5 divider">or</div>
