@@ -122,7 +122,22 @@ export default {
         'fg': 'var(--text, var(--ink))',
         'fg-strong': 'var(--text, var(--ink))',
         'fg-muted': 'var(--text-2, var(--muted))',
-        'fg-soft': 'var(--text-2, var(--muted))',
+        /*
+         * The library's quiet text scale is four steps - fg, fg-muted, fg-soft,
+         * fg-subtle - and this palette has three, so two roles share a value.
+         * They used to share at the WRONG end: fg-soft was byte-identical to
+         * fg-muted, which makes "quieter than muted" exactly as loud as muted.
+         *
+         * Nothing renders it today, which is why it was invisible: of the 53
+         * <EmptyState> sites in the estate none passes an `icon` (the only
+         * thing there that reads fg-soft) and there is no <Badge dot>. But
+         * <Breadcrumb> paints separators with fg-soft and links with fg-muted,
+         * so the two being equal is a divider as loud as the labels it divides.
+         *
+         * Doubling up at the quiet end keeps the scale monotonic, so a
+         * component asking for a quieter grey gets one.
+         */
+        'fg-soft': 'var(--text-3, var(--faint))',
         'fg-subtle': 'var(--text-3, var(--faint))',
         'line': 'var(--border, var(--line))',
         'line-strong': 'color-mix(in srgb, var(--text-3, var(--faint)) 55%, var(--border, var(--line)))',
