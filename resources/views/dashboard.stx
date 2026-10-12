@@ -3278,7 +3278,7 @@ select.panel:hover { border-color: var(--accent); }
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top pages</h2>
         @forelse (pages as p)
           <StxLink to="{{ addFilterUrl('path', p.path) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%; background: var(--bar);"></div>
+            <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(p.views) / maxPage) * 100) }}%"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ p.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono" title="Bounce rate for sessions that landed on this page">{{ Number(p.entries) ? `${Math.round((Number(p.bounces) / Number(p.entries)) * 100)}%` : 'n/a' }}</span>
@@ -3452,7 +3452,7 @@ select.panel:hover { border-color: var(--accent); }
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Entry pages</h2>
         @forelse (entryPages as e)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.entries) / maxEntry) * 100) }}%; background: var(--bar);"></div>
+            <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(e.entries) / maxEntry) * 100) }}%"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ e.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono" title="Bounce rate">{{ Math.round((Number(e.bounces) / Number(e.entries)) * 100) }}%</span>
@@ -3470,7 +3470,7 @@ select.panel:hover { border-color: var(--accent); }
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Exit pages</h2>
         @forelse (exitPages as e)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.exits) / maxExit) * 100) }}%; background: var(--bar);"></div>
+            <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(e.exits) / maxExit) * 100) }}%"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ e.path }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono">{{ Number(e.visitors).toLocaleString() }}</span>
@@ -3602,7 +3602,7 @@ select.panel:hover { border-color: var(--accent); }
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrer channels</h2>
       @forelse (channels as c)
         <StxLink to="{{ addFilterUrl('channel', c.name) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-          <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxChannel) * 100) }}%; background: var(--bar);"></div>
+          <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(c.views) / maxChannel) * 100) }}%"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ c.name }}</span>
           <span class="flex relative gap-2.5 items-baseline">
             <span class="tabular-nums text-text-3 mono">{{ Math.round((Number(c.views) / channelTotal) * 100) || (c.views ? '<1' : '0') }}%</span>
@@ -3621,7 +3621,7 @@ select.panel:hover { border-color: var(--accent); }
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Referrers</h2>
       @forelse (referrerUrls as r)
         <StxLink to="{{ addFilterUrl('referrer', r.url) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-          <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(r.views) / maxReferrerUrl) * 100) }}%; background: var(--bar);"></div>
+          <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(r.views) / maxReferrerUrl) * 100) }}%"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ r.url }}</span>
           <span class="flex relative gap-3.5 items-baseline">
             <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(r.visitors).toLocaleString() }}</span>
@@ -3640,7 +3640,7 @@ select.panel:hover { border-color: var(--accent); }
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Goals</h2>
       @forelse (goals as g)
         <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-          <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(g.conversions) / maxGoal) * 100) }}%; background: var(--bar);"></div>
+          <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(g.conversions) / maxGoal) * 100) }}%"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ g.name }}</span>
           <span class="flex relative gap-3.5 items-baseline">
             <span class="tabular-nums text-text-3 mono">${{ Number(g.total_value).toLocaleString() }}</span>
@@ -3686,7 +3686,7 @@ select.panel:hover { border-color: var(--accent); }
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Events</h2>
       @forelse (events as e)
         <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-          <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(e.events) / maxEvent) * 100) }}%; background: var(--bar);"></div>
+          <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(e.events) / maxEvent) * 100) }}%"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label">{{ e.name }}</span>
           <span class="flex relative gap-3.5 items-baseline">
             <span class="tabular-nums text-text-3 mono">{{ Number(e.visitors).toLocaleString() }}</span>
@@ -3706,7 +3706,7 @@ select.panel:hover { border-color: var(--accent); }
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Outbound links</h2>
         @forelse (outboundLinks as l)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(l.clicks) / maxOutbound) * 100) }}%; background: var(--bar);"></div>
+            <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(l.clicks) / maxOutbound) * 100) }}%"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ l.url }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
@@ -3722,7 +3722,7 @@ select.panel:hover { border-color: var(--accent); }
         <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">File downloads</h2>
         @forelse (fileDownloads as l)
           <div class="flex relative items-center justify-between -mx-1 px-1 py-2.5 text-sm">
-            <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(l.clicks) / maxDownload) * 100) }}%; background: var(--bar);"></div>
+            <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(l.clicks) / maxDownload) * 100) }}%"></div>
             <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ l.url }}</span>
             <span class="flex relative gap-3.5 items-baseline">
               <span class="tabular-nums text-text-3 mono" title="Unique visitors">{{ Number(l.visitors).toLocaleString() }}</span>
@@ -3740,7 +3740,7 @@ select.panel:hover { border-color: var(--accent); }
       <h2 class="mb-4 font-semibold text-text-3 text-xs tracking-wider uppercase">Top campaigns</h2>
       @forelse (campaigns as c)
         <StxLink to="{{ addFilterUrl('campaign', c.campaign) }}" class="relative items-center justify-between -mx-1 px-1 py-2.5 text-sm ga-row">
-          <div class="absolute inset-y-1 left-0 rounded" style="width: {{ Math.round((Number(c.views) / maxCampaign) * 100) }}%; background: var(--bar);"></div>
+          <div class="absolute inset-y-1 left-0 rounded bg-bar" style="width: {{ Math.round((Number(c.views) / maxCampaign) * 100) }}%"></div>
           <span class="relative pr-2 text-text-2 truncate ga-row-label mono">{{ c.campaign }}</span>
           <span class="relative font-medium tabular-nums mono">{{ Number(c.views).toLocaleString() }}</span>
         </StxLink>
