@@ -71,12 +71,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .divider { display: flex; align-items: center; gap: 0.75rem; color: var(--text-3); font-size: 12px; }
 .divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
 </style>
-@stack('styles')
 @endhead
 
 {{-- Outside <main> so a swap between two auth pages leaves it in place. --}}
 <div class="fixed right-4 top-4 z-10"><ThemeToggle /></div>
 <main class="flex items-center justify-center px-5 py-12 min-h-[100dvh]">
+{{-- Inside the container for the reason marketing.stx explains. No auth page
+    pushes a style today; the stack is here so that the first one to do it is
+    page-scoped rather than live for the session. --}}
+@stack('styles')
 @yield('content')
 </main>
 

@@ -26,7 +26,13 @@
     supersets here, so account gains an unused variable and a better monospace stack and
     renders identically. Everything page-specific stays in the page, pushed to
     @stack('styles') rather than left loose: once a layout applies, stx sweeps every
-    orphan <style> out of the page and appends it AFTER the content, in the body. --}}
+    orphan <style> out of the page and appends it AFTER the content, in the body.
+
+    That stack sits INSIDE <main> below, which it did not until 2026-10-13. In
+    @head it was outside the router's container and so was never removed, and
+    whichever of these three pages the visitor entered on kept its rules live
+    for the whole session -- /dashboard's 23k of CSS, including a `.panel` and a
+    `.btn` that eight and six other files use in markup. --}}
 
 @head
 <style>
@@ -73,10 +79,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); -web
 .theme-toggle-btn .ic-moon, :root[data-theme="light"] .theme-toggle-btn .ic-sun { display: none; }
 :root[data-theme="light"] .theme-toggle-btn .ic-moon { display: block; }
 </style>
-@stack('styles')
 @endhead
 
 <main>
+{{-- Inside the container, not in @head. See the note in marketing.stx: a pushed
+    <style> in the head outlives the page that pushed it, so entering on
+    /dashboard applied its 23k of CSS to every route for the session. --}}
+@stack('styles')
 @yield('content')
 </main>
 

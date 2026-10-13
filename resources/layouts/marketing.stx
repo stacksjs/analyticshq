@@ -38,7 +38,6 @@ const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0c0e">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafbfb">
 <link rel="stylesheet" href="/marketing.css">
-@stack('styles')
 @endhead
 
 {{-- The coming-soon gate. Lived in index.stx until now, which is why that page had to
@@ -72,6 +71,12 @@ const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
       extraction slices from the first <main> to the LAST </main>, so a second one
       makes the router swap the wrong span and duplicate the chrome. --}}
   <main>
+{{-- Inside the container, not in @head. A pushed <style> in the head is never
+    removed -- the router only manages style[data-crosswind] and
+    style[data-stx-page] -- so whichever page the visitor entered on kept its
+    rules applied to every route for the rest of the session. Here the block is
+    part of the swapped fragment and lives exactly as long as the page does. --}}
+@stack('styles')
 @yield('content')
   </main>
 
