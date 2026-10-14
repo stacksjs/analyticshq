@@ -135,17 +135,29 @@ describe('the palettes', () => {
     expect(light).toBeGreaterThan(dark)
   })
 
-  test('no font family is double-quoted', () => {
+  test('both font stacks reach the generated sheet unchanged', async () => {
     /*
-     * Not style. A double-quoted font family inside a preflight makes this
-     * engine substitute its own default stack and swallow the rules that
-     * follow -- measured on ts-css, and the reason commshq's block is
-     * single-quoted too. The whole of CHROME sits after these declarations.
+     * This test used to assert that no family name was double-quoted, on the
+     * belief that quoting was what made the engine substitute its own stack.
+     * It is not. Measured against the installed engine, the trigger is the
+     * SPACED rule form -- `sel { prop: value; }` -- with a stack beginning
+     * `ui-sans-serif`, and nothing after it is lost. What makes these safe is
+     * that they are custom properties, which are never rewritten, and that
+     * CHROME reaches the family through `var(--sans)`.
+     *
+     * So the assertion is the outcome rather than the shape: whatever the
+     * config declares is what the sheet carries. That holds whichever form a
+     * future edit uses, and fails the moment one is substituted.
      */
-    expect(css).not.toMatch(/font-family:[^;]*"/)
-    expect(css).not.toMatch(/--(?:sans|mono):[^;]*"/)
+    const sheet = await generate('<main></main>')
+    const declared = [...css.matchAll(/--(?:sans|mono):\s*([^;}]+)/g)].map(m => m[1].trim())
+    expect(declared.length).toBeGreaterThan(0)
+    for (const stack of declared)
+      expect({ stack, inSheet: has(sheet, stack) }).toEqual({ stack, inSheet: true })
     expect(has(css, "--sans: 'Geist', ui-sans-serif, system-ui, sans-serif")).toBe(true)
     expect(has(css, "--mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace")).toBe(true)
+    // And the one `font-family` declaration in the preflight is a var().
+    expect(has(sheet, 'font-family: var(--sans)')).toBe(true)
   })
 })
 

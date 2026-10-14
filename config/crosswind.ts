@@ -73,10 +73,20 @@ const AUTH = 'html:has(meta[name="stx-layout-group"][content="auth"])'
  * inputs, checkboxes, scrollbars) match the page instead of staying light on
  * the dark palette.
  *
- * Single quotes around the font families, not double. A double-quoted family
- * in a preflight makes this engine substitute its own default stack and
- * swallow the rules that follow -- measured on ts-css, and the reason the same
- * block in commshq is single-quoted too.
+ * The font stacks are custom properties, not `font-family` declarations, and
+ * that is what makes them safe here.
+ *
+ * An earlier version of this comment said the single quotes were load-bearing:
+ * that a double-quoted family in a preflight made the engine substitute its
+ * own stack and swallow the rules after it. Both halves are wrong. Measured
+ * against the installed engine, the trigger is the SPACED rule form --
+ * `sel { prop: value; }` -- with a stack that begins with `ui-sans-serif`;
+ * quoting makes no difference and no neighbouring rule is lost. A custom
+ * property is never rewritten whatever its form, and `font-family: var(--sans)`
+ * in CHROME below is not either, because the value is a var() reference.
+ *
+ * So the quoting is a style choice. It stays single because that is what the
+ * views used, and because CSS treats the two identically.
  */
 const APP_LIGHT = `color-scheme: light;
   --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
