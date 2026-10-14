@@ -140,10 +140,17 @@ describe('the surfaces and the timeline', () => {
   })
 
   test('the skeleton still stops for prefers-reduced-motion', async () => {
+    /*
+     * Found by its own contents rather than by taking the first
+     * `prefers-reduced-motion` block in the sheet: DASHBOARD_CSS declares two
+     * of its own ahead of this one, and the engine emits this rule from the
+     * `motion-reduce:animate-none` utility after the whole preflight.
+     */
     const css = await generate('<div class="skeleton"></div>')
-    const at = css.indexOf('@media (prefers-reduced-motion: reduce)')
-    expect(at).toBeGreaterThan(-1)
-    expect(has(css.slice(at, at + 200), '.skeleton { animation: none; }')).toBe(true)
+    const blocks = [...flat(css).matchAll(/@media \(prefers-reduced-motion: reduce\) \{([^@]*?)\}\s*\}/g)]
+    const mine = blocks.filter(b => b[1].includes('.skeleton'))
+    expect(mine).toHaveLength(1)
+    expect(flat(mine[0][1])).toContain('.skeleton { animation: none;')
   })
 
   test('the keyframes are not called `pulse`', () => {

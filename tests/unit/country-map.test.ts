@@ -22,11 +22,20 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { countryName } from '../../app/Support/dashboard-format'
+import crosswind from '../../config/crosswind'
 
 const root = join(import.meta.dir, '../..')
 const bundle = join(root, 'public/vendor/ts-maps.js')
 const geojson = join(root, 'public/vendor/world-countries.geojson')
 const dashboard = readFileSync(join(root, 'resources/views/dashboard.stx'), 'utf8')
+/*
+ * The map's own CSS -- the ts-maps tooltip restatement, the sea fill, the live
+ * pins -- is config/crosswind.ts's DASHBOARD_CSS now rather than a <style>
+ * block in the view (rule 3 / §11.1). It could not become utility classes
+ * whatever the rule said: ts-maps writes these nodes itself, from JavaScript,
+ * long after the extractor has read the page.
+ */
+const dashboardCss = (crosswind.preflights ?? []).map(e => e.getCSS()).join('\n')
 
 /** The map's client script, bounded by its own script tag. */
 function mapScript(): string {
@@ -292,9 +301,9 @@ describe('countries read as names, and the tooltip is visible while doing it', (
     // The vendor bubble is a white box with #222 text and a white arrow, which
     // is unreadable here. The arrow is a border triangle, so each direction
     // carries its own colour and each has to be re-pointed.
-    expect(dashboard).toContain('#country-map .tsmap-tooltip {')
+    expect(dashboardCss).toContain('#country-map .tsmap-tooltip {')
     for (const dir of ['top', 'bottom', 'left', 'right'])
-      expect({ dir, styled: dashboard.includes(`#country-map .tsmap-tooltip-${dir}:before`) })
+      expect({ dir, styled: dashboardCss.includes(`#country-map .tsmap-tooltip-${dir}:before`) })
         .toEqual({ dir, styled: true })
   })
 
@@ -376,14 +385,14 @@ describe('the map talks to nothing but this origin', () => {
     for (const token of ['var(--accent)', 'var(--bg)', 'var(--map-land)'])
       expect(s).toContain(token)
     expect(s).not.toMatch(/#[0-9a-f]{3,6}\b/i)
-    expect(dashboard).toMatch(/#country-map\s*\{[^}]*--map-land:/)
+    expect(dashboardCss).toMatch(/#country-map\s*\{[^}]*--map-land:/)
   })
 
   test('the sea follows the theme, not the engine\'s light basemap grey', () => {
     // ts-maps paints its container with its own --tsmap-tile-bg (#e8eaed) and
     // removes the inline background-color on init, which left the dark
     // dashboard with a pale grey map. The override has to target the token.
-    expect(dashboard).toMatch(/#country-map\.tsmap-container\s*\{[^}]*--tsmap-tile-bg:\s*var\(--bg\)/)
+    expect(dashboardCss).toMatch(/#country-map\.tsmap-container\s*\{[^}]*--tsmap-tile-bg:\s*var\(--bg\)/)
   })
 
   test('country fills are opaque, so few visits never render darker than none', () => {

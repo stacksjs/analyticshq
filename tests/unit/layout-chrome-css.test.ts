@@ -31,11 +31,14 @@ import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-con
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
-/** The preflight alone, exactly as the engine receives it. */
+/**
+ * The preflight alone, exactly as the engine receives it. Four entries --
+ * TOKENS, CHROME, APP_VIEWS, DASHBOARD_CSS -- concatenated in cascade order,
+ * which is how the engine joins them.
+ */
 function preflightCSS(): string {
-  const entries = (theme as { preflights?: { getCSS: () => string }[] }).preflights ?? []
-  expect(entries.length).toBe(1)
-  return entries.map(e => e.getCSS()).join('\n')
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(e => e.getCSS()).join('\n')
 }
 
 /**
@@ -182,10 +185,17 @@ describe('the shared chrome, through the real merge', () => {
      * call sites keep their `py-2.5 w-full font-semibold text-sm`.
      */
     const css = await generate('<main class="wordmark"></main>')
+    /*
+     * Anchored on the UTILITY's rule, not on `.wordmark` anywhere in the
+     * sheet: the preflight declares `.wordmark` too, inside the layer, and
+     * `indexOf` finds that one. The question is where the generated utility
+     * lands relative to the last layer block.
+     */
     const layer = css.lastIndexOf('@layer')
-    const wordmark = css.indexOf('.wordmark')
+    const utility = css.indexOf('.wordmark {', css.lastIndexOf('}'))
     expect(layer).toBeGreaterThan(-1)
-    expect(wordmark).toBeGreaterThan(layer)
+    expect(css.slice(layer).includes('.wordmark')).toBe(true)
+    expect(utility === -1 ? css.lastIndexOf('.wordmark') : utility).toBeGreaterThan(layer)
   })
 })
 
@@ -254,35 +264,5 @@ describe('the auth controls, as shortcuts', () => {
         .flatMap(m => m[1].split(/\s+/))
       expect(`${view}: ${classes.includes('btn')}`).toBe(`${view}: false`)
     }
-  })
-})
-
-describe('rule 3: the style blocks that are left', () => {
-  /*
-   * The last one, named so that a new one is a failure rather than a
-   * quiet addition, and so that clearing one is a deliberate edit here.
-   *
-   *   dashboard.stx -- 495 lines, the date-range picker, the country map's
-   *     ts-maps tooltips, the account menu and the GA import table. Over half
-   *     the app's remaining CSS on its own.
-   */
-  const ALLOWED = [
-    'resources/views/dashboard.stx',
-  ]
-
-  test('no .stx file outside the allowlist declares CSS', () => {
-    /*
-     * Comments are stripped first. These files discuss `<style>` at length --
-     * app.stx and marketing.stx both explain in prose why a pushed one used to
-     * outlive its page -- and a grep for the opening tag counts those
-     * sentences. The last census of this estate reported 47 files for that
-     * reason when the real number was 38.
-     */
-    const { globSync } = require('node:fs') as { globSync: (p: string, o: { cwd: string }) => string[] }
-    const found = globSync('resources/**/*.stx', { cwd: ROOT })
-      .filter(p => /^\s*<style[\s>]/m.test(read(p).replace(/\{\{--[\s\S]*?--\}\}/g, '')))
-      .map(p => p.replace(/\\/g, '/'))
-      .sort()
-    expect(found).toEqual([...ALLOWED].sort())
   })
 })

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tzCookie, validTimeZone, zonedKey, zoneLabel } from '../../app/Support/timezone'
 import { stamp } from '../../app/Support/visitor-format'
+import crosswind from '../../config/crosswind'
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -84,7 +85,10 @@ describe('the dashboard wiring', () => {
     // The stx router strips aria-current="page" from any link whose href is not
     // the current pathname, and these hrefs are query-only.
     expect(dash).toContain(`aria-current="{{ !isCustom && r.key === range ? 'true' : 'false' }}"`)
-    expect(dash).toContain('.range-link[aria-current="true"]')
-    expect(dash).not.toContain('.range-link[aria-current="page"]')
+    // The rule that acts on it is config/crosswind.ts's DASHBOARD_CSS now, not
+    // a <style> block in the view -- rule 3 / §11.1.
+    const css = (crosswind.preflights ?? []).map(e => e.getCSS()).join('\n')
+    expect(css).toContain('.range-link[aria-current="true"]')
+    expect(css).not.toContain('.range-link[aria-current="page"]')
   })
 })

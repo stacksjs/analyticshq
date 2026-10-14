@@ -1,10 +1,19 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import crosswind from '../../config/crosswind'
 
 const ROOT = join(import.meta.dir, '../..')
 const component = readFileSync(join(ROOT, 'resources/components/DateRangePicker.stx'), 'utf8')
 const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8')
+/*
+ * The picker's CSS lives in config/crosswind.ts's DASHBOARD_CSS now, not in a
+ * <style> block in the view -- rule 3 / §11.1. Read from the config's own
+ * preflight entry rather than from the file's text, so these assertions follow
+ * the rules wherever they are declared and fail if an entry stops being
+ * emitted at all.
+ */
+const dashboardCss = (crosswind.preflights ?? []).map(e => e.getCSS()).join('\n')
 
 // The date math ships inside the component's client script, where a unit test
 // cannot import it. The #region markers fence off the part that touches no
@@ -140,7 +149,7 @@ describe('date range picker: wiring', () => {
     expect(component).toMatch(/function pickClose\(e(?:: Event)?\)(?:: void)? \{[\s\S]*?closest\('details'\)[\s\S]*?removeAttribute\('open'\)/)
     // It sits below the panel and above the sticky nav so a click on the panel
     // itself never reaches it, but a click on the page behind does.
-    const backdrop = dashboard.match(/\.drp-backdrop\s*\{[^}]*\}/)?.[0] ?? ''
+    const backdrop = dashboardCss.match(/\.drp-backdrop\s*\{[^}]*\}/)?.[0] ?? ''
     expect(backdrop).toContain('position: fixed')
     expect(backdrop).toContain('inset: 0')
     expect(backdrop).toMatch(/z-index:\s*39\b/)
@@ -149,7 +158,7 @@ describe('date range picker: wiring', () => {
   test('at phone width the panel shows one calendar inside the visible viewport', () => {
     // Anchored on the rule that already switches the menu to phone layout, so the
     // test does not depend on the block's breakpoint value.
-    const phone = dashboard.slice(dashboard.indexOf('.date-menu { position: static; }'))
+    const phone = dashboardCss.slice(dashboardCss.indexOf('.date-menu { position: static; }'))
     expect(phone).toContain('.drp-cal.is-right { display: none; }')
     expect(phone).toContain('max-height: calc(100dvh - 6rem); overflow-y: auto; overscroll-behavior: contain;')
     expect(phone).toContain('.drp { grid-template-columns: minmax(0, 1fr); }')
