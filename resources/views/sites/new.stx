@@ -90,7 +90,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
     <div class="text-center">
       <h1 class="mb-2 font-semibold text-xl tracking-tight">Sign in to add a site</h1>
       <p class="mb-6 text-sm text-text-3">Adding a site needs an account. Sign in to continue.</p>
-      <StxLink to="/login" class="inline-block px-4 py-2.5 font-semibold text-sm btn">Sign in</StxLink>
+      <StxLink to="/login" class="inline-block px-4 py-2.5 font-semibold text-sm btn-accent">Sign in</StxLink>
     </div>
   @else
   <div class="mb-8 text-center">
@@ -112,7 +112,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <input id="site-domain" name="domain" type="text" placeholder="example.com" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
     </div>
 
-    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
+    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
       {{ loading() ? 'Creating…' : 'Create site' }}
     </button>
   </form>

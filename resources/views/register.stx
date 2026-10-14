@@ -74,7 +74,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
   <StxLink to="/" class="text-2xl wordmark">analyticshq</StxLink>
   <p class="mt-6 text-sm text-text-2">You are signed in as <span class="font-medium text-text">{{ auth.user?.email }}</span>.</p>
   <div class="flex flex-col gap-2.5 mt-6">
-    <StxLink to="/dashboard" class="py-2.5 w-full font-semibold text-sm btn">Go to your dashboard</StxLink>
+    <StxLink to="/dashboard" class="py-2.5 w-full font-semibold text-sm btn-accent">Go to your dashboard</StxLink>
     <StxLink to="/account" class="py-2.5 w-full font-medium text-sm oauth-btn">Account</StxLink>
   </div>
   <p class="mt-5 text-text-3 text-xs">To create an account with a different account, log out from your account page first.</p>
@@ -104,7 +104,7 @@ async function handleSubmit(e: SubmitEvent): Promise<void> {
       <input id="register-password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'form-error' : ''">
     </div>
 
-    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn">
+    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
       {{ loading() ? 'Creating account…' : 'Create account' }}
     </button>
   </form>

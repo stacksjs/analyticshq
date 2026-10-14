@@ -2,7 +2,161 @@
  * Crosswind (utility CSS) — content globs for STX views.
  * @see https://github.com/cwcss/crosswind
  */
+
+/*
+ * ## Where the chrome below used to live, and why it moved
+ *
+ * resources/layouts/app.stx and resources/layouts/auth.stx each carried a
+ * `<style>` block in `@head`: a `:root` palette, a `body` rule, `.wordmark`,
+ * and the ten rules ThemeToggle.stx needs. The last twelve of those were
+ * BYTE-IDENTICAL between the two files (checked by diffing the spans, not by
+ * eye), and the palettes were two deliberately different sets under the same
+ * token names.
+ *
+ * A `<style>` block in a `.stx` file is invisible to the extractor, cannot be
+ * deduped or purged, and is the thing stx-standards rule 3 / §11.1 forbids;
+ * §11.2 says the tokens belong here, exactly once. Both are now `preflights`
+ * entries, which the render path prepends to the generated sheet -- so they
+ * land inside the one `<style data-crosswind>` the SPA router preserves across
+ * a fragment swap, instead of a `/_stx/style.*.css` file of their own.
+ *
+ * ## Why a preflight is the right vehicle and a shortcut is not
+ *
+ * Measured against the installed engine rather than assumed: `preflights` land
+ * in `@layer tc-base`, and `shortcuts` emit an UNLAYERED `.name{…}` rule. An
+ * unlayered rule beats a layered one at any specificity, and the generated
+ * sheet is served AFTER public/marketing.css on every marketing page (verified
+ * in the built output: /marketing.css at byte 2183 of dist/pricing.html, the
+ * generated link at 2228).
+ *
+ * So for a class name public/marketing.css also claims -- `.btn`, `.panel`,
+ * `.stat-label` -- the two vehicles do opposite things: a preflight LOSES to
+ * marketing.css on the 28 marketing pages and applies everywhere else, while a
+ * shortcut WINS and would repaint them. The layer is the page scoping, for
+ * free. Nothing here shares a name with marketing.css, and the auth controls
+ * that did are shortcuts under names it has no claim on (see `btn-accent`).
+ *
+ * ## Why the palettes are keyed off a meta tag
+ *
+ * One generated sheet serves every page, so `:root{…}` would put the app's
+ * white `--panel` on the marketing pages too -- where the whole point of the
+ * `var(--panel, var(--surface))` fallbacks in `theme.extend.colors` below is
+ * that `--panel` is UNDEFINED and marketing.css's `--surface` answers instead.
+ * Defining it would quietly turn every `bg-panel` on those pages white.
+ *
+ * stx emits `<meta name="stx-layout-group" content="…">` into `<head>` from
+ * the layout's FILENAME, which is already what this app treats as the real
+ * name of a layout group (see the comment at the top of each layout), and
+ * stx-router keeps it fresh across navigations. It is also emitted at the very
+ * top of `<head>` -- byte 219 of dist/dashboard.html, a kilobyte ahead of the
+ * first stylesheet -- so the match is settled before anything paints. Keying
+ * off `<main data-chrome>` instead would have left a frame where the palette
+ * had not resolved yet, which on the dark auth pages is a white flash.
+ *
+ * `html:has(meta…)` is (0,2,1): it outranks the plain `:root` the rules below
+ * would otherwise use, and the two groups are mutually exclusive, so neither
+ * palette can reach the other's pages however the two blocks are ordered.
+ */
+const APP = 'html:has(meta[name="stx-layout-group"][content="app"])'
+const AUTH = 'html:has(meta[name="stx-layout-group"][content="auth"])'
+
+/*
+ * analyticshq — Geist display + Geist Mono for numerics. One accent (emerald),
+ * off-black/off-white, auto light+dark, radius lock 12px.
+ *
+ * `--accent` is a fill: behind `--accent-ink` it clears 4.5:1, but as small
+ * text on the light page it is 3.6:1, so text in the accent colour uses
+ * `--accent-text`. `--good` / `--bad` / `--warn` are the delta, error and
+ * warning colours, which were Tailwind 500s written inline and read at 2-4:1
+ * on the light palette. Each clears 4.5:1 on `--bg` and `--panel` in its own
+ * theme. `color-scheme` makes the native controls (the site switcher, date
+ * inputs, checkboxes, scrollbars) match the page instead of staying light on
+ * the dark palette.
+ *
+ * Single quotes around the font families, not double. A double-quoted family
+ * in a preflight makes this engine substitute its own default stack and
+ * swallow the rules that follow -- measured on ts-css, and the reason the same
+ * block in commshq is single-quoted too.
+ */
+const APP_LIGHT = `color-scheme: light;
+  --bg: #fbfbfc; --panel: #ffffff; --border: rgba(15,23,42,0.08);
+  --text: #0b1220; --text-2: #4b5563; --text-3: #667085; --accent: #059669; --accent-ink: #04120d; --bar: rgba(5,150,105,0.16);
+  --accent-text: #047857; --good: #047857; --bad: #c93434; --warn: #b45309;
+  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;`
+
+const APP_DARK = `color-scheme: dark; --bg: #080b12; --panel: #0f131c; --border: rgba(148,163,184,0.12);
+  --text: #f2f5f9; --text-2: #b0b9c8; --text-3: #7b879a; --accent: #34d399; --accent-ink: #04120d; --bar: rgba(52,211,153,0.18);
+  --accent-text: #34d399; --good: #34d399; --bad: #f87171; --warn: #fbbf24;`
+
+/*
+ * The marketing palette under this layout's token names, so signing in looks
+ * like the site you came from -- dark by default, light when the OS asks or
+ * the reader picked it (config/ui.ts app.colorMode writes <html data-theme>
+ * before first paint; the attribute beats the media query either way).
+ *
+ * The values are public/marketing.css's, spelled out rather than aliased: that
+ * file is only linked by the marketing layout, so `var(--void)` would resolve
+ * to nothing here. The duplication is marketing.css's 47 token declarations
+ * being their own §11.2 debt, not this block's.
+ */
+const AUTH_DARK = `color-scheme: dark;
+  --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
+  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #7b878c;
+  --accent: #46d3c0; --accent-ink: #04201c; --danger: #f87171;
+  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;`
+
+const AUTH_LIGHT = `color-scheme: light;
+  --bg: #fafbfb; --panel: #ffffff; --border: rgba(12,18,20,0.12);
+  --text: #0c1214; --text-2: #4e5a5f; --text-3: #5f6b72;
+  --accent: #0f7c72; --accent-ink: #ffffff; --danger: #c93434;`
+
+/*
+ * One light set per group, written twice: the media query covers auto mode
+ * (and a reader with scripts off), the attribute covers an explicit choice.
+ * The explicit-choice rules come last and are (0,3,1), so a reader who picked
+ * light on a dark-preferring OS gets light in both groups.
+ */
+const TOKENS = `${APP} { ${APP_LIGHT} }
+@media (prefers-color-scheme: dark) { ${APP} { ${APP_DARK} } }
+${APP}[data-theme="dark"] { ${APP_DARK} }
+${APP}[data-theme="light"] { ${APP_LIGHT} }
+${AUTH} { ${AUTH_DARK} }
+@media (prefers-color-scheme: light) { ${AUTH}:not([data-theme="dark"]) { ${AUTH_LIGHT} } }
+${AUTH}[data-theme="light"] { ${AUTH_LIGHT} }`
+
+/*
+ * The twelve rules both layouts carried identically.
+ *
+ * `body` is scoped to the two groups because `--bg` and `--text` are: on a
+ * marketing page they are undefined, and `background: var(--bg)` with nothing
+ * behind it is a declaration that computes to nothing. marketing.css's own
+ * unlayered `body` rule would win there anyway, but relying on that would make
+ * these pages depend on a file they do not link.
+ *
+ * `.wordmark` and the ThemeToggle rules are unscoped: no marketing page
+ * carries either class -- marketing.css styles its nav toggle as
+ * `.theme-toggle`, a different element -- so the name is the scope.
+ *
+ * ThemeToggle (resources/components/ThemeToggle.stx) shows the theme you would
+ * switch TO: a sun on dark, a moon on light, keyed off the data-theme the
+ * pre-paint boot writes. Those last two rules are why this is a preflight and
+ * not a shortcut: `:root[data-theme="light"] .theme-toggle-btn .ic-moon` is a
+ * descendant of an attribute on the root, which no utility spells.
+ */
+const CHROME = `${APP} body, ${AUTH} body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+.wordmark { font-weight: 700; letter-spacing: -0.03em; }
+.theme-toggle-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; flex-shrink: 0;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text-2); cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease; }
+.theme-toggle-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.theme-toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle-btn i { width: 1rem; height: 1rem; }
+.theme-toggle-btn .ic-moon, :root[data-theme="light"] .theme-toggle-btn .ic-sun { display: none; }
+:root[data-theme="light"] .theme-toggle-btn .ic-moon { display: block; }`
+
 export default {
+
   content: [
     './resources/views/**/*.{stx,html}',
     './resources/**/*.{stx,html}',
@@ -33,10 +187,18 @@ export default {
   ],
   preflight: true,
   minify: false,
-  // Register the design tokens (defined as CSS vars in each view's :root, so they
-  // stay theme-reactive for light/dark) so utilities like `text-text-2`,
-  // `bg-panel`, `border-border` exist — replacing repetitive inline
-  // `style="color: var(--text-2)"` etc. with crosswind classes.
+
+  /*
+   * The two layouts' former `<style>` blocks. One entry, not several: the
+   * engine passes a preflight's string through verbatim, so a multi-rule
+   * entry keeps its rules and their order (checked against the installed
+   * engine -- an earlier splitter in loghq was guarding a loss that does not
+   * happen on ts-css).
+   */
+  preflights: [{ getCSS: () => `${TOKENS}\n${CHROME}` }],
+  // The theme below maps utility names onto the tokens the preflight declares,
+  // so `text-text-2`, `bg-panel`, `border-border` exist and replace the
+  // repetitive inline `style="color: var(--text-2)"` these views used to carry.
   /**
    * Shared chrome, defined once here rather than per page.
    *
@@ -44,12 +206,71 @@ export default {
    * only reads `class=` attributes, and the SPA router keeps only the generated
    * Crosswind tag across a fragment swap. A shortcut is the supported home for a
    * repeated composite, and it is where bughq keeps the same button.
-   *
-   * Sized to sit level with the pill controls beside it: those are px-3 py-1.5 on
-   * a 13px line, which lands at 34px, so this is a 34px square rather than a
-   * padded box that would drift when the row wraps.
    */
   shortcuts: {
+    /*
+     * ## The auth controls
+     *
+     * The five auth views' form chrome, which lived in resources/layouts/auth.stx.
+     * Shortcuts rather than preflight rules because every one of these shapes is
+     * something the engine can spell, and because a shortcut is unlayered: it
+     * composes with the utilities already at the call sites (`py-2.5 w-full
+     * font-semibold text-sm`) the same way the old `<style>` rules did -- none of
+     * those nine sites sets a radius, a background or a border, so there is
+     * nothing for either side to fight over.
+     *
+     * `btn-accent`, not `btn`. `.btn` belongs to public/marketing.css, which 20
+     * marketing views and 4 components use and which declares background, color,
+     * border, border-radius and transition on it. A shortcut called `btn` would be
+     * unlayered and served after that file, so it would have repainted every
+     * marketing button; a preflight called `btn` would have lost to it on those
+     * pages and still collided with account.stx's and visitor.stx's own `.btn`.
+     * A name marketing.css has no claim on cannot be caught either way -- the same
+     * reasoning `empty-row` below is named for.
+     *
+     * The radius is `rounded-control`, the 10px role in theme.extend.borderRadius,
+     * rather than a repeated `rounded-[10px]`: all four of these controls were
+     * 10px by hand.
+     */
+    'btn-accent': 'bg-accent text-accent-ink rounded-control '
+      + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
+      + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
+      + 'active:[transform:translateY(1px)] disabled:opacity-60 disabled:cursor-default',
+
+    // Bordered on the panel colour: the Google/GitHub buttons under the divider.
+    'oauth-btn': 'border border-solid border-border rounded-control text-text bg-panel '
+      + '[transition:border-color_0.15s_ease,transform_0.12s_ease] '
+      + 'hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] '
+      + 'active:[transform:translateY(1px)]',
+
+    // Eleven inputs across the five auth views. `focus:outline-none` emits
+    // `outline-style: none`, which is what `outline: none` did here.
+    'field': 'bg-bg border border-solid border-border rounded-control text-text '
+      + 'focus:outline-none focus:border-accent '
+      + 'focus:[box-shadow:0_0_0_3px_color-mix(in_srgb,var(--accent)_16%,transparent)]',
+
+    /*
+     * The tint and text colour of an inline form notice; `notice-box` below is
+     * the geometry the two share. Spelled with the literal `var(--danger)`
+     * rather than `text-danger`, which resolves to `var(--bad, var(--danger))`:
+     * these eight sites are all on the auth layout, whose palette defines
+     * `--danger` and not `--bad`, so the alias would work only by falling back.
+     */
+    'err': 'bg-[color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]',
+    'ok': 'bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] text-accent',
+
+    // "or" between the password form and the OAuth buttons, with a rule either
+    // side. `flex-1` emits `flex: 1 1 0%`, the longhand of the `flex: 1` this
+    // replaces.
+    'divider': 'flex items-center gap-3 text-text-3 text-[12px] '
+      + "before:content-[''] before:h-px before:flex-1 before:bg-border "
+      + "after:content-[''] after:h-px after:flex-1 after:bg-border",
+
+    /*
+     * Sized to sit level with the pill controls beside it: those are px-3 py-1.5
+     * on a 13px line, which lands at 34px, so this is a 34px square rather than
+     * a padded box that would drift when the row wraps.
+     */
     'icon-btn': 'inline-flex items-center justify-center w-[34px] h-[34px] '
       + 'border border-solid border-border rounded-[9px] text-text-2 bg-panel cursor-pointer '
       + '[transition:color_0.15s_ease,border-color_0.15s_ease] '
@@ -70,10 +291,12 @@ export default {
      *
      * Named outside the `panel-*` family on purpose, even though every one of
      * these sits inside a `.panel`. `panel-head` and `panel-tag` belong to
-     * public/marketing.css, which is UNLAYERED and which only the marketing
-     * pages link: a shortcut sharing that prefix would work on a dashboard
-     * page and lose to marketing.css on a marketing one. A name that file has
-     * no claim on cannot be caught that way.
+     * public/marketing.css, and a shortcut sharing one of those names would
+     * not lose to that file -- it would WIN, which is worse. Both are
+     * unlayered, and the generated sheet is linked after /marketing.css, so
+     * the later rule takes it (corrected here: this comment used to claim the
+     * shortcut lost, and the rendered order says otherwise). A name that file
+     * has no claim on cannot be caught either way.
      */
     'empty-row': 'py-8 text-center text-sm text-text-3',
 

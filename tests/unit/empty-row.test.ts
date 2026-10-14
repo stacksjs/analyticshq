@@ -79,10 +79,11 @@ describe('the shared empty-list placeholder', () => {
     /*
      * The name sits outside the `panel-*` family deliberately. Every one of
      * these placeholders is inside a `.panel`, but `panel-head` and `panel-tag`
-     * are declared in public/marketing.css, which is unlayered and which only
-     * the marketing pages link: a `panel-empty` shortcut would work on a
-     * dashboard page and lose to that file on a marketing one. This asserts the
-     * name stays unclaimed.
+     * are declared in public/marketing.css, and a `panel-empty` shortcut would
+     * not lose to that file on a marketing page -- it would WIN, which is
+     * worse. Both are unlayered and the generated sheet is linked after
+     * /marketing.css, so the later rule takes it (corrected: this comment used
+     * to claim the shortcut lost). This asserts the name stays unclaimed.
      */
     for (const path of ['public/marketing.css', 'resources/views/dashboard.stx', 'resources/views/visitor.stx'])
       expect(read(path)).not.toMatch(/\.empty-row\b/)

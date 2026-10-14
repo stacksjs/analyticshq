@@ -11,67 +11,20 @@
     themselves; the FILENAME is what actually names a layout group, so the two could
     disagree and nothing would say so.
 
-    The <style> block below was copy-pasted, byte for byte, into login.stx and
-    register.stx, and into sites/new.stx minus the five .oauth-btn/.divider rules it
-    does not use. Those five are harmless there -- no element carries the class -- and
-    one shared block beats three that drift.
+    There is no <style> block here any more, and there must not be one -- rule 3 /
+    §11.1. It held the marketing palette under this layout's token names plus the form
+    chrome, and before that the same CSS was copy-pasted byte for byte into login.stx
+    and register.stx, and into sites/new.stx minus the .oauth-btn/.divider rules it does
+    not use. Three copies became one block here, and the block is now config/crosswind.ts:
+    the palette as a `preflights` entry keyed off the `<meta name="stx-layout-group"
+    content="auth">` stx emits from THIS FILE'S NAME, and the controls as the
+    `btn-accent` / `oauth-btn` / `field` / `err` / `ok` / `divider` shortcuts. `.btn` is
+    gone from the five views with it: that name belongs to public/marketing.css.
 
     <main> lives HERE and pages must not declare their own: fragment extraction slices
     from the first <main> to the LAST </main>, so a second one makes the router swap the
     wrong span. Pages yield their own width wrapper instead, because they disagree about
     it -- login and register want max-w-sm, sites/new wants max-w-md. --}}
-
-@head
-<style>
-/* The marketing palette under this layout's token names, so signing in looks
-  like the site you came from -- dark by default, light when the OS asks or the
-  reader picked it (config/ui.ts app.colorMode writes <html data-theme> before
-  first paint; the attribute beats the media query either way). */
-:root {
-  color-scheme: dark;
-  --bg: #0a0c0e; --panel: #101317; --border: rgba(233,238,240,0.12);
-  --text: #eef2f3; --text-2: #9aa4a9; --text-3: #7b878c;
-  --accent: #46d3c0; --accent-ink: #04201c; --danger: #f87171;
-  --sans: 'Geist', ui-sans-serif, system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) { color-scheme: light;
-    --bg: #fafbfb; --panel: #ffffff; --border: rgba(12,18,20,0.12);
-    --text: #0c1214; --text-2: #4e5a5f; --text-3: #5f6b72;
-    --accent: #0f7c72; --accent-ink: #ffffff; --danger: #c93434; }
-}
-:root[data-theme="light"] { color-scheme: light;
-  --bg: #fafbfb; --panel: #ffffff; --border: rgba(12,18,20,0.12);
-  --text: #0c1214; --text-2: #4e5a5f; --text-3: #5f6b72;
-  --accent: #0f7c72; --accent-ink: #ffffff; --danger: #c93434; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-.wordmark { font-weight: 700; letter-spacing: -0.03em; }
-/* ThemeToggle (resources/components/ThemeToggle.stx). Shows the theme you would
-  switch TO: a sun on dark, a moon on light, keyed off the data-theme the
-  pre-paint boot writes. */
-.theme-toggle-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; flex-shrink: 0;
-  border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text-2); cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease; }
-.theme-toggle-btn:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.theme-toggle-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.theme-toggle-btn i { width: 1rem; height: 1rem; }
-.theme-toggle-btn .ic-moon, :root[data-theme="light"] .theme-toggle-btn .ic-sun { display: none; }
-:root[data-theme="light"] .theme-toggle-btn .ic-moon { display: block; }
-.field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); }
-.field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
-.btn { background: var(--accent); color: var(--accent-ink); border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease; }
-.btn:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.6; cursor: default; }
-.err { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
-.ok { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
-.oauth-btn { border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--panel); transition: border-color 0.15s ease, transform 0.12s ease; }
-.oauth-btn:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.oauth-btn:active { transform: translateY(1px); }
-.divider { display: flex; align-items: center; gap: 0.75rem; color: var(--text-3); font-size: 12px; }
-.divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
-</style>
-@endhead
 
 {{-- Outside <main> so a swap between two auth pages leaves it in place. --}}
 <div class="fixed right-4 top-4 z-10"><ThemeToggle /></div>
