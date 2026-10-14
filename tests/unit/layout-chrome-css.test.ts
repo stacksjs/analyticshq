@@ -259,18 +259,15 @@ describe('the auth controls, as shortcuts', () => {
 
 describe('rule 3: the style blocks that are left', () => {
   /*
-   * The remaining two, named so that a new one is a failure rather than a
+   * The last one, named so that a new one is a failure rather than a
    * quiet addition, and so that clearing one is a deliberate edit here.
    *
    *   dashboard.stx -- 495 lines, the date-range picker, the country map's
    *     ts-maps tooltips, the account menu and the GA import table. Over half
    *     the app's remaining CSS on its own.
-   *   pricing.stx -- the billing toggle and plan cards, built on
-   *     public/marketing.css's tokens rather than this app's.
    */
   const ALLOWED = [
     'resources/views/dashboard.stx',
-    'resources/views/pricing.stx',
   ]
 
   test('no .stx file outside the allowlist declares CSS', () => {

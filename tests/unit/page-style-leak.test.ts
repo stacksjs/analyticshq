@@ -80,10 +80,11 @@ describe('page style leak', () => {
     // the content by stx, which puts it outside <main> again. The push is what
     // keeps it where the layout decides.
     //
-    // Two of the original four are gone: account.stx and visitor.stx are
-    // config/crosswind.ts entries now. The remaining two are the allowlist in
+    // Three of the original four are gone: account.stx and visitor.stx are
+    // config/crosswind.ts entries now, and pricing.stx is utilities on its own
+    // elements. The last one is the allowlist in
     // tests/unit/layout-chrome-css.test.ts.
-    for (const view of ['dashboard', 'pricing']) {
+    for (const view of ['dashboard']) {
       const src = readFileSync(join(ROOT, `resources/views/${view}.stx`), 'utf8')
       const pushed = /@push\(['"]styles['"]\)([\s\S]*?)@endpush/.exec(src)
       expect(`${view}: pushes`).toBe(`${view}: ${pushed && /<style/.test(pushed[1]) ? 'pushes' : 'LOOSE OR MISSING'}`)

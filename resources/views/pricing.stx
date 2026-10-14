@@ -58,39 +58,22 @@ async function upgrade(): Promise<void> {
 @extends('marketing')
 
 
-@push('styles')
-<style>
-  /* Pricing-specific pieces, built on the shared marketing.css tokens so the
-    page stays dark-locked and on the same teal accent as the rest of the site.
-    No token redefinition, no light-mode override. */
-  .price-toggle-row { display: flex; justify-content: center; margin-bottom: 2.75rem; }
-  .price-toggle { display: inline-flex; gap: 0.25rem; padding: 0.28rem; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); }
-  .price-toggle button { appearance: none; border: 0; cursor: pointer; padding: 0.5rem 1.15rem; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-weight: 500; font-size: 0.9rem; transition: color 0.16s ease, background 0.16s ease; }
-  .price-toggle button:hover { color: var(--ink); }
-  .price-toggle button.on { background: var(--accent); color: var(--accent-ink); }
-  .price-toggle .save { font-size: 0.78rem; opacity: 0.85; }
+{{-- No <style> block, and no @push('styles'): rule 3 / §11.1. Everything the
+    block declared is a utility on the element below, spelled against
+    public/marketing.css's own tokens (--surface, --ink, --muted, --faint,
+    --line, --line-strong, --accent, --r) so the page stays dark-locked and on
+    the site's teal, with no token redefinition and no light-mode override.
 
-  .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; max-width: 720px; margin: 0 auto; }
-  .plan { position: relative; padding: 1.9rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
-  .plan.featured { border-color: var(--accent-line); box-shadow: 0 18px 60px color-mix(in srgb, var(--accent) 12%, transparent); }
-  .plan-eyebrow { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
-  .plan.featured .plan-eyebrow { color: var(--accent); }
-  .plan-price { margin: 1rem 0 0; display: flex; align-items: baseline; gap: 0.3rem; }
-  .plan-amt { font-size: 2.4rem; font-weight: 700; letter-spacing: -0.03em; color: var(--ink); }
-  .plan-per { color: var(--faint); font-size: 0.9rem; }
-  .plan-desc { margin: 0.55rem 0 0; color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
-  .plan-list { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.65rem; }
-  .plan-list li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.92rem; color: var(--ink); }
-  .plan-check { width: 16px; height: 16px; flex: none; color: var(--accent); }
-  .plan .btn { width: 100%; justify-content: center; margin-top: 1.75rem; }
-  .price-err { margin: 0.85rem 0 0; text-align: center; font-size: 0.8rem; color: var(--danger); }
-  .self-host { margin: 2.75rem auto 0; text-align: center; color: var(--faint); font-size: 0.85rem; }
+    Shortcuts were the wrong vehicle here and so was a preflight: these are
+    one-offs on a single page, not a repeated composite, and §11.1's answer for
+    a one-off is the utility on the element.
 
-  @media (max-width: 640px) {
-    .plans { grid-template-columns: 1fr; }
-  }
-</style>
-@endpush
+    Two shapes are spelled as mutually exclusive class sets rather than a base
+    plus an override, because utilities are all unlayered and all of equal
+    specificity -- which one wins is source order in the generated sheet, and
+    that follows the order the extractor meets them. The billing toggle's
+    on/off colours are the two branches of one ternary, and the featured plan
+    carries --accent-line in place of --line rather than after it. --}}
 
 @section('content')
       @include('breadcrumbs', { crumbs })
@@ -102,49 +85,49 @@ async function upgrade(): Promise<void> {
       </section>
 
       <section class="reveal section shell" aria-label="Plans and pricing">
-        <div class="price-toggle-row">
-          <div class="price-toggle" role="group" aria-label="Billing interval">
-            <button @click="pick('monthly')" :class="interval() === 'monthly' ? 'on' : ''">Monthly</button>
-            <button @click="pick('yearly')" :class="interval() === 'yearly' ? 'on' : ''">Yearly <span class="save">Save 17%</span></button>
+        <div class="flex justify-center mb-11">
+          <div class="inline-flex gap-1 p-[0.28rem] bg-[var(--surface)] border border-[var(--line-strong)] border-solid rounded-[999px]" role="group" aria-label="Billing interval">
+            <button @click="pick('monthly')" class="px-[1.15rem] py-2 font-medium text-[0.9rem] rounded-[999px] appearance-none cursor-pointer [border:0] [transition:color_0.16s_ease,background_0.16s_ease]" :class="interval() === 'monthly' ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-transparent text-[var(--muted)] hover:text-[var(--ink)]'">Monthly</button>
+            <button @click="pick('yearly')" class="px-[1.15rem] py-2 font-medium text-[0.9rem] rounded-[999px] appearance-none cursor-pointer [border:0] [transition:color_0.16s_ease,background_0.16s_ease]" :class="interval() === 'yearly' ? 'bg-[var(--accent)] text-[var(--accent-ink)]' : 'bg-transparent text-[var(--muted)] hover:text-[var(--ink)]'">Yearly <span class="text-[0.78rem] opacity-[0.85]">Save 17%</span></button>
           </div>
         </div>
 
-        <div class="plans">
-          <div class="plan">
-            <span class="plan-eyebrow">Free</span>
-            <div class="plan-price"><span class="plan-amt">$0</span><span class="plan-per">/ forever</span></div>
-            <p class="plan-desc">Everything you need to get started.</p>
-            <ul class="plan-list">
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 1 site</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 10k events / mo</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 30-day retention</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Community support</li>
+        <div class="grid gap-5 grid-cols-2 max-sm:grid-cols-1 mx-auto max-w-[720px]">
+          <div class="relative p-[1.9rem] bg-[var(--surface)] border border-[var(--line)] border-solid rounded-[var(--r)]">
+            <span class="text-[0.74rem] text-[var(--faint)] tracking-[0.14em] uppercase [font-family:var(--mono)]">Free</span>
+            <div class="flex gap-[0.3rem] items-baseline mt-4"><span class="font-bold text-[2.4rem] text-[var(--ink)] tracking-[-0.03em]">$0</span><span class="text-[0.9rem] text-[var(--faint)]">/ forever</span></div>
+            <p class="mt-[0.55rem] leading-[1.55] text-[0.92rem] text-[var(--muted)]">Everything you need to get started.</p>
+            <ul class="grid gap-[0.65rem] mt-6 p-0 list-none">
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 1 site</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 10k events / mo</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> 30-day retention</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Community support</li>
             </ul>
-            <StxLink to="/register" class="btn ghost">Get started</StxLink>
+            <StxLink to="/register" class="justify-center mt-7 w-full btn ghost">Get started</StxLink>
           </div>
 
-          <div class="featured plan">
-            <span class="plan-eyebrow">Pro</span>
-            <div class="plan-price">
-              <span class="plan-amt">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span>
-              <span class="plan-per">{{ interval() === 'yearly' ? '/ year' : '/ month' }}</span>
+          <div class="relative p-[1.9rem] bg-[var(--surface)] border border-[var(--accent-line)] border-solid rounded-[var(--r)] [box-shadow:0_18px_60px_color-mix(in_srgb,var(--accent)_12%,transparent)]">
+            <span class="text-[0.74rem] text-[var(--accent)] tracking-[0.14em] uppercase [font-family:var(--mono)]">Pro</span>
+            <div class="flex gap-[0.3rem] items-baseline mt-4">
+              <span class="font-bold text-[2.4rem] text-[var(--ink)] tracking-[-0.03em]">{{ interval() === 'yearly' ? '\$190' : '\$19' }}</span>
+              <span class="text-[0.9rem] text-[var(--faint)]">{{ interval() === 'yearly' ? '/ year' : '/ month' }}</span>
             </div>
-            <p class="plan-desc">For teams and sites that are growing.</p>
-            <ul class="plan-list">
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited sites</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited events</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Full retention</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Priority support</li>
-              <li><svg class="plan-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Import history from a CSV export</li>
+            <p class="mt-[0.55rem] leading-[1.55] text-[0.92rem] text-[var(--muted)]">For teams and sites that are growing.</p>
+            <ul class="grid gap-[0.65rem] mt-6 p-0 list-none">
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited sites</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Unlimited events</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Full retention</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Priority support</li>
+              <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Import history from a CSV export</li>
             </ul>
-            <button @click="upgrade" :disabled="loading()" class="btn primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
+            <button @click="upgrade" :disabled="loading()" class="justify-center mt-7 w-full btn primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
             @if (err())
-              <p class="price-err">{{ err() }}</p>
+              <p class="mt-[0.85rem] text-[0.8rem] text-[var(--danger)] text-center">{{ err() }}</p>
             @endif
           </div>
         </div>
 
-        <p class="self-host">Prefer to self-host? analyticshq is open source and free to run yourself.</p>
+        <p class="mt-11 mx-auto text-[0.85rem] text-[var(--faint)] text-center">Prefer to self-host? analyticshq is open source and free to run yourself.</p>
       </section>
 
       <section class="reveal section shell" aria-label="Get started">
