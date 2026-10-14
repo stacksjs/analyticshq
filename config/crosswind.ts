@@ -155,6 +155,36 @@ const CHROME = `${APP} body, ${AUTH} body { background: var(--bg); color: var(--
 .theme-toggle-btn .ic-moon, :root[data-theme="light"] .theme-toggle-btn .ic-sun { display: none; }
 :root[data-theme="light"] .theme-toggle-btn .ic-moon { display: block; }`
 
+/*
+ * The three rules from the app views that no utility can spell.
+ *
+ * `.panel` is here rather than in `shortcuts` for the reason the whole file
+ * turns on: public/marketing.css declares `.panel` too, with its own surface,
+ * radius and padding, and 10 marketing views carry the class. A shortcut would
+ * be unlayered and served after that file, so it would repaint all ten; a
+ * preflight is layered, loses to every property marketing.css sets, and
+ * applies on the app pages where that file is not linked. Checked on the built
+ * site: `.panel` on / is still #101317 at marketing.css's 18.4px padding.
+ *
+ * It was declared identically in dashboard.stx and visitor.stx -- the two
+ * copies are gone, and BreakdownPanel.stx and invite.stx (which carry the
+ * class but never had a rule for it, because invite.stx uses no layout) pick
+ * it up for the first time.
+ *
+ * `.visit + .visit` is an adjacent sibling, which `peer-*` cannot express: it
+ * emits a GENERAL sibling, so every later visit would take the margin instead
+ * of each one after the first.
+ *
+ * The keyframes are named `skeleton-pulse`, not `pulse`. marketing.css already
+ * has an unlayered `@keyframes pulse` driving its live dot, and @keyframes DO
+ * obey layers -- an unlayered set beats a layered one of the same name -- so a
+ * `pulse` here would be a silent, page-dependent swap of one animation for
+ * another the first time anything loads both.
+ */
+const APP_VIEWS = `.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.visit + .visit { margin-top: 12px; }
+@keyframes skeleton-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }`
+
 export default {
 
   content: [
@@ -195,7 +225,7 @@ export default {
    * engine -- an earlier splitter in loghq was guarding a loss that does not
    * happen on ts-css).
    */
-  preflights: [{ getCSS: () => `${TOKENS}\n${CHROME}` }],
+  preflights: [{ getCSS: () => `${TOKENS}\n${CHROME}\n${APP_VIEWS}` }],
   // The theme below maps utility names onto the tokens the preflight declares,
   // so `text-text-2`, `bg-panel`, `border-border` exist and replace the
   // repetitive inline `style="color: var(--text-2)"` these views used to carry.
@@ -232,8 +262,8 @@ export default {
      * rather than a repeated `rounded-[10px]`: all four of these controls were
      * 10px by hand.
      */
-    'btn-accent': 'bg-accent text-accent-ink rounded-control '
-      + '[transition:transform_0.12s_ease,opacity_0.15s_ease] '
+    'btn-accent': 'bg-accent text-accent-ink rounded-control font-semibold '
+      + '[transition:transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
       + 'hover:bg-[color-mix(in_srgb,var(--accent)_88%,#000)] '
       + 'active:[transform:translateY(1px)] disabled:opacity-60 disabled:cursor-default',
 
@@ -265,6 +295,80 @@ export default {
     'divider': 'flex items-center gap-3 text-text-3 text-[12px] '
       + "before:content-[''] before:h-px before:flex-1 before:bg-border "
       + "after:content-[''] after:h-px after:flex-1 after:bg-border",
+
+    /*
+     * ## account.stx and visitor.stx
+     *
+     * Two `<style>` blocks that between them declared `.btn` three different
+     * ways -- account's base-plus-modifier pair and visitor's bordered one --
+     * on top of the auth layout's filled one and public/marketing.css's. The
+     * four were never four buttons. Measured declaration by declaration,
+     * account's `.btn.btn-primary` IS the auth layout's button, and account's
+     * `.btn.btn-ghost` IS visitor's `.btn`, down to the colour stops in the
+     * hover `color-mix`. What differed was the transition list, and only
+     * because each copy listed the properties its own page happened to
+     * animate. So: two buttons, both supersets.
+     *
+     * `btn-accent` picked up `font-semibold` and `background-color` in its
+     * transition from account's copy. The nine auth call sites already wrote
+     * `font-semibold` themselves, so the weight is unchanged there; the
+     * transition means the sign-in button's hover now eases instead of
+     * snapping, which is what account's button always did.
+     *
+     * `btn-danger` is a WHOLE button, not a modifier to add beside
+     * `btn-ghost`. As a modifier it would have had to beat `btn-ghost:hover`
+     * at the same specificity, which works only while the two names stay in
+     * that order in the class attribute -- and pickier's sort-tailwind-classes
+     * rule is entitled to reorder them, at which point the destructive button
+     * silently loses its red. Six repeated utilities is the cheaper half of
+     * that trade.
+     */
+    'btn-ghost': 'border border-solid border-border rounded-control text-text font-semibold '
+      + '[transition:border-color_0.15s_ease,transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
+      + 'hover:border-[color-mix(in_srgb,var(--accent)_45%,var(--border))] '
+      + 'active:[transform:translateY(1px)]',
+    'btn-danger': 'border border-solid border-border rounded-control text-text font-semibold '
+      + '[transition:border-color_0.15s_ease,transform_0.12s_ease,opacity_0.15s_ease,background-color_0.15s_ease] '
+      + 'hover:border-[var(--bad)] hover:text-[var(--bad)] '
+      + 'active:[transform:translateY(1px)]',
+
+    // account.stx's surfaces. `card` is `panel` at a 14px radius; it keeps its
+    // own name because it is a different radius, not because it is a different
+    // idea, and because marketing.css has no claim on `card`.
+    'card': 'bg-panel border border-solid border-border rounded-[14px]',
+    'badge': 'border border-solid border-border rounded-pill [font-family:var(--mono)] '
+      + 'text-[11px] tracking-[0.04em] uppercase text-text-2',
+    // The one place `--accent-text` is read directly: the pro badge is small
+    // accent text, which is the 3.6:1 case `--accent` is not allowed for.
+    'badge-pro': 'border-accent text-[var(--accent-text)]',
+    'avatar': 'rounded-pill object-cover bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel))]',
+    // `row-rule`, not `row`: a shortcut is global and unlayered, and `row` is
+    // the kind of name a future template reaches for without meaning this.
+    'row-rule': 'border-t border-solid border-border',
+    'skeleton': 'bg-[color-mix(in_srgb,var(--text-3)_20%,transparent)] rounded-[6px] '
+      + 'animate-[skeleton-pulse_1.4s_ease-in-out_infinite] motion-reduce:animate-none',
+
+    /*
+     * visitor.stx's timeline, plus the `mono` both it and the dashboard
+     * declared identically. `mono` keeps its name -- marketing.css has no
+     * `.mono` rule -- so none of its 8 call sites changes.
+     *
+     * `[font-family:var(--mono)]` rather than `font-mono`, which resolves to
+     * the engine's own `ui-monospace, monospace` and would drop Geist Mono.
+     *
+     * `stat-key` is visitor's `.stat-label` renamed. marketing.css declares
+     * `.stat-label` with a margin, a colour and a size, and 2 marketing views
+     * use it; this one adds `font-family`, `letter-spacing` and
+     * `text-transform`, which that file does NOT set -- so either vehicle
+     * under the old name would have leaked uppercase mono onto those pages.
+     * A preflight loses only where the other file declares the same property.
+     */
+    'mono': "[font-family:var(--mono)] [font-feature-settings:'tnum'_1]",
+    'stat-key': '[font-family:var(--mono)] text-[11px] tracking-[0.04em] uppercase text-text-3',
+    'step-rail': 'border-l border-solid border-border',
+    'step-row': "relative before:content-[''] before:absolute before:left-[-20px] before:top-[11px] "
+      + 'before:w-[7px] before:h-[7px] before:rounded-pill before:bg-border '
+      + 'data-[kind=conversion]:before:bg-accent data-[kind=event]:before:bg-text-3',
 
     /*
      * Sized to sit level with the pill controls beside it: those are px-3 py-1.5

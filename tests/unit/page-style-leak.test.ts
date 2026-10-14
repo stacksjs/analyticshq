@@ -75,11 +75,15 @@ describe('page style leak', () => {
     }
   })
 
-  test('the four pushing views still push rather than leaving a <style> loose', () => {
+  test('the views that still push do it rather than leaving a <style> loose', () => {
     // Not cosmetic: a loose <style> is swept out of the page and appended after
     // the content by stx, which puts it outside <main> again. The push is what
     // keeps it where the layout decides.
-    for (const view of ['dashboard', 'visitor', 'pricing', 'account']) {
+    //
+    // Two of the original four are gone: account.stx and visitor.stx are
+    // config/crosswind.ts entries now. The remaining two are the allowlist in
+    // tests/unit/layout-chrome-css.test.ts.
+    for (const view of ['dashboard', 'pricing']) {
       const src = readFileSync(join(ROOT, `resources/views/${view}.stx`), 'utf8')
       const pushed = /@push\(['"]styles['"]\)([\s\S]*?)@endpush/.exec(src)
       expect(`${view}: pushes`).toBe(`${view}: ${pushed && /<style/.test(pushed[1]) ? 'pushes' : 'LOOSE OR MISSING'}`)

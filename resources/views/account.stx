@@ -106,28 +106,12 @@ onMount(() => {
 
 @extends('app')
 
-{{-- Tokens, body and .wordmark now come from resources/layouts/app.stx, which carries
-    the superset of what this page and the dashboard each had. What stays is what only
-    this page uses. It is pushed rather than left loose because a loose style block under a
-    layout gets swept out of the page and appended after the content, in the body. --}}
-@push('styles')
-<style>
-.card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
-.btn { border-radius: 10px; transition: transform 0.12s ease, opacity 0.15s ease, background-color 0.15s ease; font-weight: 600; }
-.btn:active { transform: translateY(1px); }
-.btn-primary { background: var(--accent); color: var(--accent-ink); }
-.btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
-.btn-ghost { border: 1px solid var(--border); color: var(--text); }
-.btn-ghost:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
-.badge { border: 1px solid var(--border); border-radius: 999px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-2); }
-.badge-pro { border-color: var(--accent); color: var(--accent-text); }
-.avatar { border-radius: 999px; object-fit: cover; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
-.row { border-top: 1px solid var(--border); }
-.skeleton { background: color-mix(in srgb, var(--text-3) 20%, transparent); border-radius: 6px; animation: pulse 1.4s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 0.9; } }
-@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
-</style>
-@endpush
+{{-- No <style> block, and no @push('styles'): rule 3 / §11.1. Tokens, body and
+    .wordmark are a preflight in config/crosswind.ts; .card, .badge, .badge-pro,
+    .avatar, .row and .skeleton are shortcuts there, and the two buttons this page
+    spelled as `.btn .btn-primary` and `.btn .btn-ghost` are `btn-accent` and
+    `btn-ghost` -- the same two the auth views and visitor.stx use, because measured
+    declaration by declaration they were always the same two. --}}
 
 @section('content')
 <div class="min-h-[100dvh]">
@@ -136,10 +120,10 @@ onMount(() => {
     <div class="flex gap-2.5 items-center">
       <ThemeToggle />
       @if (authed)
-        <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn btn-ghost">Dashboard</StxLink>
-        <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn btn-ghost">Log out</button>
+        <StxLink to="/dashboard" class="px-3.5 py-2 text-sm btn-ghost">Dashboard</StxLink>
+        <button type="button" @click="logout" class="px-3.5 py-2 text-sm btn-ghost">Log out</button>
       @else
-        <StxLink to="/login" class="px-3.5 py-2 text-sm btn btn-ghost">Sign in</StxLink>
+        <StxLink to="/login" class="px-3.5 py-2 text-sm btn-ghost">Sign in</StxLink>
       @endif
     </div>
   </header>
@@ -157,7 +141,7 @@ onMount(() => {
           title="Sign in to your account"
           description="Your account is private. Sign in to manage your plan and settings."
         >
-          <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn btn-primary">Sign in</StxLink>
+          <StxLink to="/login" class="inline-block px-4 py-2 text-sm btn-accent">Sign in</StxLink>
         </EmptyState>
       </div>
     </div>
@@ -217,19 +201,19 @@ onMount(() => {
           @endif
         </div>
         @if (admin())
-          <StxLink to="/dashboard" class="px-4 py-2 text-sm whitespace-nowrap btn btn-ghost">All sites</StxLink>
+          <StxLink to="/dashboard" class="px-4 py-2 text-sm whitespace-nowrap btn-ghost">All sites</StxLink>
         @elseif (pro())
-          <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-ghost">Manage plan</StxLink>
+          <StxLink to="/pricing" class="px-4 py-2 text-sm btn-ghost">Manage plan</StxLink>
         @else
-          <StxLink to="/pricing" class="px-4 py-2 text-sm btn btn-primary">Upgrade to Pro</StxLink>
+          <StxLink to="/pricing" class="px-4 py-2 text-sm btn-accent">Upgrade to Pro</StxLink>
         @endif
       </div>
-      <div class="flex items-center justify-between px-6 py-4 row">
+      <div class="flex items-center justify-between row-rule px-6 py-4">
         <div>
           <div class="text-xs tracking-wide uppercase" style="color: var(--text-3); font-family: var(--mono)">Member since</div>
           <div class="mt-1 text-base text-text-2">{{ since() }}</div>
         </div>
-        <StxLink to="/dashboard" class="px-4 py-2 text-sm btn btn-ghost">Open dashboard</StxLink>
+        <StxLink to="/dashboard" class="px-4 py-2 text-sm btn-ghost">Open dashboard</StxLink>
       </div>
     </section>
 

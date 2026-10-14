@@ -203,8 +203,14 @@ describe('the auth controls, as shortcuts', () => {
       // .field
       '.field { background-color: var(--bg); border-width: 1px; border-style: solid; border-color: var(--border); border-radius: 10px; color: var(--text); }',
       '.field:focus { outline-style: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb,var(--accent) 16%,transparent); }',
-      // .btn, now .btn-accent
-      '.btn-accent { background-color: var(--accent); color: var(--accent-ink); border-radius: 10px; transition: transform 0.12s ease,opacity 0.15s ease; }',
+      /*
+       * .btn, now .btn-accent, and a superset of what this layout declared:
+       * `font-weight` and the `background-color` transition came from
+       * account.stx's copy of the same button. All nine call sites here
+       * already wrote `font-semibold`, so the weight is unchanged; the
+       * transition means the hover eases rather than snapping.
+       */
+      '.btn-accent { background-color: var(--accent); color: var(--accent-ink); border-radius: 10px; font-weight: 600; transition: transform 0.12s ease,opacity 0.15s ease,background-color 0.15s ease; }',
       '.btn-accent:hover { background-color: color-mix(in srgb,var(--accent) 88%,#000); }',
       '.btn-accent:active { transform: translateY(1px); }',
       '.btn-accent:disabled { opacity: 0.6; cursor: default; }',
@@ -253,20 +259,17 @@ describe('the auth controls, as shortcuts', () => {
 
 describe('rule 3: the style blocks that are left', () => {
   /*
-   * The remaining four, named so that a new one is a failure rather than a
+   * The remaining two, named so that a new one is a failure rather than a
    * quiet addition, and so that clearing one is a deliberate edit here.
    *
    *   dashboard.stx -- 495 lines, the date-range picker, the country map's
    *     ts-maps tooltips, the account menu and the GA import table. Over half
    *     the app's remaining CSS on its own.
-   *   account.stx, visitor.stx -- a card/badge/avatar set and a visit timeline.
    *   pricing.stx -- the billing toggle and plan cards, built on
    *     public/marketing.css's tokens rather than this app's.
    */
   const ALLOWED = [
     'resources/views/dashboard.stx',
-    'resources/views/account.stx',
-    'resources/views/visitor.stx',
     'resources/views/pricing.stx',
   ]
 

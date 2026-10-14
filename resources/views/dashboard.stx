@@ -2518,8 +2518,6 @@ onMount(() => {
     thing that uses it. Required, not cosmetic -- see the tooltip rules below. --}}
 <link rel="stylesheet" href="/vendor/ts-maps.css">
 <style>
-.mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
 .pill { border-radius: 999px; transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; }
 
 .workspace-header {
