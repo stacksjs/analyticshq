@@ -29,6 +29,19 @@ import theme from '../../config/crosswind'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
+
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
@@ -91,10 +104,10 @@ describe('the shared breakdown bar', () => {
   })
 
   test('nothing in the app declares a competing .bg-bar', () => {
-    // Same reasoning as .empty-row: public/marketing.css is unlayered and only
+    // Same reasoning as .empty-row: the marketing sheet is scoped and only
     // the marketing pages link it, so a declaration there would win on one page
     // and lose on another. The generated utility should be the only definition.
-    for (const path of ['public/marketing.css', 'resources/views/dashboard.stx', 'resources/views/visitor.stx'])
-      expect(read(path), path).not.toMatch(/\.bg-bar\b/)
+    for (const source of [marketingCss(), read('resources/views/dashboard.stx'), read('resources/views/visitor.stx')])
+      expect(source).not.toMatch(/\.bg-bar\b/)
   })
 })

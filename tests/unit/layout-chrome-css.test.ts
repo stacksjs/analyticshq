@@ -28,17 +28,36 @@ import theme from '../../config/crosswind'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
+
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
 /**
- * The preflight alone, exactly as the engine receives it. Four entries --
- * TOKENS, CHROME, APP_VIEWS, DASHBOARD_CSS -- concatenated in cascade order,
- * which is how the engine joins them.
+ * The SITE-WIDE preflight entries, exactly as the engine receives them --
+ * TOKENS, CHROME, APP_VIEWS, DASHBOARD_CSS -- concatenated in cascade order.
+ *
+ * MARKETING is deliberately excluded. It joined `preflights` when
+ * public/marketing.css moved into the config, but it is the one entry that is
+ * SCOPED to a layout group, so it is not part of what these assertions mean by
+ * "the preflight": they are about what every page gets.
  */
 function preflightCSS(): string {
   return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
-    .map(e => e.getCSS()).join('\n')
+    .map(e => e.getCSS())
+    .filter(css => !css.includes('content="marketing"'))
+    .join('\n')
 }
 
 /**
@@ -97,7 +116,17 @@ describe('the palettes', () => {
   })
 
   test('the marketing group is named by neither', () => {
+    /*
+     * The app and auth palettes scope themselves to their own groups and must
+     * not claim marketing's -- those pages get their palette from MARKETING,
+     * which is a preflight now rather than public/marketing.css. `css` is the
+     * site-wide entries only, so this still asks the original question; the
+     * second assertion is the other half, that exactly one entry does name it.
+     */
     expect(css).not.toContain('content="marketing"')
+    const naming = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+      .map(e => e.getCSS()).filter(c => c.includes('content="marketing"'))
+    expect(naming).toHaveLength(1)
   })
 
   test('the app palette is the emerald one, light by default', () => {
@@ -196,18 +225,47 @@ describe('the shared chrome, through the real merge', () => {
      * `@head` behaved relative to the generated sheet, and how the nine auth
      * call sites keep their `py-2.5 w-full font-semibold text-sm`.
      */
-    const css = await generate('<main class="wordmark"></main>')
     /*
-     * Anchored on the UTILITY's rule, not on `.wordmark` anywhere in the
-     * sheet: the preflight declares `.wordmark` too, inside the layer, and
-     * `indexOf` finds that one. The question is where the generated utility
-     * lands relative to the last layer block.
+     * Measured on a class that actually generates a utility. The old version
+     * of this test used `<main class="wordmark">` and compared indexOf against
+     * `lastIndexOf('@layer')` -- but `.wordmark` is a preflight class, not a
+     * utility, so crosswind emits nothing for it and the assertion fell
+     * through a `=== -1` fallback to a weaker positional claim. It also broke
+     * outright once MARKETING appended a later layer block.
+     *
+     * `text-accent` is a real utility and the preflight declares `.wordmark`,
+     * so one of each is on the element and the question is answerable:
+     * the preflight rule is inside a layer, the utility is outside every one,
+     * and an unlayered rule beats a layered one at any specificity.
      */
-    const layer = css.lastIndexOf('@layer')
-    const utility = css.indexOf('.wordmark {', css.lastIndexOf('}'))
-    expect(layer).toBeGreaterThan(-1)
-    expect(css.slice(layer).includes('.wordmark')).toBe(true)
-    expect(utility === -1 ? css.lastIndexOf('.wordmark') : utility).toBeGreaterThan(layer)
+    const css = await generate('<main class="wordmark text-accent"></main>')
+    const spans: Array<[number, number]> = []
+    for (let i = css.indexOf('@layer'); i !== -1; i = css.indexOf('@layer', i + 1)) {
+      const open = css.indexOf('{', i)
+      if (open === -1) break
+      let depth = 0
+      let j = open
+      for (; j < css.length; j++) {
+        if (css[j] === '{') depth++
+        else if (css[j] === '}') { depth--; if (depth === 0) break }
+      }
+      spans.push([i, j])
+    }
+    expect(spans.length).toBeGreaterThan(0)
+    const inALayer = (at: number) => spans.some(([a, b]) => at > a && at < b)
+    const at = (needle: string) => {
+      const out: number[] = []
+      for (let i = css.indexOf(needle); i !== -1; i = css.indexOf(needle, i + 1)) out.push(i)
+      return out
+    }
+    const wordmark = at('.wordmark')
+    const utility = at('.text-accent {')
+    expect(wordmark.length).toBeGreaterThan(0)
+    expect(utility.length).toBeGreaterThan(0)
+    // the chrome rule is layered...
+    expect(wordmark.every(inALayer)).toBe(true)
+    // ...and the utility is not, so it outranks it whatever the specificity.
+    expect(utility.some(i => !inALayer(i))).toBe(true)
   })
 })
 
@@ -258,17 +316,25 @@ describe('the auth controls, as shortcuts', () => {
       expect({ decl, present: has(css, decl) }).toEqual({ decl, present: true })
   })
 
-  test('.btn is left to public/marketing.css', async () => {
+  test('.btn is left to the marketing sheet', async () => {
     /*
      * Both vehicles would have gone wrong here, in opposite directions: a
-     * shortcut named `btn` is unlayered and the generated sheet is linked
-     * AFTER /marketing.css, so it would have repainted all 20 marketing views'
+     * shortcut named `btn` is unlayered and the generated sheet came AFTER
+     * /marketing.css, so it would have repainted all 20 marketing views'
      * buttons; a preflight named `btn` would have lost to that file there and
      * still collided with account.stx's and visitor.stx's own `.btn`.
+     *
+     * Still true now that the sheet is the MARKETING preflight: it is scoped,
+     * so a site-wide `.btn` would reach the app pages it must not touch. The
+     * marketing entry is excluded below for that reason -- it DOES define
+     * `.btn`, which is the whole point.
      */
-    const css = await generate('<button class="btn primary">Go</button>')
+    const whole = await generate('<button class="btn primary">Go</button>')
+    const css = whole.split('html:has(meta[name="stx-layout-group"][content="marketing"])')[0]
     expect(css).not.toMatch(/\.btn\s*\{/)
     expect(css).not.toMatch(/\.btn[:\s]/)
+    // And the marketing sheet still owns it.
+    expect(marketingCss()).toMatch(/\.btn\b/)
 
     // And no auth view still asks for it.
     for (const view of ['login', 'register', 'forgot-password', 'reset-password', 'sites/new']) {

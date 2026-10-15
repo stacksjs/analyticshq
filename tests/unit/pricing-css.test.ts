@@ -2,7 +2,7 @@
  * pricing.stx's chrome, after it became utilities on its own elements.
  *
  * The page pushed a 31-line `<style>` into `<main>` -- rule 3 / §11.1 -- built
- * on public/marketing.css's tokens rather than this app's. Every rule is now a
+ * on the marketing sheet's tokens rather than this app's. Every rule is now a
  * utility on the element, which is §11.1's answer for a one-off: these shapes
  * appear once each, on one page, so neither a shortcut nor a preflight is the
  * right home for them.
@@ -19,6 +19,19 @@ import theme from '../../config/crosswind'
 // The installed STX package does not export these subpaths by bare specifier.
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
+
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -56,13 +69,13 @@ describe('the page declares no CSS', () => {
       expect(`${name}: ${new RegExp(`class="[^"]*\\b${name}\\b`).test(src)}`).toBe(`${name}: false`)
   })
 
-  test('the two class names it keeps are public/marketing.css\'s own', () => {
+  test('the two class names it keeps are the marketing sheet\'s own', () => {
     // `.btn` and its `.primary` / `.ghost` modifiers stay that file's, which is
     // the whole reason the app and auth buttons are named `btn-accent` and
     // `btn-ghost` instead.
     expect(SRC).toContain('btn ghost')
     expect(SRC).toContain('btn primary')
-    const marketing = read('public/marketing.css')
+    const marketing = marketingCss()
     expect(marketing).toContain('.btn {')
     expect(marketing).toContain('.btn.primary {')
   })

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import theme from '../../config/crosswind'
 
-const ROOT = join(import.meta.dir, '../..')
-const marketing = readFileSync(join(ROOT, 'public/marketing.css'), 'utf8')
+const marketing = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+  .map(entry => entry.getCSS())
+  .find(css => css.includes('content="marketing"')) ?? ''
 
 // The phone menu lists every marketing destination in one column, which is
 // taller than an 812px viewport. The panel has to scroll inside the viewport

@@ -21,6 +21,19 @@ import theme from '../../config/crosswind'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
+
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
@@ -79,13 +92,13 @@ describe('the shared empty-list placeholder', () => {
     /*
      * The name sits outside the `panel-*` family deliberately. Every one of
      * these placeholders is inside a `.panel`, but `panel-head` and `panel-tag`
-     * are declared in public/marketing.css, and a `panel-empty` shortcut would
+     * are declared in the marketing sheet, and a `panel-empty` shortcut would
      * not lose to that file on a marketing page -- it would WIN, which is
      * worse. Both are unlayered and the generated sheet is linked after
      * /marketing.css, so the later rule takes it (corrected: this comment used
      * to claim the shortcut lost). This asserts the name stays unclaimed.
      */
-    for (const path of ['public/marketing.css', 'resources/views/dashboard.stx', 'resources/views/visitor.stx'])
-      expect(read(path)).not.toMatch(/\.empty-row\b/)
+    for (const source of [marketingCss(), read('resources/views/dashboard.stx'), read('resources/views/visitor.stx')])
+      expect(source).not.toMatch(/\.empty-row\b/)
   })
 })

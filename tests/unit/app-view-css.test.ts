@@ -5,7 +5,7 @@
  * Both pushed a `<style>` into `<main>`, which is what rule 3 / §11.1 forbids.
  * Between them they declared `.btn` three different ways -- account's
  * base-plus-modifier pair and visitor's bordered one -- on top of the auth
- * layout's filled button and public/marketing.css's. Measured declaration by
+ * layout's filled button and the marketing sheet's. Measured declaration by
  * declaration they were two buttons, not four: account's `.btn.btn-primary`
  * matched the auth layout's, and account's `.btn.btn-ghost` matched visitor's
  * `.btn`, down to the colour stops in the hover `color-mix`. The transition
@@ -27,6 +27,19 @@ import theme from '../../config/crosswind'
 // The installed STX package does not export these subpaths by bare specifier.
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
+
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
 
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
@@ -153,23 +166,38 @@ describe('the surfaces and the timeline', () => {
     expect(flat(mine[0][1])).toContain('.skeleton { animation: none;')
   })
 
-  test('the keyframes are not called `pulse`', () => {
+  test('no @keyframes name is declared twice in the generated sheet', () => {
     /*
-     * public/marketing.css already has an unlayered `@keyframes pulse` driving
-     * its live dot, and @keyframes obey layers: an unlayered set beats a
-     * layered one of the same name. Sharing the name would be a silent,
-     * page-dependent swap of one animation for the other.
+     * This used to assert that public/marketing.css had `@keyframes pulse` and
+     * that this preflight avoided the name. Both sets now live in ONE sheet,
+     * which makes the hazard sharper rather than softer: a same-named
+     * @keyframes replaces rather than merges, so a duplicate is a silent,
+     * page-dependent swap of one animation for another.
+     *
+     * The marketing sheet's `pulse` was renamed `ahq-pulse` when it moved, for
+     * exactly this reason -- `pulse` is the name crosswind emits for
+     * `animate-pulse`. Nothing uses that utility today, so there was no live
+     * collision; a preflight reaches every page, so the first person to type
+     * it would have changed the live dot's ring instead of getting an error.
+     * loghq and reportshq renamed theirs the same way.
+     *
+     * Asserting uniqueness rather than a name list, so a future entry cannot
+     * reintroduce a clash without failing here.
      */
-    expect(read('public/marketing.css')).toContain('@keyframes pulse')
-    const preflight = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    const all = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
       .map(e => e.getCSS()).join('\n')
-    expect(preflight).toContain('@keyframes skeleton-pulse')
-    expect(preflight).not.toMatch(/@keyframes pulse\b/)
+    const names = [...all.matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1])
+    const duplicated = names.filter((n, i) => names.indexOf(n) !== i)
+    expect(duplicated).toEqual([])
+    expect(names).toContain('ahq-pulse')
+    expect(names).not.toContain('pulse')
+    // and the rename took its one call site with it
+    expect(all).toContain('animation: ahq-pulse 2.4s ease-out infinite')
   })
 })
 
-describe('the names public/marketing.css also claims', () => {
-  const marketing = read('public/marketing.css')
+describe('the names the marketing sheet also claims', () => {
+  const marketing = marketingCss()
 
   test('a claimed name is a preflight, never a shortcut', () => {
     /*

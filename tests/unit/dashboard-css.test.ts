@@ -23,9 +23,27 @@ import theme from '../../config/crosswind'
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
+/**
+ * The marketing sheet. It was public/marketing.css until it moved into the
+ * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
+ * what these assertions read is unchanged -- except that it is layered now,
+ * which is the point several of them turn on.
+ */
+function marketingCss(): string {
+  return ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+    .map(entry => entry.getCSS())
+    .find(css => css.includes('content="marketing"')) ?? ''
+}
+
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
-const SECTIONS = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? []).map(e => e.getCSS())
+// Site-wide entries only. MARKETING joined `preflights` when
+// public/marketing.css moved into the config, but it is scoped to a layout
+// group and is not what this file means by "the preflight".
+const SECTIONS = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
+  .map(e => e.getCSS())
+  .filter(css => !css.includes('content="marketing"'))
 /** The four sections are TOKENS, CHROME, APP_VIEWS, DASHBOARD_CSS, in cascade order. */
 const PREFLIGHT = SECTIONS.join('\n')
 const DASHBOARD = SECTIONS[3] ?? ''
@@ -168,7 +186,7 @@ describe('the rules that moved', () => {
 
 describe('nothing leaks onto the 28 marketing pages', () => {
   /*
-   * This preflight is served on every page, and public/marketing.css is
+   * This preflight is served on every page, and the marketing sheet is
    * unlayered, so it wins for every property it declares on a shared class --
    * and loses for every property it does not. Its `.bar` is a flex track with
    * no animation, so an unscoped `.bar { animation: grow }` here would have
@@ -181,7 +199,7 @@ describe('nothing leaks onto the 28 marketing pages', () => {
    * and `.reveal` runs marketing.css's own `reveal-in`.
    */
   const marketingClasses = (() => {
-    const css = read('public/marketing.css')
+    const css = marketingCss()
     const out = new Set<string>()
     for (const r of css.matchAll(/([^{}]+)\{/g)) {
       const sel = r[1].trim()
@@ -233,7 +251,7 @@ describe('nothing leaks onto the 28 marketing pages', () => {
       ':root[data-theme="light"] .theme-toggle-btn .ic-moon',
       '.panel',
     ])
-    const marketing = read('public/marketing.css')
+    const marketing = marketingCss()
     for (const prop of ['background', 'border', 'border-radius'])
       expect({ prop, declared: new RegExp(`\\.panel \\{[^}]*${prop}:`).test(marketing.replace(/\s+/g, ' ')) }).toEqual({ prop, declared: true })
   })
@@ -250,11 +268,15 @@ describe('nothing leaks onto the 28 marketing pages', () => {
     expect(scoped.length).toBeGreaterThanOrEqual(11)
   })
 
-  test('the keyframes it adds are named outside marketing.css\'s set', () => {
-    // @keyframes obey layers too, so a shared name would be a silent,
-    // page-dependent swap of one animation for another.
+  test('the keyframes it adds are named outside the marketing sheet\'s set', () => {
+    /*
+     * A same-named @keyframes elsewhere in the sheet replaces rather than
+     * merges, so a shared name is a silent, page-dependent swap of one
+     * animation for another. This mattered more once both sets landed in ONE
+     * generated sheet: they used to be in two files.
+     */
     const mine = [...PREFLIGHT.matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]).sort()
-    const theirs = new Set([...read('public/marketing.css').matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]))
+    const theirs = new Set([...marketingCss().matchAll(/@keyframes\s+([\w-]+)/g)].map(m => m[1]))
     expect(mine).toEqual(['grow', 'livepulse', 'reveal', 'skeleton-pulse'])
     expect(mine.filter(n => theirs.has(n))).toEqual([])
   })
