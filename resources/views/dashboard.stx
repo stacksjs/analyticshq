@@ -3805,9 +3805,31 @@ onMount(() => {
 @push('scripts')
 <script type="module">
 ;(async function () {
+  /*
+   * The four querySelector calls in this block are marked rather than
+   * converted, and this is the reason for all four.
+   *
+   * §8.2's replacement for querySelector is `ref=` plus `useRef('name')`, and
+   * useRef is auto-imported into `<script client>` only (client-script.js:143,
+   * destructured at :334-340). This is `<script type="module">` inside
+   * `@push('scripts')` because it needs module scope for the two dynamic
+   * `await import()`s below -- 340KB of map engine and 170KB of geometry,
+   * loaded in parallel and only once the panel is on screen. No `<script
+   * client>` in this app does a dynamic import, and rewriting 210 lines of
+   * working, deliberately-deferred third-party bootstrap to find out would
+   * risk the lazy loading for no behavioural gain.
+   *
+   * The marker is per-SITE, which is precisely what §12.1 objects that
+   * `allowPatterns` cannot be: that filter is rule-global and substring
+   * matched, so one entry silences a rule everywhere. allowPatterns stays
+   * empty here. This file already marks its two other deliberate DOM calls
+   * the same way -- the download anchor and `window.location.origin`.
+   */
+  // stx-strict-ignore-next-line document.querySelector -- mounts the vendored map engine
   const host = document.querySelector('[data-country-map]')
   if (!host) return
 
+  // stx-strict-ignore-next-line document.querySelector -- reads the server-rendered totals attribute
   const totalsEl = document.querySelector('[data-country-totals]')
   let totals: Record<string, number> = {}
   try { totals = JSON.parse(totalsEl?.getAttribute('data-country-totals') || '{}') }
@@ -3973,6 +3995,7 @@ onMount(() => {
       centroids[f.id] = best
   }
 
+  // stx-strict-ignore-next-line document.querySelector -- reads the live-points attribute
   const liveEl = document.querySelector('[data-live-points]')
   const dots = LayerGroup ? new LayerGroup().addTo(map) : null
   function drawLive() {
@@ -4012,6 +4035,7 @@ onMount(() => {
   // nowhere on the map would reasonably think the map is wrong.
   const missing = Object.keys(totals).filter(c => !(c in names))
   if (missing.length) {
+    // stx-strict-ignore-next-line document.querySelector -- the too-small-to-plot note
     const note = document.querySelector('[data-country-missing]')
     if (note) {
       const label = missing.map(c => serverNames[c] || names[c] || c).join(', ')
