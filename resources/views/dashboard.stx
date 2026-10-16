@@ -84,8 +84,8 @@ if (isCustom)
 const RANGE_LABELS: Record<string, string> = { '24h': 'Last 24 hours', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', '1y': 'Last 365 days', 'all': 'All time' }
 const fmtDay = (s: string): string => new Date(`${s.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 const fmtSpan = (a: string, b: string): string => a.slice(0, 4) === b.slice(0, 4)
-  ? `${fmtDay(a)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
-  : `${fmtDay(a)}, ${a.slice(0, 4)} – ${fmtDay(b)}, ${b.slice(0, 4)}`
+  ? `${fmtDay(a)} to ${fmtDay(b)}, ${b.slice(0, 4)}`
+  : `${fmtDay(a)}, ${a.slice(0, 4)} to ${fmtDay(b)}, ${b.slice(0, 4)}`
 const rangeLabel = isCustom ? fmtSpan(customFrom, customTo) : isAll ? 'All time' : `${RANGE_LABELS[range] ?? 'Custom'} · ${fmtSpan(from, to)}`
 // Chart bucket granularity by span: hour (<= 2d) for a real 24h curve, day (<= ~400d),
 // or month (wider, e.g. all-time) so a multi-year chart isn't thousands of points.

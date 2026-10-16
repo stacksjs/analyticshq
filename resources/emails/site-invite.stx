@@ -62,7 +62,7 @@ const year = props.year || new Date().getFullYear()
               @endif
 
               <p style="margin: 0; color: #737373; font-size: 13px;">
-                It only works for this email address, and only once. If you were not expecting it, you can ignore this message — nothing happens until you accept.
+                It only works for this email address, and only once. If you were not expecting it, you can ignore this message. Nothing happens until you accept.
               </p>
             </td>
           </tr>

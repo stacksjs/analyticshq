@@ -139,15 +139,15 @@ export const competitors: Record<string, Competitor> = {
     ctaLink: SEE_DASHBOARD,
     rows: [
       { dim: 'Source', them: 'Closed-source SaaS', us: 'Open source, and you can read every line.' },
-      { dim: 'Where your data lives', them: 'Fathom’s infrastructure, reports handed back to you', us: 'Your own PostgreSQL — you hold the raw events, not just charts.' },
+      { dim: 'Where your data lives', them: 'Fathom’s infrastructure, reports handed back to you', us: 'Your own PostgreSQL: you hold the raw events, not just charts.' },
       { dim: 'Geography', them: 'City-level location', us: 'Country by default. Region and city opt-in per site, never coordinates.' },
-      { dim: 'Cookies and consent', them: 'Cookieless, no banner', us: 'Cookieless, no banner — same footing here.' },
+      { dim: 'Cookies and consent', them: 'Cookieless, no banner', us: 'Cookieless, no banner, same footing here.' },
       { dim: 'Revenue tracking', them: 'Per-event value with currency', us: 'Goals and events today; per-event revenue on the roadmap.' },
       { dim: 'Hosting and EU', them: 'Managed SaaS with EU Isolation for EU visitors', us: 'Self-host anywhere, or run it in the region you choose.' },
       { dim: 'Ecosystem', them: 'Polished single-dashboard product', us: 'Native to the Stacks toolchain and your own stack.' },
     ],
     reasons: [
-      { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS — you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
+      { n: '01', h: 'Own the data, not just the dashboard', b: 'Fathom is a well-built closed SaaS: you get clean reports, but the raw events live on their servers. analyticshq writes every event to a PostgreSQL database you control, so the underlying data is yours to query, export, or keep.' },
       { n: '02', h: 'Country by default, city only if you ask', b: 'Fathom resolves every visitor to city level. analyticshq resolves country on your own server and stops there unless you turn on state and province, or city, yourself, per site. Even then it records a place name, never coordinates, and small towns are folded into Other so nobody can be singled out.' },
       { n: '03', h: 'Open and self-hostable', b: 'Read the source, run it on your own infrastructure, and audit exactly what is collected. Fathom’s EU Isolation and per-event revenue are genuinely strong; analyticshq trades that polish for openness and full data ownership.' },
     ],
@@ -176,7 +176,7 @@ export const competitors: Record<string, Competitor> = {
     intro: 'Plausible is a respected, cookieless analytics tool, and on the basics the two are close: no cookies, no consent banner, exact counts. The difference is where your data lives and how far the privacy line is drawn.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Plausible vs analyticshq',
-    sectionIntro: 'Plausible does plenty analyticshq does not — funnels, Search Console, a Looker connector, spike alerts. If those are what you need, it is an excellent choice. Here is where analyticshq leads instead.',
+    sectionIntro: 'Plausible does plenty analyticshq does not: funnels, Search Console, a Looker connector, spike alerts. If those are what you need, it is an excellent choice. Here is where analyticshq leads instead.',
     whyHeading: 'Where analyticshq goes further.',
     // Typographic apostrophe, matching every other possessive in this file
     // ("Fathom’s", "Umami’s"). The original was a straight quote inline in the
@@ -185,16 +185,16 @@ export const competitors: Record<string, Competitor> = {
     ctaHeading: 'Your numbers. Your visitors’ privacy. Your database.',
     ctaLink: SEE_DASHBOARD,
     rows: [
-      { dim: 'Cookies and consent', them: 'Cookieless, no banner — genuinely privacy-first', us: 'Cookieless, no banner — the same baseline.' },
+      { dim: 'Cookies and consent', them: 'Cookieless, no banner, genuinely privacy-first', us: 'Cookieless, no banner, the same baseline.' },
       { dim: 'Where your data lives', them: 'Plausible Cloud hosts it on their EU servers', us: 'Your own PostgreSQL database, wherever you run it.' },
       { dim: 'Geolocation', them: 'Resolves to city level', us: 'Country by default. State, province and city only if you switch them on, per site.' },
-      { dim: 'Accuracy', them: 'Exact, no sampling', us: 'Exact, no sampling — the same.' },
-      { dim: 'Visitor identity', them: '24-hour rotating salt', us: '24-hour rotating, per-site hash — the same.' },
+      { dim: 'Accuracy', them: 'Exact, no sampling', us: 'Exact, no sampling, the same.' },
+      { dim: 'Visitor identity', them: '24-hour rotating salt', us: '24-hour rotating, per-site hash, the same.' },
       { dim: 'Ecosystem', them: 'Standalone SaaS, self-hostable', us: 'Native to the Stacks toolchain: Postgres, queues, deploy.' },
       { dim: 'Licence', them: 'Open source (AGPL)', us: 'Open source, and Postgres-native.' },
     ],
     reasons: [
-      { n: '01', h: 'Your data, in your own database', b: 'Plausible is a great cookieless tool, but on Plausible Cloud your analytics live on their servers. analyticshq writes every event to a PostgreSQL table you own and can query directly — no separate store to trust.' },
+      { n: '01', h: 'Your data, in your own database', b: 'Plausible is a great cookieless tool, but on Plausible Cloud your analytics live on their servers. analyticshq writes every event to a PostgreSQL table you own and can query directly. No separate store to trust.' },
       { n: '02', h: 'You decide how precise', b: 'Plausible resolves visitor location to city level, for everyone. analyticshq resolves country by default and lets a site owner opt in to state and province, or city, if they need it: a decision you make per site and one that stays off until you make it. Cities with only a handful of visitors are reported together as Other.' },
       { n: '03', h: 'Part of your stack, not another service', b: 'analyticshq runs inside the Stacks toolchain, on the same Postgres, queue, and deploy you already operate. There is no extra analytics service to run alongside your app.' },
     ],
@@ -262,7 +262,7 @@ export const competitors: Record<string, Competitor> = {
     },
     kicker: 'analyticshq vs Matomo',
     h1: 'The privacy suite, minus the weight.',
-    intro: 'Matomo is a powerful open-source GA replacement with a full behavioral suite — recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. analyticshq goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.',
+    intro: 'Matomo is a powerful open-source GA replacement with a full behavioral suite: recordings, heatmaps, funnels, A/B tests. If you want all of that, it is a genuinely good pick. analyticshq goes the other way: always cookieless, aggregate-only, and light enough to forget it is there.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Matomo vs analyticshq',
     whyHeading: 'Where analyticshq fits instead.',
@@ -271,7 +271,7 @@ export const competitors: Record<string, Competitor> = {
     rows: [
       { dim: 'Cookies and consent', them: 'Sets cookies when behavioral features are on; can run cookieless with reduced accuracy', us: 'Always cookieless. Nothing stored on the device, so no banner.' },
       { dim: 'Script weight', them: 'Heavy tracker plus a full PHP/MySQL or cloud stack to run', us: 'Under 2 KB, first-party, on a lean Postgres and Stacks stack.' },
-      { dim: 'Approach', them: 'Full behavioral suite: recordings, heatmaps, funnels, A/B tests', us: 'Deliberately aggregate-only — the reports you actually open.' },
+      { dim: 'Approach', them: 'Full behavioral suite: recordings, heatmaps, funnels, A/B tests', us: 'Deliberately aggregate-only: the reports you actually open.' },
       { dim: 'Session recordings and heatmaps', them: 'Included (individual-level tracking of real sessions)', us: 'Not offered by design; nothing is recorded per person.' },
       { dim: 'Setup and hosting', them: 'Self-host the LAMP stack, or pay for Matomo Cloud', us: 'Drop in a one-line script; your data lands in your Postgres.' },
       { dim: 'Where your data lives', them: 'Your Matomo instance, or Matomo Cloud', us: 'Your own PostgreSQL database, and nowhere else.' },
@@ -280,7 +280,7 @@ export const competitors: Record<string, Competitor> = {
     reasons: [
       { n: '01', h: 'Cookieless without an asterisk', b: 'Matomo can run cookieless, but you trade away accuracy and features to get there, and the full suite sets cookies. analyticshq is cookieless on every plan, with no banner and nothing to configure.' },
       { n: '02', h: 'Light where Matomo is heavy', b: 'Matomo is a full LAMP application with a large tracker. analyticshq is an under-2 KB first-party script writing to a Postgres table, so there is far less to run, host, and keep patched.' },
-      { n: '03', h: 'Aggregate on purpose', b: 'Matomo records and replays individual sessions. analyticshq never does — it answers how your site is doing at the aggregate level, which is exactly why there is no personal data to manage.' },
+      { n: '03', h: 'Aggregate on purpose', b: 'Matomo records and replays individual sessions. analyticshq never does. It answers how your site is doing at the aggregate level, which is exactly why there is no personal data to manage.' },
     ],
     metrics: [
       { v: '< 2 KB', l: 'First-party script versus Matomo’s heavier tracker.' },
@@ -347,11 +347,11 @@ export const competitors: Record<string, Competitor> = {
     meta: {
       canonical: 'https://analyticshq.org/compare/simple-analytics',
       title: 'analyticshq vs Simple Analytics - privacy-first, with the full report set',
-      description: 'Both are cookieless and aggregate-only. analyticshq adds bounce rate, entry and exit pages, goals, and real-time — plus self-hosting and Postgres data ownership.',
+      description: 'Both are cookieless and aggregate-only. analyticshq adds bounce rate, entry and exit pages, goals, and real-time, plus self-hosting and Postgres data ownership.',
     },
     kicker: 'analyticshq vs Simple Analytics',
     h1: 'Just as private. With the reports you actually need.',
-    intro: 'Simple Analytics is admirably strict — it never even touches the IP. But its report set is the thinnest of the privacy-first tools: no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, and gives you the full picture — on data you own.',
+    intro: 'Simple Analytics is admirably strict: it never even touches the IP. But its report set is the thinnest of the privacy-first tools: no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, and gives you the full picture, on data you own.',
     heroCta: HOW_PRIVACY_WORKS,
     eyebrow: 'Simple Analytics vs analyticshq',
     whyHeading: 'Where analyticshq goes further.',
@@ -365,16 +365,16 @@ export const competitors: Record<string, Competitor> = {
       { dim: 'Geography', them: 'Country only, inferred from timezone and UA', us: 'Country resolved on your own server, with region and city opt-in per site' },
       // Was "DNT respect is on the roadmap" until #8 shipped. Kept honest in
       // both directions: they still deserve the credit for doing it first.
-      { dim: 'Do Not Track', them: 'Honored — data dropped entirely (a real strength)', us: 'Honored too, by default — DNT and Global Privacy Control' },
+      { dim: 'Do Not Track', them: 'Honored, data dropped entirely (a real strength)', us: 'Honored too, by default: DNT and Global Privacy Control' },
       { dim: 'Cookies and consent', them: 'Cookieless, no banner, never touches the IP', us: 'Cookieless, no banner, IP hashed then discarded' },
     ],
     reasons: [
-      { n: '01', h: 'Just as private, with the reports you actually need', b: 'Simple Analytics keeps things minimal — no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, but gives you the full report set teams rely on.' },
+      { n: '01', h: 'Just as private, with the reports you actually need', b: 'Simple Analytics keeps things minimal: no bounce rate, no entry or exit pages, no conversion value. analyticshq stays cookieless and aggregate-only, but gives you the full report set teams rely on.' },
       { n: '02', h: 'You own the raw data', b: 'Simple Analytics is closed-source SaaS. analyticshq is self-hostable and Postgres-native, so the raw events live in a database you control and can query directly.' },
-      { n: '03', h: 'Credit where it is due', b: 'Simple Analytics never collects the IP at all and documents honoring Do Not Track — genuinely strong privacy choices. analyticshq matches the cookieless, no-personal-data posture and adds depth and ownership on top.' },
+      { n: '03', h: 'Credit where it is due', b: 'Simple Analytics never collects the IP at all and documents honoring Do Not Track, genuinely strong privacy choices. analyticshq matches the cookieless, no-personal-data posture and adds depth and ownership on top.' },
     ],
     metrics: [
-      { v: 'Full', l: 'Bounce, entry/exit, goals, and real-time — not just pageviews.' },
+      { v: 'Full', l: 'Bounce, entry/exit, goals, and real-time, not just pageviews.' },
       { v: 'Self-host', l: 'Run it on your own Postgres and own the raw data.' },
       { v: '0', l: 'Cookies set, consent banners shown, or personal data stored.' },
     ],
@@ -403,21 +403,21 @@ export const competitors: Record<string, Competitor> = {
     ctaLink: SEE_DASHBOARD,
     rows: [
       { dim: 'ID rotation window', them: 'Session salt rotates monthly, visit salt hourly', us: 'Per-site hash rotates every 24 hours by default. A site can opt into a fixed 30-day window for visitor timelines, and the key is deleted when it ends.' },
-      { dim: 'Session replay & heatmaps', them: 'Yes — added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
+      { dim: 'Session replay & heatmaps', them: 'Yes, added in v3 (replay on rrweb, heatmaps)', us: 'Never. Recording individual sessions breaks aggregate-only.' },
       { dim: 'Individual profiles', them: 'A "Sessions" view lists and drills into individual visitors', us: 'Off by default. A site owner can turn on 30-day visitor timelines: pseudonymous, per site, no cookie, no identify(), erasable per visitor.' },
       { dim: 'Cross-session identity', them: 'identify() stitches a user’s sessions across time', us: 'No identify(), no distinct-ID stitching, by design.' },
       { dim: 'Geolocation', them: 'Country, region, and city', us: 'Country by default, region and city opt-in. Resolved locally, IP discarded.' },
-      { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes — Postgres-native, self-hostable, Stacks-integrated.' },
+      { dim: 'Open source', them: 'Yes (MIT), self-hostable', us: 'Yes: Postgres-native, self-hostable, Stacks-integrated.' },
       { dim: 'Cookies & consent', them: 'Cookieless, no banner needed', us: 'Cookieless, no banner needed.' },
     ],
     reasons: [
-      { n: '01', h: 'Both are open source — the philosophy is where they split', b: 'Umami and analyticshq are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, analyticshq refuses to build it.' },
+      { n: '01', h: 'Both are open source, and the philosophy is where they split', b: 'Umami and analyticshq are both MIT-spirited and self-hostable, with cookieless defaults. The difference is the ceiling: Umami now offers individual-level tracking, analyticshq refuses to build it.' },
       { n: '02', h: 'Aggregate by default, bounded by design', b: 'Umami v3 shipped session replay, heatmaps, individual visitor profiles, and identify() user stitching. analyticshq will never add replay, heatmaps or identify(). Its visitor timelines are off until a site owner turns them on, and even then an id cannot outlive 30 days.' },
       { n: '03', h: 'A tighter identity window', b: 'Umami’s session salt rotates monthly. analyticshq rotates its per-site hash every 24 hours unless a site opts into timelines, so by default activity cannot be linked across days. Opted in, the window is a fixed block with its key deleted at the end.' },
     ],
     metrics: [
       { v: '24h', l: 'Default ID rotation window, versus Umami’s monthly session salt.' },
-      { v: '0', l: 'Session recordings, heatmaps, or individual profiles — ever.' },
+      { v: '0', l: 'Session recordings, heatmaps, or individual profiles. Ever.' },
       { v: 'Country', l: 'Geo granularity by default. Region and city are opt-in per site.' },
     ],
     related: [

@@ -2,7 +2,7 @@
 useSeoMeta({
   canonical: 'https://analyticshq.org/features/geography',
   title: "Geography and devices - analyticshq",
-  description: "Country, device, browser, and operating system, resolved on your own server. See who visits without tracking who they are — no cookie, no stored IP, no third-party lookup.",
+  description: "Country, device, browser, and operating system, resolved on your own server. See who visits without tracking who they are: no cookie, no stored IP, no third-party lookup.",
 })
 
 // Drives BOTH the JSON-LD below and the visible nav, so the two cannot drift.
@@ -21,7 +21,7 @@ const crumbs = [
       <section class="feat-hero shell">
         <span class="kicker">Audience</span>
         <h1>See who visits, without tracking who they are.</h1>
-        <p>Country, device, browser, and operating system. Country is resolved on your own server from a local database — the visitor's IP is never stored and never sent to anyone.</p>
+        <p>Country, device, browser, and operating system. Country is resolved on your own server from a local database. The visitor's IP is never stored and never sent to anyone.</p>
         <div class="hero-actions">
           <StxLink class="btn primary" to="/dashboard?site=analyticshq-demo&share=5d3a9c0e7b1f4a6d8e2c0b9a7f1e3d5c">See a live dashboard</StxLink>
           <StxLink class="btn ghost" to="/#install">Get your script tag</StxLink>
