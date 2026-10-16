@@ -24,13 +24,47 @@ const ROOT = join(import.meta.dir, '../..')
 const DIRS = ['app', 'routes', 'config', 'scripts', 'tests', 'types', 'resources', 'cloud']
 const SELF = relative(ROOT, import.meta.path)
 
+/*
+ * Directories the walk must not enter.
+ *
+ * `pantry` is a local toolchain install (Postgres and its dependencies): one
+ * `.gitignore` entry, 6990 files, and not a single `.ts` or `.stx` among them.
+ * In this app it sits at `config/pantry`, so the `config` scan below walked all
+ * of it to find nothing -- and its `.bin/` holds 92 symlinks into a checkout
+ * that no longer has those files, so the walk died on the first one with an
+ * ENOENT out of `statSync` and took the whole file down with it. CI never sees
+ * `pantry`, which is why this only ever failed on a developer's machine, and
+ * why it cost an exit code rather than a build.
+ */
+const VENDORED = new Set(['pantry', 'node_modules'])
+
 function files(dir: string): string[] {
   const out: string[] = []
-  for (const name of readdirSync(dir)) {
-    const path = join(dir, name)
-    if (statSync(path).isDirectory())
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (VENDORED.has(entry.name))
+      continue
+    const path = join(dir, entry.name)
+    /*
+     * Read the kind off the directory entry, not off a stat of the path: a
+     * `readdirSync` entry already knows, so the common case costs no syscall
+     * and cannot throw. Only a symlink needs resolving, because its own entry
+     * says nothing about what it points at -- and if that target is gone, skip
+     * the link instead of letting the error end the walk. There are no symlinks
+     * at all under the other seven directories, so this branch exists for
+     * `pantry`'s sake and for whatever the next local install leaves behind.
+     */
+    let directory = entry.isDirectory()
+    if (entry.isSymbolicLink()) {
+      try {
+        directory = statSync(path).isDirectory()
+      }
+      catch {
+        continue
+      }
+    }
+    if (directory)
       out.push(...files(path))
-    else if (/\.(?:ts|stx)$/.test(name))
+    else if (/\.(?:ts|stx)$/.test(entry.name))
       out.push(path)
   }
   return out
