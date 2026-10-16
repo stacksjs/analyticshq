@@ -216,6 +216,21 @@ export default {
     default: '',
   },
 
+  // Read by database/seeders/OwnerSeeder.ts, which bootstraps the account you
+  // sign in with. Empty is the normal state locally: the seeder then falls
+  // back to constants in its own file. Outside a local APP_ENV an empty
+  // password makes the seeder skip, and in prod it refuses to run, so these
+  // are the only way to bootstrap an owner on a deploy.
+  ANALYTICSHQ_OWNER_EMAIL: {
+    validation: schema.string(),
+    default: '',
+  },
+
+  ANALYTICSHQ_OWNER_PASSWORD: {
+    validation: schema.string(),
+    default: '',
+  },
+
   MEILISEARCH_HOST: {
     validation: schema.string(),
     default: '',
