@@ -2378,8 +2378,12 @@ function exportCsv() {
   const a = document.createElement('a')
   a.href = url
   a.download = `analyticshq-${data.site}-${data.range}.csv`
+  // Both halves of the same transient anchor as the line above: it has to be in
+  // the document for the click to count, and out again straight after.
+  // stx-strict-ignore-next-line document.body
   document.body.appendChild(a)
   a.click()
+  // stx-strict-ignore-next-line document.body
   document.body.removeChild(a)
   // Deliberately setTimeout and NOT useTimeout, which is the opposite of the call made
   // for the copy-feedback timer above. useTimeout stops itself on destroy -- correct for
