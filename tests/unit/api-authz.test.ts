@@ -22,11 +22,23 @@ function routeBlock(path: string): string {
   return end === -1 ? rest : rest.slice(0, end)
 }
 
-const READ_ENDPOINTS = [
+/**
+ * The four reads a machine key may reach (#67), and nothing else.
+ *
+ * These are gated by `requireSiteRead`, which takes a read key issued for the
+ * site OR falls back to the same viewer check as everything below. They drop
+ * `.middleware('auth')` because it 401s before the handler and would refuse a
+ * key before it could be read — the real check is in the gate, which is
+ * asserted separately.
+ */
+const KEY_READABLE = [
   '/api/sites/{siteId}/stats',
   '/api/sites/{siteId}/timeseries',
   '/api/sites/{siteId}/pages',
   '/api/sites/{siteId}/referrers',
+]
+
+const READ_ENDPOINTS = [
   '/api/sites/{siteId}/events',
   '/api/sites/{siteId}/entry-pages',
   '/api/sites/{siteId}/exit-pages',
@@ -44,6 +56,42 @@ const TOP_DIMENSIONS = [
   '/api/sites/{siteId}/utm/mediums',
   '/api/sites/{siteId}/utm/campaigns',
 ]
+
+describe('guardrail: a read key reaches exactly the reads it was issued for', () => {
+  // The point of a site key is that it is narrower than a person. If it could
+  // reach every /api/sites/{siteId}/* route, it would be a worse version of the
+  // user token it replaces, so the set it reaches is pinned here rather than
+  // left to whoever edits a route next.
+  for (const path of KEY_READABLE) {
+    test(`GET ${path} is gated by requireSiteRead`, () => {
+      const block = routeBlock(path)
+      expect(block).not.toBe('')
+      expect(block).toContain('requireSiteRead(request, siteId)')
+    })
+  }
+
+  test('no other route is gated by requireSiteRead', () => {
+    const gated = analytics.split('requireSiteRead(request, siteId)').length - 1
+    // One call per allowlisted route, plus the definition's own signature line
+    // does not match this call shape.
+    expect(gated).toBe(KEY_READABLE.length)
+  })
+
+  test('requireSiteRead still enforces viewer for a person', () => {
+    // Without this the four routes above would have no role check at all for a
+    // signed-in caller: dropping .middleware('auth') on them is only safe
+    // because the fallback is the same gate the rest of the file uses.
+    const i = analytics.indexOf('async function requireSiteRead(')
+    expect(i).toBeGreaterThan(-1)
+    const end = analytics.indexOf('\nasync function requireSiteRole(', i)
+    expect(end).toBeGreaterThan(i)
+    const body = analytics.slice(i, end)
+    expect(body).toContain('requireSiteRole(request, siteId, \'viewer\')')
+    // And it only accepts something shaped like a key — anything else falls
+    // through to the person check rather than being trusted.
+    expect(body).toContain('looksLikeReadKey(presented)')
+  })
+})
 
 describe('guardrail: site-scoped read endpoints require at least viewer', () => {
   // These were owner-gated until #19, which is why an invited colleague could not
@@ -160,7 +208,11 @@ describe('guardrail: no site-scoped endpoint is left ungated', () => {
       const rest = analytics.slice(i)
       const end = rest.indexOf('\nroute.')
       const block = end === -1 ? rest : rest.slice(0, end)
-      expect(block).toMatch(/requireSiteRole\(request, siteId, '(viewer|admin|owner)'\)|requireSiteOwner\(request, siteId\)/)
+      // requireSiteRead counts: it takes a read key issued for this site, and
+      // otherwise defers to requireSiteRole(..., 'viewer') — asserted above, so
+      // accepting it here does not widen what "gated" means. The set of routes
+      // allowed to use it is pinned above too.
+      expect(block).toMatch(/requireSiteRole\(request, siteId, '(viewer|admin|owner)'\)|requireSiteOwner\(request, siteId\)|requireSiteRead\(request, siteId\)/)
     })
   }
 })
