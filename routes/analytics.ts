@@ -826,8 +826,10 @@ function authUserId(request: HandlerRequest): string | null {
  * still answers 401 when no credential resolves.
  */
 async function requireSiteRead(request: HandlerRequest, siteId: string): Promise<Response | null> {
-  const authHeader = request.headers?.get?.('authorization') ?? ''
-  const presented = request.bearerToken?.() ?? authHeader.replace(/^Bearer\s+/i, '')
+  // Read off the header rather than a bearerToken() helper: HandlerRequest
+  // declares no such method here, and line 3272 reads the same header the same
+  // way, so this stays consistent with the rest of the file.
+  const presented = String(request.headers?.get?.('authorization') ?? '').replace(/^Bearer\s+/i, '')
   if (!looksLikeReadKey(presented))
     return requireSiteRole(request, siteId, 'viewer')
 

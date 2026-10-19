@@ -1445,11 +1445,11 @@ function readKeyStatus(): string {
     return 'No read key. Issue one to let a server read this site.'
   const at = readKeyUsed()
   if (!at)
-    return 'A read key is active — never used.'
+    return 'A read key is active, never used.'
   const when = new Date(at)
   return Number.isNaN(when.getTime())
-    ? 'A read key is active — used recently.'
-    : `A read key is active — last used ${when.toLocaleString()}.`
+    ? 'A read key is active, used recently.'
+    : `A read key is active, last used ${when.toLocaleString()}.`
 }
 
 function copyReadKey() {

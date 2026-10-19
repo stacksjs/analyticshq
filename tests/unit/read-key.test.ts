@@ -71,7 +71,12 @@ describe('authorizeRead', () => {
     // against a caller presenting nothing.
     for (const presented of [KEY, null, undefined, ''])
       expect(authorizeRead({ ...site, read_key: null }, presented).ok).toBe(false)
-    expect(authorizeRead({ ...site, read_key: null }, KEY).status).toBe(403)
+    // Narrowed rather than reached into: the refusal shape only carries a
+    // status on the failing branch of the union.
+    const refused = authorizeRead({ ...site, read_key: null }, KEY)
+    expect(refused.ok).toBe(false)
+    if (!refused.ok)
+      expect(refused.status).toBe(403)
   })
 
   test('refuses another project\'s key with 401', () => {
