@@ -62,7 +62,7 @@ const crumbs = [
       </section>
 
       <section class="reveal section shell" aria-label="Live preview">
-        <div class="panel" style="max-width: 640px">
+        <div class="max-w-[640px] panel">
           <div class="panel-head">
             <span class="live"><span class="live-dot" aria-hidden="true"></span>47 online now</span>
             <span class="panel-tag">Sample data</span>
@@ -72,7 +72,7 @@ const crumbs = [
           <div class="chart-wrap">
             <span class="chart-cap">Visitors, last hour</span>
             <svg class="chart" viewBox="0 0 300 64" preserveAspectRatio="none" role="img" aria-label="Visitors over the last hour">
-              <polyline points="{{ sparkPoints }}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
+              <polyline class="stroke-[var(--accent)]" points="{{ sparkPoints }}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
             </svg>
           </div>
         </div>

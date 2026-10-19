@@ -157,7 +157,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
     </div>
 
     <label for="login-remember" class="flex gap-2 items-center text-sm text-text-3 cursor-pointer select-none">
-      <input id="login-remember" name="remember" type="checkbox" class="h-4 w-4" style="accent-color: var(--accent)">
+      <input id="login-remember" name="remember" type="checkbox" class="h-4 w-4 [accent-color:var(--accent)]">
       <span>Keep me signed in for 30 days</span>
     </label>
 

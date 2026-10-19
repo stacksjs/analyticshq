@@ -29,7 +29,7 @@ const crumbs = [
       </section>
 
       <section class="reveal section shell" aria-label="Core Web Vitals preview">
-        <div class="vitals" style="max-width: 640px">
+        <div class="max-w-[640px] vitals">
           <div class="good vital">
             <div class="vital-k">LCP</div>
             <div class="vital-v">1.2s</div>

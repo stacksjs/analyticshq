@@ -45,6 +45,14 @@ function marketingCss(): string {
 const ROOT = join(import.meta.dir, '../..')
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8')
 
+/*
+ * The class order here is pickier's, not a preference. These strings pin an
+ * exact ordered class attribute, and `pickier --fix` sorts class attributes, so
+ * `rounded bg-bar` became `bg-bar rounded` when the inline-style sweep ran the
+ * linter over these two files. The assertions are unchanged in intent: one
+ * shared token, no inline colour, and the width still inline because it is the
+ * part that varies. Re-sorting is what to do if the linter moves them again.
+ */
 const CALLERS = {
   'resources/views/dashboard.stx': 10,
   'resources/components/BreakdownPanel.stx': 1,
@@ -54,7 +62,7 @@ describe('the shared breakdown bar', () => {
   test('every bar uses the token and none carries the colour inline', () => {
     for (const [path, count] of Object.entries(CALLERS)) {
       const source = read(path)
-      expect(source.match(/class="absolute inset-y-1 left-0 rounded bg-bar"/g) ?? [], path).toHaveLength(count)
+      expect(source.match(/class="absolute inset-y-1 left-0 bg-bar rounded"/g) ?? [], path).toHaveLength(count)
       // The bar's own inline colour. `.ga-row:hover` and `.drp-day.is-range`
       // legitimately still declare this in CSS, so the needle is the inline
       // form the bar divs used, not the value.
@@ -66,7 +74,7 @@ describe('the shared breakdown bar', () => {
     // The point of the change was to remove what was identical, not to lose
     // what is not. A bar with no width is a bar nobody can read.
     const source = read('resources/views/dashboard.stx')
-    const widths = source.match(/class="absolute inset-y-1 left-0 rounded bg-bar" style="width: \{\{ [^}]+\}\}%"/g) ?? []
+    const widths = source.match(/class="absolute inset-y-1 left-0 bg-bar rounded" style="width: \{\{ [^}]+\}\}%"/g) ?? []
 
     expect(widths).toHaveLength(CALLERS['resources/views/dashboard.stx'])
   })

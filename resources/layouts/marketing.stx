@@ -56,8 +56,8 @@ const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
   <div class="mode-card">
     <h1 id="coming-soon-heading">analyticshq</h1>
     <p>Privacy-first web analytics is almost ready. Leave your email and we will send the install snippet the moment it opens.</p>
-    <form action="/api/email/subscribe" method="POST" style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:1.25rem;max-width:30rem;">
-      <input type="email" name="email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" required style="flex:1 1 15rem;min-height:46px;padding:0 0.9rem;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink);font:inherit;">
+    <form class="flex flex-wrap gap-[0.6rem] mt-[1.25rem] max-w-[30rem]" action="/api/email/subscribe" method="POST">
+      <input class="px-[0.9rem] py-0 min-h-[46px] text-[var(--ink)] bg-[var(--surface-2)] border border-[var(--line-strong)] rounded-[var(--r-sm)] [flex:1_1_15rem] [font:inherit]" type="email" name="email" placeholder="you@example.com" autocomplete="email" aria-label="Email address" required>
       <button class="btn primary" type="submit">Notify me</button>
     </form>
   </div>

@@ -29,7 +29,7 @@ const crumbs = [
       </section>
 
       <section class="reveal section shell" aria-label="Goals and campaigns preview">
-        <div class="code" style="max-width: 680px">
+        <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">Track a signup conversion</span></div>
           <pre class="code-body"><code>// anywhere in your app, on the event that matters
 analyticshq('signup', {

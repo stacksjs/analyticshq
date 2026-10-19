@@ -29,26 +29,26 @@ const crumbs = [
       </section>
 
       <section class="reveal section shell" aria-label="Sources and referrers preview">
-        <div class="panel" style="max-width: 640px">
+        <div class="max-w-[640px] panel">
           <div class="panel-head"><span class="chart-cap">Traffic by channel</span><span class="panel-tag">Sample data</span></div>
           <div class="bar-row">
             <span class="bar-label">Search</span>
-            <span class="bar-track"><span class="bar-fill" style="width: 100%"></span></span>
+            <span class="bar-track"><span class="w-[100%] bar-fill"></span></span>
             <span class="bar-value">42%</span>
           </div>
           <div class="bar-row">
             <span class="bar-label">Direct</span>
-            <span class="bar-track"><span class="bar-fill" style="width: 57%"></span></span>
+            <span class="bar-track"><span class="w-[57%] bar-fill"></span></span>
             <span class="bar-value">24%</span>
           </div>
           <div class="bar-row">
             <span class="bar-label">Social</span>
-            <span class="bar-track"><span class="bar-fill" style="width: 45%"></span></span>
+            <span class="bar-track"><span class="w-[45%] bar-fill"></span></span>
             <span class="bar-value">19%</span>
           </div>
           <div class="bar-row">
             <span class="bar-label">Referral</span>
-            <span class="bar-track"><span class="bar-fill" style="width: 36%"></span></span>
+            <span class="bar-track"><span class="w-[36%] bar-fill"></span></span>
             <span class="bar-value">15%</span>
           </div>
         </div>

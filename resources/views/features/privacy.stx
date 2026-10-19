@@ -29,7 +29,7 @@ const crumbs = [
       </section>
 
       <section class="reveal section shell" aria-label="Privacy by design preview">
-        <div class="code" style="max-width: 680px">
+        <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">The entire payload a visitor sends</span></div>
           <pre class="code-body"><code>{
   "d": "yoursite.com",      // domain

@@ -45,7 +45,7 @@ const crumbs = [
           <h2 class="section-title">Install the script</h2>
           <p class="section-intro">Add one tag to your site head with your site ID. It loads deferred and first-party, and starts counting page views right away, including client-side route changes in single-page apps.</p>
         </div>
-        <div class="code" style="max-width: 680px">
+        <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">Add to every page, once</span></div>
           <pre class="code-body"><code>&lt;script defer
   src="https://analyticshq.org/script.js"
@@ -58,7 +58,7 @@ const crumbs = [
           <h2 class="section-title">Track custom events</h2>
           <p class="section-intro">Once the script has loaded it puts an analyticshq() function on the page. Call it on any event that matters, with optional properties, to record a conversion beside your traffic.</p>
         </div>
-        <div class="code" style="max-width: 680px">
+        <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">On the event that matters</span></div>
           <pre class="code-body"><code>// e.g. right after a successful signup
 analyticshq('signup', {
@@ -73,7 +73,7 @@ analyticshq('signup', {
           <h2 class="section-title">Read your numbers with the API</h2>
           <p class="section-intro">Every figure on the dashboard is available over a small read API, scoped to your site ID and an optional date range. Wire it into a status board, a scheduled report, or your own UI.</p>
         </div>
-        <div class="code" style="max-width: 680px">
+        <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">GET /api/sites/{siteId}/*</span></div>
           <pre class="code-body"><code>GET /api/sites/{siteId}/stats        // visitors, views, sessions
 GET /api/sites/{siteId}/timeseries   // views per day

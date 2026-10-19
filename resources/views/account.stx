@@ -162,7 +162,7 @@ onMount(() => {
           render as an inert attribute and never fire.
         -->
         <div class="relative shrink-0 h-14 w-14">
-          <div class="grid place-items-center h-14 w-14 avatar" style="color: var(--accent-text); font-weight: 700; font-size: 1.25rem">{{ initialCh() }}</div>
+          <div class="grid place-items-center h-14 w-14 font-bold text-[1.25rem] text-[var(--accent-text)] avatar">{{ initialCh() }}</div>
           @if (avatarUrl())
             <img class="absolute inset-0 h-14 w-14 avatar" :src="avatarUrl()" alt="" width="56" height="56" onerror="this.hidden = true">
           @endif
@@ -171,7 +171,7 @@ onMount(() => {
           @if (loaded())
             <div class="font-semibold text-lg">{{ name() }}</div>
           @else
-            <div class="skeleton" style="width: 160px; height: 20px"></div>
+            <div class="h-[20px] w-[160px] skeleton"></div>
           @endif
           <div class="mt-1.5 text-sm text-text-2">{{ email() }}</div>
         </div>
@@ -184,7 +184,7 @@ onMount(() => {
     <section class="mb-5 card">
       <div class="flex items-center justify-between px-6 py-4">
         <div>
-          <div class="text-xs tracking-wide uppercase" style="color: var(--text-3); font-family: var(--mono)">Plan</div>
+          <div class="text-[var(--text-3)] text-xs tracking-wide uppercase [font-family:var(--mono)]">Plan</div>
           <div class="mt-1 font-semibold text-base">
             @if (admin())
               Admin
@@ -210,7 +210,7 @@ onMount(() => {
       </div>
       <div class="flex items-center justify-between row-rule px-6 py-4">
         <div>
-          <div class="text-xs tracking-wide uppercase" style="color: var(--text-3); font-family: var(--mono)">Member since</div>
+          <div class="text-[var(--text-3)] text-xs tracking-wide uppercase [font-family:var(--mono)]">Member since</div>
           <div class="mt-1 text-base text-text-2">{{ since() }}</div>
         </div>
         <StxLink to="/dashboard" class="px-4 py-2 text-sm btn-ghost">Open dashboard</StxLink>

@@ -37,32 +37,32 @@ const crumbs = [
             <span class="live">Revenue, last 30 days</span>
             <span class="panel-tag">Sample data</span>
           </div>
-          <svg class="usecase-viz" viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Store revenue of $65.7k over the last 30 days from 742 orders, trending up, with revenue split across organic search, paid social, and email" style="display:block;width:100%;height:auto;margin-top:1.1rem">
-            <text x="4" y="14" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2" style="fill:var(--faint)">REVENUE · LAST 30 DAYS</text>
-            <text x="4" y="48" font-family="'Geist',sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5" style="fill:var(--ink)">$65.7k</text>
-            <text x="4" y="66" font-family="'Geist Mono',monospace" font-size="10.5"><tspan style="fill:var(--accent)">▲ 18%</tspan><tspan style="fill:var(--muted)"> vs last month · 742 orders</tspan></text>
+          <svg class="block mt-[1.1rem] h-auto w-[100%] usecase-viz" viewBox="0 0 360 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Store revenue of $65.7k over the last 30 days from 742 orders, trending up, with revenue split across organic search, paid social, and email">
+            <text class="fill-[var(--faint)]" x="4" y="14" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.2">REVENUE · LAST 30 DAYS</text>
+            <text class="fill-[var(--ink)]" x="4" y="48" font-family="'Geist',sans-serif" font-size="28" font-weight="700" letter-spacing="-0.5">$65.7k</text>
+            <text x="4" y="66" font-family="'Geist Mono',monospace" font-size="10.5"><tspan class="fill-[var(--accent)]">▲ 18%</tspan><tspan class="fill-[var(--muted)]"> vs last month · 742 orders</tspan></text>
 
-            <path d="M8,186 L8,166 L46,158 L84,162 L122,138 L160,144 L198,120 L236,126 L274,102 L312,108 L344,88 L344,186 Z" fill-opacity="0.13" style="fill:var(--accent)"></path>
-            <polyline points="8,166 46,158 84,162 122,138 160,144 198,120 236,126 274,102 312,108 344,88" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="stroke:var(--accent)"></polyline>
-            <circle cx="344" cy="88" r="4.5" style="fill:var(--accent)"></circle>
-            <line x1="8" y1="186" x2="352" y2="186" stroke-width="1" style="stroke:var(--line)"></line>
+            <path class="fill-[var(--accent)]" d="M8,186 L8,166 L46,158 L84,162 L122,138 L160,144 L198,120 L236,126 L274,102 L312,108 L344,88 L344,186 Z" fill-opacity="0.13"></path>
+            <polyline class="stroke-[var(--accent)]" points="8,166 46,158 84,162 122,138 160,144 198,120 236,126 274,102 312,108 344,88" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>
+            <circle class="fill-[var(--accent)]" cx="344" cy="88" r="4.5"></circle>
+            <line class="stroke-[var(--line)]" x1="8" y1="186" x2="352" y2="186" stroke-width="1"></line>
 
-            <text x="4" y="212" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1" style="fill:var(--faint)">REVENUE BY CHANNEL</text>
+            <text class="fill-[var(--faint)]" x="4" y="212" font-family="'Geist Mono',monospace" font-size="10" letter-spacing="1">REVENUE BY CHANNEL</text>
 
-            <text x="8" y="230" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Organic search</text>
-            <text x="352" y="230" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$28.4k</text>
-            <rect x="8" y="234" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
-            <rect x="8" y="234" width="344" height="8" rx="4" fill-opacity="0.92" style="fill:var(--accent)"></rect>
+            <text class="fill-[var(--muted)]" x="8" y="230" font-family="'Geist Mono',monospace" font-size="9.5">Organic search</text>
+            <text class="fill-[var(--ink)]" x="352" y="230" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$28.4k</text>
+            <rect class="fill-[var(--line)]" x="8" y="234" width="344" height="8" rx="4"></rect>
+            <rect class="fill-[var(--accent)]" x="8" y="234" width="344" height="8" rx="4" fill-opacity="0.92"></rect>
 
-            <text x="8" y="256" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Paid social</text>
-            <text x="352" y="256" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$16.2k</text>
-            <rect x="8" y="260" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
-            <rect x="8" y="260" width="196" height="8" rx="4" fill-opacity="0.58" style="fill:var(--accent)"></rect>
+            <text class="fill-[var(--muted)]" x="8" y="256" font-family="'Geist Mono',monospace" font-size="9.5">Paid social</text>
+            <text class="fill-[var(--ink)]" x="352" y="256" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$16.2k</text>
+            <rect class="fill-[var(--line)]" x="8" y="260" width="344" height="8" rx="4"></rect>
+            <rect class="fill-[var(--accent)]" x="8" y="260" width="196" height="8" rx="4" fill-opacity="0.58"></rect>
 
-            <text x="8" y="282" font-family="'Geist Mono',monospace" font-size="9.5" style="fill:var(--muted)">Email</text>
-            <text x="352" y="282" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600" style="fill:var(--ink)">$12.5k</text>
-            <rect x="8" y="286" width="344" height="8" rx="4" style="fill:var(--line)"></rect>
-            <rect x="8" y="286" width="151" height="8" rx="4" fill-opacity="0.4" style="fill:var(--accent)"></rect>
+            <text class="fill-[var(--muted)]" x="8" y="282" font-family="'Geist Mono',monospace" font-size="9.5">Email</text>
+            <text class="fill-[var(--ink)]" x="352" y="282" text-anchor="end" font-family="'Geist',sans-serif" font-size="10" font-weight="600">$12.5k</text>
+            <rect class="fill-[var(--line)]" x="8" y="286" width="344" height="8" rx="4"></rect>
+            <rect class="fill-[var(--accent)]" x="8" y="286" width="151" height="8" rx="4" fill-opacity="0.4"></rect>
           </svg>
         </aside>
       </section>
@@ -85,11 +85,11 @@ const crumbs = [
               <span class="live">Orders by landing page</span>
               <span class="panel-tag">Sample data</span>
             </div>
-            <div class="top-pages" style="margin-top:1.1rem;">
-              <div class="top-row"><span class="path">/products/tote</span><span class="bar"><span style="width:100%"></span></span><span class="count">228</span></div>
-              <div class="top-row"><span class="path">/collections/new</span><span class="bar"><span style="width:64%"></span></span><span class="count">146</span></div>
-              <div class="top-row"><span class="path">/products/mug</span><span class="bar"><span style="width:44%"></span></span><span class="count">101</span></div>
-              <div class="top-row"><span class="path">/sale</span><span class="bar"><span style="width:31%"></span></span><span class="count">71</span></div>
+            <div class="top-pages !mt-[1.1rem]">
+              <div class="top-row"><span class="path">/products/tote</span><span class="bar"><span class="w-[100%]"></span></span><span class="count">228</span></div>
+              <div class="top-row"><span class="path">/collections/new</span><span class="bar"><span class="w-[64%]"></span></span><span class="count">146</span></div>
+              <div class="top-row"><span class="path">/products/mug</span><span class="bar"><span class="w-[44%]"></span></span><span class="count">101</span></div>
+              <div class="top-row"><span class="path">/sale</span><span class="bar"><span class="w-[31%]"></span></span><span class="count">71</span></div>
             </div>
           </aside>
         </div>
@@ -113,11 +113,11 @@ const crumbs = [
               <span class="live">Revenue by source</span>
               <span class="panel-tag">Sample data</span>
             </div>
-            <div class="top-pages" style="margin-top:1.1rem;">
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Organic search</span><span class="bar"><span style="width:100%"></span></span><span class="count">$28.4k</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Paid social</span><span class="bar"><span style="width:57%"></span></span><span class="count">$16.2k</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Email</span><span class="bar"><span style="width:44%"></span></span><span class="count">$12.5k</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Direct</span><span class="bar"><span style="width:30%"></span></span><span class="count">$8.6k</span></div>
+            <div class="top-pages !mt-[1.1rem]">
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Organic search</span><span class="bar"><span class="w-[100%]"></span></span><span class="count">$28.4k</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Paid social</span><span class="bar"><span class="w-[57%]"></span></span><span class="count">$16.2k</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Email</span><span class="bar"><span class="w-[44%]"></span></span><span class="count">$12.5k</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Direct</span><span class="bar"><span class="w-[30%]"></span></span><span class="count">$8.6k</span></div>
             </div>
           </aside>
         </div>

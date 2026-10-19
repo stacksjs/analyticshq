@@ -37,25 +37,25 @@ const crumbs = [
             <span class="live">Signup funnel, last 30 days</span>
             <span class="panel-tag">Sample data</span>
           </div>
-          <svg viewBox="0 0 360 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 612 signups to 289 activated users, a 3.4 percent visitor-to-activated rate" style="display:block;width:100%;height:auto;margin-top:1.1rem">
-            <path d="M20,100 L340,100 L286,120 L74,120 Z" fill-opacity="0.07" style="fill:var(--accent)"></path>
-            <path d="M74,164 L286,164 L254,184 L106,184 Z" fill-opacity="0.07" style="fill:var(--accent)"></path>
+          <svg class="block mt-[1.1rem] h-auto w-[100%]" viewBox="0 0 360 280" preserveAspectRatio="xMidYMid meet" role="img" aria-label="A signup funnel narrowing from 8,420 visitors to 612 signups to 289 activated users, a 3.4 percent visitor-to-activated rate">
+            <path class="fill-[var(--accent)]" d="M20,100 L340,100 L286,120 L74,120 Z" fill-opacity="0.07"></path>
+            <path class="fill-[var(--accent)]" d="M74,164 L286,164 L254,184 L106,184 Z" fill-opacity="0.07"></path>
 
-            <rect x="20" y="56" width="320" height="44" rx="8" fill-opacity="0.92" style="fill:var(--accent)"></rect>
-            <text x="36" y="84" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--viz-on-accent)">VISITORS</text>
-            <text x="324" y="85" text-anchor="end" font-family="'Geist',sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4" style="fill:var(--viz-on-accent)">8,420</text>
+            <rect class="fill-[var(--accent)]" x="20" y="56" width="320" height="44" rx="8" fill-opacity="0.92"></rect>
+            <text class="fill-[var(--viz-on-accent)]" x="36" y="84" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">VISITORS</text>
+            <text class="fill-[var(--viz-on-accent)]" x="324" y="85" text-anchor="end" font-family="'Geist',sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4">8,420</text>
 
-            <rect x="74" y="120" width="212" height="44" rx="8" fill-opacity="0.58" style="fill:var(--accent)"></rect>
-            <text x="90" y="148" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--viz-on-accent)">SIGNUPS</text>
-            <text x="270" y="149" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" style="fill:var(--viz-on-accent)">612</text>
+            <rect class="fill-[var(--accent)]" x="74" y="120" width="212" height="44" rx="8" fill-opacity="0.58"></rect>
+            <text class="fill-[var(--viz-on-accent)]" x="90" y="148" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">SIGNUPS</text>
+            <text class="fill-[var(--viz-on-accent)]" x="270" y="149" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4">612</text>
 
-            <rect x="106" y="184" width="148" height="44" rx="8" fill-opacity="0.34" style="fill:var(--accent)"></rect>
-            <text x="122" y="212" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8" style="fill:var(--ink)">ACTIVATED</text>
-            <text x="238" y="213" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4" style="fill:var(--ink)">289</text>
+            <rect class="fill-[var(--accent)]" x="106" y="184" width="148" height="44" rx="8" fill-opacity="0.34"></rect>
+            <text class="fill-[var(--ink)]" x="122" y="212" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" letter-spacing="0.8">ACTIVATED</text>
+            <text class="fill-[var(--ink)]" x="238" y="213" text-anchor="end" font-family="'Geist',sans-serif" font-size="18" font-weight="700" letter-spacing="-0.4">289</text>
 
-            <line x1="20" y1="250" x2="340" y2="250" style="stroke:var(--line)"></line>
-            <text x="20" y="272" font-family="'Geist Mono',ui-monospace,monospace" font-size="11" style="fill:var(--muted)">visitor &#8594; activated</text>
-            <text x="340" y="272" text-anchor="end" font-family="'Geist',sans-serif" font-size="15" font-weight="700" style="fill:var(--accent)">3.4%</text>
+            <line class="stroke-[var(--line)]" x1="20" y1="250" x2="340" y2="250"></line>
+            <text class="fill-[var(--muted)]" x="20" y="272" font-family="'Geist Mono',ui-monospace,monospace" font-size="11">visitor &#8594; activated</text>
+            <text class="fill-[var(--accent)]" x="340" y="272" text-anchor="end" font-family="'Geist',sans-serif" font-size="15" font-weight="700">3.4%</text>
           </svg>
         </aside>
       </section>
@@ -78,11 +78,11 @@ const crumbs = [
               <span class="live">Signups by landing page</span>
               <span class="panel-tag">Sample data</span>
             </div>
-            <div class="top-pages" style="margin-top:1.1rem;">
-              <div class="top-row"><span class="path">/pricing</span><span class="bar"><span style="width:100%"></span></span><span class="count">214</span></div>
-              <div class="top-row"><span class="path">/</span><span class="bar"><span style="width:62%"></span></span><span class="count">133</span></div>
-              <div class="top-row"><span class="path">/integrations</span><span class="bar"><span style="width:38%"></span></span><span class="count">81</span></div>
-              <div class="top-row"><span class="path">/blog/launch</span><span class="bar"><span style="width:27%"></span></span><span class="count">58</span></div>
+            <div class="top-pages !mt-[1.1rem]">
+              <div class="top-row"><span class="path">/pricing</span><span class="bar"><span class="w-[100%]"></span></span><span class="count">214</span></div>
+              <div class="top-row"><span class="path">/</span><span class="bar"><span class="w-[62%]"></span></span><span class="count">133</span></div>
+              <div class="top-row"><span class="path">/integrations</span><span class="bar"><span class="w-[38%]"></span></span><span class="count">81</span></div>
+              <div class="top-row"><span class="path">/blog/launch</span><span class="bar"><span class="w-[27%]"></span></span><span class="count">58</span></div>
             </div>
           </aside>
         </div>
@@ -106,11 +106,11 @@ const crumbs = [
               <span class="live">Signups by source</span>
               <span class="panel-tag">Sample data</span>
             </div>
-            <div class="top-pages" style="margin-top:1.1rem;">
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Organic search</span><span class="bar"><span style="width:100%"></span></span><span class="count">188</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Product Hunt</span><span class="bar"><span style="width:54%"></span></span><span class="count">102</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Newsletter</span><span class="bar"><span style="width:41%"></span></span><span class="count">77</span></div>
-              <div class="top-row"><span class="path" style="font-family:var(--sans);">Direct</span><span class="bar"><span style="width:29%"></span></span><span class="count">54</span></div>
+            <div class="top-pages !mt-[1.1rem]">
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Organic search</span><span class="bar"><span class="w-[100%]"></span></span><span class="count">188</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Product Hunt</span><span class="bar"><span class="w-[54%]"></span></span><span class="count">102</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Newsletter</span><span class="bar"><span class="w-[41%]"></span></span><span class="count">77</span></div>
+              <div class="top-row"><span class="![font-family:var(--sans)] path">Direct</span><span class="bar"><span class="w-[29%]"></span></span><span class="count">54</span></div>
             </div>
           </aside>
         </div>
