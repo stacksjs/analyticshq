@@ -155,7 +155,7 @@ async function accept(): Promise<void> {
         {{-- Static label. A reactive mustache as an element's own text makes stx
             cloak it, and the primary control on this page must not be
             display:none before the bundle runs. --}}
-        <button type="button" @click="accept()" :disabled="busy()" class="w-full btn primary">Accept the invitation</button>
+        <button type="button" @click="accept()" :disabled="busy()" :aria-busy="busy()" class="w-full btn primary">Accept the invitation</button>
         <span :show="busy()" style="display:none" class="block mt-2 text-center text-text-3 text-xs">Accepting…</span>
         <p :show="failed() !== ''" style="display:none" class="mt-3 text-[var(--danger,_#f87171)] text-center text-xs">{{ failed() }}</p>
 

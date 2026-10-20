@@ -120,7 +120,7 @@ async function upgrade(): Promise<void> {
               <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Priority support</li>
               <li class="flex gap-[0.55rem] items-center text-[0.92rem] text-[var(--ink)]"><svg class="flex-none h-4 w-4 text-[var(--accent)]" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 4.5l-7 7-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg> Import history from a CSV export</li>
             </ul>
-            <button @click="upgrade" :disabled="loading()" class="justify-center mt-7 w-full btn primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
+            <button @click="upgrade" :disabled="loading()" :aria-busy="loading()" class="justify-center mt-7 w-full btn primary">{{ loading() ? 'Redirecting…' : 'Upgrade to Pro' }}</button>
             @if (err())
               <p class="mt-[0.85rem] text-[0.8rem] text-[var(--danger)] text-center">{{ err() }}</p>
             @endif

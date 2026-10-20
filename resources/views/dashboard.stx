@@ -1956,6 +1956,14 @@ const fathomReplace: StxSignal<boolean> = state(false)
 const fathomAcceptFiltered: StxSignal<boolean> = state(false)
 const fathomDragging: StxSignal<boolean> = state(false)
 const fathomBusy: StxSignal<boolean> = state(false)
+/*
+ * Which of the two Fathom buttons is working. `fathomBusy` gates BOTH of them,
+ * which is right for :disabled -- neither should be clickable while either runs
+ * -- but wrong for aria-busy, which says "THIS element is being updated". With
+ * the shared signal on both, starting a check would announce the import button
+ * as busy too. Set beside every fathomBusy.set() and cleared with it.
+ */
+const fathomAction: StxSignal<string> = state('')
 const fathomProgress: StxSignal<string> = state('')
 const fathomPreview: StxSignal<string> = state('')
 const fathomResult: StxSignal<string> = state('')
@@ -2144,6 +2152,7 @@ async function checkFathomExport(): Promise<void> {
     return
   }
   fathomBusy.set(true)
+  fathomAction.set('check')
   fathomProgress.set('Checking your export...')
   fathomPreview.set('')
   fathomResult.set('')
@@ -2173,6 +2182,7 @@ async function checkFathomExport(): Promise<void> {
     fathomResult.set('Could not reach the server.')
   }
   fathomBusy.set(false)
+  fathomAction.set('')
   fathomProgress.set('')
 }
 
@@ -2184,6 +2194,7 @@ async function importFromFathom(): Promise<void> {
     return
   }
   fathomBusy.set(true)
+  fathomAction.set('import')
   fathomProgress.set('Importing your Fathom history...')
   fathomPreview.set('')
   fathomResult.set('')
@@ -2243,6 +2254,7 @@ async function importFromFathom(): Promise<void> {
   }
 
   fathomBusy.set(false)
+  fathomAction.set('')
   fathomProgress.set('')
   fathomWarnings.set(warnings)
 
@@ -3285,7 +3297,7 @@ onMount(() => {
           <option value="starts_with">starts with</option>
         </select>
         <input class="px-[9px] py-[6px] w-[80px] text-[var(--text)] bg-[var(--bg)] border border-[var(--border)] rounded-[8px] [font:500_13px/1.2_var(--sans,ui-sans-serif)]" name="value" type="number" step="any" placeholder="Value" aria-label="Goal value">
-        <button class="px-[13px] py-[7px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[8px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="submit" :disabled="goalBusy()">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
+        <button class="px-[13px] py-[7px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[8px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="submit" :disabled="goalBusy()" :aria-busy="goalBusy()">{{ goalBusy() ? 'Adding…' : 'Add goal' }}</button>
       </form>
       <div class="mt-2 text-[var(--bad)] text-xs" :show="goalError()" style="display:none">{{ goalError() }}</div>
       @endif
@@ -3545,7 +3557,7 @@ onMount(() => {
                     display:none until the bundle ran. Busy state is carried by
                     :disabled, an ATTRIBUTE binding, which does not cloak, and by
                     the sibling below, which is supposed to start hidden. --}}
-                <button class="px-[14px] py-[7px] text-[var(--accent-ink)] bg-[var(--accent)] border border-[var(--accent)] rounded-[8px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="sendInvite()" :disabled="inviteBusy()">Send invitation</button>
+                <button class="px-[14px] py-[7px] text-[var(--accent-ink)] bg-[var(--accent)] border border-[var(--accent)] rounded-[8px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="sendInvite()" :disabled="inviteBusy()" :aria-busy="inviteBusy()">Send invitation</button>
                 <span class="text-[var(--text-3)] [font:400_12px/1_var(--sans,ui-sans-serif)]" :show="inviteBusy()" style="display:none">Sending…</span>
               </div>
               <p class="mt-2 text-text-3 text-xs">They get an emailed link that works once, for that address only, and expires in 14 days.</p>
@@ -3614,7 +3626,7 @@ onMount(() => {
               in separate elements for the same reason: a reactive child cloaks
               its parent. --}}
           <div class="flex flex-wrap gap-3 items-center mt-4">
-            <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="importFromGa" :disabled="gaBusy()">Import my history</button>
+            <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="importFromGa" :disabled="gaBusy()" :aria-busy="gaBusy()">Import my history</button>
           </div>
           <p class="mt-2 text-text-3 text-xs" :show="gaProgress()" style="display:none">{{ gaProgress() }}</p>
           <p class="mt-3 text-sm text-text-2" :show="gaResult()" style="display:none">{{ gaResult() }}</p>
@@ -3690,8 +3702,8 @@ onMount(() => {
                 attribute binding, which does not cloak. A reactive mustache in a
                 button's own text would hide the control until hydration. --}}
             <div class="flex flex-wrap gap-3 items-center mt-4">
-              <button class="px-[13px] py-[8px] text-[var(--text-2)] bg-[transparent] border border-[var(--border)] rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="checkFathomExport" :disabled="fathomBusy()">Check this export</button>
-              <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="importFromFathom" :disabled="fathomBusy()">Import my history</button>
+              <button class="px-[13px] py-[8px] text-[var(--text-2)] bg-[transparent] border border-[var(--border)] rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="checkFathomExport" :disabled="fathomBusy()" :aria-busy="fathomAction() === 'check'">Check this export</button>
+              <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="importFromFathom" :disabled="fathomBusy()" :aria-busy="fathomAction() === 'import'">Import my history</button>
             </div>
 
             <p class="mt-2 text-text-3 text-xs" :show="fathomProgress()" style="display:none">{{ fathomProgress() }}</p>
@@ -3859,9 +3871,9 @@ onMount(() => {
           <div class="flex flex-wrap gap-2 items-center" :show="shareUrl()" style="display:none">
             <input readonly :value="shareUrl()" aria-label="Share link" class="px-[9px] py-[6px] max-w-[340px] min-w-[220px] text-[var(--text-2)] text-xs bg-[var(--bg)] border border-[var(--border)] rounded-[8px] mono">
             <button class="px-[11px] py-[6px] text-[var(--text-2)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]" type="button" @click="copyShare">{{ shareCopied() ? 'Copied' : 'Copy' }}</button>
-            <button class="px-[11px] py-[6px] text-[var(--text-3)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]" type="button" @click="revokeShare" :disabled="shareBusy()">Revoke</button>
+            <button class="px-[11px] py-[6px] text-[var(--text-3)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]" type="button" @click="revokeShare" :disabled="shareBusy()" :aria-busy="shareBusy()">Revoke</button>
           </div>
-          <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
+          <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="createShare" :disabled="shareBusy()" :aria-busy="shareBusy()" :show="!shareUrl()" style="display:none">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
         </div>
       </div>
     @endif

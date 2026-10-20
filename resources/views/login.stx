@@ -161,7 +161,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
       <span>Keep me signed in for 30 days</span>
     </label>
 
-    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
+    <button type="submit" :disabled="loading()" :aria-busy="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
       {{ loading() ? 'Signing in…' : 'Sign in' }}
     </button>
   </form>
@@ -173,7 +173,7 @@ async function handleVerify(e: SubmitEvent): Promise<void> {
       <input id="login-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" class="px-3.5 py-2.5 w-full text-sm field" :aria-invalid="error() ? 'true' : 'false'" :aria-describedby="error() ? 'login-error' : ''">
       <p class="mt-1.5 text-text-3 text-xs">Enter the 6-digit code from your authenticator app.</p>
     </div>
-    <button type="submit" :disabled="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
+    <button type="submit" :disabled="loading()" :aria-busy="loading()" class="py-2.5 w-full font-semibold text-sm btn-accent">
       {{ loading() ? 'Verifying…' : 'Verify and sign in' }}
     </button>
   </form>
