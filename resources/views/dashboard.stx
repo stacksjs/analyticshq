@@ -373,6 +373,8 @@ let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
 // UI can show/copy/revoke the link. Bridged into the client block.
 let __shareToken = ''
+let __hasReadKey = false
+let __readKeyUsed = ''
 
 // Raw rows, read into the shapes in types/dashboard.d.ts as each query returns.
 // `db.unsafe` answers Record<string, unknown>, and Postgres hands COUNT(*) back as
@@ -497,6 +499,16 @@ async function loadData(): Promise<void> {
   // interpolating it into the share URL, which stringifies it the same way.
   if (!shareMode)
     __shareToken = text((await readSettings(siteId)).share_token) || ''
+
+  // The read key's presence and last use, never the key (#67). It is a secret,
+  // shown once when it is issued and never again, so the page is only ever told
+  // whether one exists — enough to tell a live key from a forgotten one before
+  // revoking it.
+  if (!shareMode) {
+    const keyRow = (await pgq(`SELECT read_key, read_key_last_used_at FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+    __hasReadKey = !!(keyRow && keyRow.read_key)
+    __readKeyUsed = keyRow && keyRow.read_key_last_used_at ? String(keyRow.read_key_last_used_at) : ''
+  }
 
   // Team: who can already reach this site, and who has been invited but has not
   // accepted yet. Resolved server-side and rendered with @foreach so the panel
@@ -1382,12 +1394,16 @@ const exportPayload = {
 // UI so it can display the existing share link. The underlying server binding
 // stays private and only this exact scalar crosses the bridge.
 const shareCapability = __shareToken
+// Presence and last use only. The key itself is never bridged, because it is
+// never on the server side of this page either — see the read of it above.
+const readKeyPresent = __hasReadKey
+const readKeyUsedAt = __readKeyUsed
 // regionGeo and cityGeo seed the two geo toggles. They were missing from this
 // list for regions, and a declared payload bridges ONLY what it names, so
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, regionGeo, savedTz, shareCapability, visitorTimelines })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyPresent, readKeyUsedAt, regionGeo, savedTz, shareCapability, visitorTimelines })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1412,6 +1428,96 @@ const isPro = state(false)
 // declared further down and reached by hoisting, which is the trade for having one
 // place that decides what a share URL looks like.
 const shareUrl = state(shareCapability ? shareLinkFor(shareCapability) : '')
+
+// --- Read key ---------------------------------------------------------------
+// Issued on demand, shown once, revocable (#67). The key lives in a signal only
+// for as long as the page that issued it is open: nothing renders it from the
+// server and nothing stores it, so leaving the page is the end of the only copy
+// the browser ever had.
+const hasReadKey = state(readKeyPresent)
+const readKeyUsed = state(readKeyUsedAt)
+const readKeyOnce = state('')
+const readKeyBusy = state(false)
+const readKeyCopied = state(false)
+
+function readKeyStatus(): string {
+  if (!hasReadKey())
+    return 'No read key. Issue one to let a server read this site.'
+  const at = readKeyUsed()
+  if (!at)
+    return 'A read key is active, never used.'
+  const when = new Date(at)
+  return Number.isNaN(when.getTime())
+    ? 'A read key is active, used recently.'
+    : `A read key is active, last used ${when.toLocaleString()}.`
+}
+
+function copyReadKey() {
+  const value = readKeyOnce()
+  if (!value || !navigator.clipboard?.writeText)
+    return
+  void navigator.clipboard.writeText(value).then(() => {
+    readKeyCopied.set(true)
+    setTimeout(() => readKeyCopied.set(false), 1600)
+  }, () => {})
+}
+
+async function issueReadKey() {
+  if (readKeyBusy())
+    return
+  // Replacing is destructive in the same way revoking is, so it asks — but only
+  // when there is something to break.
+  if (hasReadKey() && !(await stxConfirm('Replace the read key? Anything using the current one stops reading immediately.')))
+    return
+  readKeyBusy.set(true)
+  let failed = false
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/read-key`, { method: 'POST', credentials: 'same-origin' })
+    const d: { read_key?: string } = await res.json().catch(() => ({}))
+    if (res.ok && d.read_key) {
+      readKeyOnce.set(d.read_key)
+      hasReadKey.set(true)
+      readKeyUsed.set('')
+    }
+    else {
+      failed = true
+    }
+  }
+  catch {
+    failed = true
+  }
+  readKeyBusy.set(false)
+  if (failed)
+    await stxAlert('Could not issue a read key. Please try again.')
+}
+
+async function revokeReadKey() {
+  if (readKeyBusy())
+    return
+  if (!(await stxConfirm('Revoke the read key? Anything using it stops reading immediately.')))
+    return
+  readKeyBusy.set(true)
+  let failed = false
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/read-key`, { method: 'DELETE', credentials: 'same-origin' })
+    if (res.ok) {
+      hasReadKey.set(false)
+      readKeyUsed.set('')
+      readKeyOnce.set('')
+    }
+    else {
+      failed = true
+    }
+  }
+  catch {
+    failed = true
+  }
+  readKeyBusy.set(false)
+  // Worth surfacing rather than swallowing, for the same reason a failed share
+  // revoke is: the old key is still live, and clearing nothing looks like success.
+  if (failed)
+    await stxAlert('Could not revoke the read key. It may still be active. Please try again.')
+}
 const shareBusy = state(false)
 const shareCopied = state(false)
 // Live "current visitors": seeded from the server render, then polled so the
@@ -3757,6 +3863,44 @@ onMount(() => {
           </div>
           <button class="px-[13px] py-[8px] text-[var(--accent-ink)] bg-[var(--accent)] border-0 rounded-[9px] cursor-pointer [font:600_13px/1_var(--sans,ui-sans-serif)]" type="button" @click="createShare" :disabled="shareBusy()" :show="!shareUrl()" style="display:none">{{ shareBusy() ? 'Creating…' : 'Create share link' }}</button>
         </div>
+      </div>
+    @endif
+
+    {{-- Read key: the credential a server presents to read this site's reports
+        without signing in as anybody (#67). Sits beside the share link because
+        both hand reading to someone who is not you — but a share link is a URL
+        for a person's browser, and this is a secret for a server, which is the
+        distinction the copy has to carry.
+
+        Same :show discipline as the share panel above, and for the reason
+        spelled out there: a client-signal conditional nested inside a server
+        one breaks stx's directive matching (§7.3), so :show is the binding,
+        and the SSR state rides in the static style (§7.1).
+
+        Written without naming those directives literally — prose that spells
+        them has made a matcher start inside a comment before. --}}
+    @if (ownsActive)
+      <div class="p-5 panel site-settings-panel">
+        <div class="flex flex-wrap gap-3 items-center justify-between">
+          <div>
+            <div class="font-semibold text-sm">Read key</div>
+            <div class="mt-0.5 text-text-3 text-xs">Lets a server read this site's reports machine-to-machine. Unlike a share link this is a secret: it belongs to no account and keeps working after you leave.</div>
+          </div>
+
+          {{-- Just issued: the only time the key is ever shown. --}}
+          <div class="flex flex-wrap gap-2 items-center" :show="readKeyOnce()" style="display:none">
+            <input readonly :value="readKeyOnce()" aria-label="Read key" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
+            <button type="button" @click="copyReadKey" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ readKeyCopied() ? 'Copied' : 'Copy' }}</button>
+          </div>
+
+          {{-- Otherwise: whether one exists, and whether it is still in use. --}}
+          <div class="flex flex-wrap gap-2 items-center" :show="!readKeyOnce()" style="display:none">
+            <span class="text-text-3 text-xs" style="max-width:340px">{{ readKeyStatus() }}</span>
+            <button type="button" @click="issueReadKey" :disabled="readKeyBusy()" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ readKeyBusy() ? 'Working…' : (hasReadKey() ? 'Replace' : 'Issue key') }}</button>
+            <button type="button" @click="revokeReadKey" :disabled="readKeyBusy()" :show="hasReadKey()" style="display:none;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-3);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
+          </div>
+        </div>
+        <div class="mt-2 text-text-3" style="font-size:11px">Shown once when issued. The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.</div>
       </div>
     @endif
 

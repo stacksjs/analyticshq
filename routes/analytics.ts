@@ -20,6 +20,7 @@ import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app
 import { ASSIGNABLE_ROLES, isAssignableRole, listReachableSites, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
+import { authorizeRead, looksLikeReadKey, newReadKey, shouldRecordUse } from '../app/Support/read-key'
 import { normalizeEnvironment } from '../app/Analytics/environment'
 import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
@@ -809,6 +810,49 @@ function authUserId(request: HandlerRequest): string | null {
  * conceal and collapsing the two would only make real 404s undebuggable. The
  * secret is the data, and that is what the role check protects.
  */
+/**
+ * Gate a site-scoped read on a viewer role, or on a read key issued for the
+ * site (#67).
+ *
+ * Only the reads named on that issue call this — the stats summary, the time
+ * series, and the top pages and referrers. Every other `/api/sites/{siteId}/*`
+ * route keeps asking for a person, so a machine key reaches exactly the four
+ * endpoints it was issued for rather than all forty-odd by default. Adding one
+ * is calling this instead of requireSiteRole, deliberately one line per route.
+ *
+ * These four drop `.middleware('auth')`, which 401s before the handler and so
+ * would refuse a key before it could be read. Nothing is lost: that middleware
+ * was defence in depth behind requireSiteRole, which does the real check and
+ * still answers 401 when no credential resolves.
+ */
+async function requireSiteRead(request: HandlerRequest, siteId: string): Promise<Response | null> {
+  // Read off the header rather than a bearerToken() helper: HandlerRequest
+  // declares no such method here, and line 3272 reads the same header the same
+  // way, so this stays consistent with the rest of the file.
+  const presented = String(request.headers?.get?.('authorization') ?? '').replace(/^Bearer\s+/i, '')
+  if (!looksLikeReadKey(presented))
+    return requireSiteRole(request, siteId, 'viewer')
+
+  const row = (await pgq('SELECT id, read_key, read_key_last_used_at FROM sites WHERE id = ? LIMIT 1', [String(siteId)]))?.[0]
+  const site = row ? { id: String(row.id), read_key: row.read_key == null ? null : String(row.read_key), read_key_last_used_at: row.read_key_last_used_at == null ? null : String(row.read_key_last_used_at) } : null
+  const verdict = authorizeRead(site, presented)
+  if (!verdict.ok)
+    return json({ error: verdict.error }, verdict.status)
+  if (site)
+    await recordReadKeyUse(site)
+  return null
+}
+
+/** Stamp the key as used, at most once a minute — see LAST_USED_RESOLUTION_MS. */
+async function recordReadKeyUse(site: { id: string, read_key_last_used_at?: string | null }): Promise<void> {
+  const now = new Date()
+  if (!shouldRecordUse(site.read_key_last_used_at, now))
+    return
+  // Never let the stamp fail a read: it aids revoking a key, it does not
+  // authorise one.
+  await pgq('UPDATE sites SET read_key_last_used_at = ? WHERE id = ?', [now.toISOString(), String(site.id)]).catch(() => {})
+}
+
 async function requireSiteRole(request: HandlerRequest, siteId: string, required: SiteRole): Promise<Response | null> {
   const uid = authUserId(request)
   if (!uid)
@@ -1009,6 +1053,40 @@ route.post('/api/sites/{siteId}/members', async (request) => {
     [String(siteId), Number(userId), role, new Date().toISOString()],
   )
   return json({ members: await listSiteMembers(siteId) })
+}).middleware('auth').skipCsrf()
+
+route.options('/api/sites/{siteId}/read-key', () => new Response(null, { status: 204, headers: CORS }))
+
+// Issue (or replace) a site's read key. Admin-only.
+//
+// The credential a server presents to read this site's analytics without a
+// person's account behind it (#67). Returned here and nowhere else: it is a
+// secret, so it is shown once and afterwards the site only reports that a key
+// exists and when it was last used. Losing it means issuing another, and the
+// previous key stops working the moment that lands.
+route.post('/api/sites/{siteId}/read-key', async (request) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  const key = newReadKey()
+  // A new key starts with no last-used stamp: keeping the old one would read
+  // as "used before it existed".
+  await pgq('UPDATE sites SET read_key = ?, read_key_last_used_at = NULL WHERE id = ?', [key, siteId])
+  return json({ read_key: key })
+}).middleware('auth').skipCsrf()
+
+// Revoke a site's read key. Admin-only. Anything still presenting it is
+// refused on its next request.
+route.delete('/api/sites/{siteId}/read-key', async (request) => {
+  const siteId = request.params.siteId
+  const denied = await requireSiteRole(request, siteId, 'admin')
+  if (denied)
+    return denied
+
+  await pgq('UPDATE sites SET read_key = NULL, read_key_last_used_at = NULL WHERE id = ?', [siteId])
+  return json({ revoked: true })
 }).middleware('auth').skipCsrf()
 
 route.options('/api/sites/{siteId}/members/{userId}', () => new Response(null, { status: 204, headers: CORS }))
@@ -3559,7 +3637,8 @@ route.delete('/api/sites/{siteId}/visitors/{visitorId}', async (request) => {
 
 route.get('/api/sites/{siteId}/stats', async (request) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteRole(request, siteId, 'viewer')
+  // A viewer on this site, or a read key issued for it (#67).
+  const denied = await requireSiteRead(request, siteId)
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -3583,11 +3662,12 @@ route.get('/api/sites/{siteId}/stats', async (request) => {
     sessions: Number(row?.sessions ?? 0),
     range: { from, to },
   })
-}).middleware('auth')
+})
 
 route.get('/api/sites/{siteId}/timeseries', async (request) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteRole(request, siteId, 'viewer')
+  // A viewer on this site, or a read key issued for it (#67).
+  const denied = await requireSiteRead(request, siteId)
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -3606,11 +3686,12 @@ route.get('/api/sites/{siteId}/timeseries', async (request) => {
   if ('response' in result)
     return result.response
   return json({ series: result.rows })
-}).middleware('auth')
+})
 
 route.get('/api/sites/{siteId}/pages', async (request) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteRole(request, siteId, 'viewer')
+  // A viewer on this site, or a read key issued for it (#67).
+  const denied = await requireSiteRead(request, siteId)
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -3629,11 +3710,12 @@ route.get('/api/sites/{siteId}/pages', async (request) => {
   if ('response' in result)
     return result.response
   return json({ pages: result.rows })
-}).middleware('auth')
+})
 
 route.get('/api/sites/{siteId}/referrers', async (request) => {
   const siteId = request.params.siteId
-  const denied = await requireSiteRole(request, siteId, 'viewer')
+  // A viewer on this site, or a read key issued for it (#67).
+  const denied = await requireSiteRead(request, siteId)
   if (denied)
     return denied
   const { from, to } = window(request)
@@ -3652,7 +3734,7 @@ route.get('/api/sites/{siteId}/referrers', async (request) => {
   if ('response' in result)
     return result.response
   return json({ referrers: result.rows })
-}).middleware('auth')
+})
 
 // Owner-gated "top <dimension>" reports over page_views, so every dashboard
 // breakdown has a documented JSON endpoint too (issue #15). `column` is always a

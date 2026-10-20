@@ -37,6 +37,21 @@ export default defineModel({
       validation: { rule: schema.string().required().max(255) },
     },
 
+    // Secret read key: a machine presents it as `Authorization: Bearer` to read
+    // this site's analytics without a person's credentials (#67). Not fillable
+    // and with no factory — issued on demand from site settings, revoked by
+    // setting it back to null. See app/Support/read-key.ts.
+    read_key: {
+      fillable: false,
+      hidden: true,
+      validation: { rule: schema.string() },
+    },
+
+    read_key_last_used_at: {
+      fillable: false,
+      validation: { rule: schema.string() },
+    },
+
     domains: {
       fillable: true,
       validation: { rule: schema.string().optional() },
