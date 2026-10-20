@@ -1438,6 +1438,9 @@ const hasReadKey = state(readKeyPresent)
 const readKeyUsed = state(readKeyUsedAt)
 const readKeyOnce = state('')
 const readKeyBusy = state(false)
+// Which read-key button is working. See fathomAction above for why a shared
+// busy signal cannot drive aria-busy on two buttons that are both on screen.
+const readKeyAction = state('')
 const readKeyCopied = state(false)
 
 function readKeyStatus(): string {
@@ -1470,6 +1473,7 @@ async function issueReadKey() {
   if (hasReadKey() && !(await stxConfirm('Replace the read key? Anything using the current one stops reading immediately.')))
     return
   readKeyBusy.set(true)
+  readKeyAction.set('issue')
   let failed = false
   try {
     const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/read-key`, { method: 'POST', credentials: 'same-origin' })
@@ -1487,6 +1491,7 @@ async function issueReadKey() {
     failed = true
   }
   readKeyBusy.set(false)
+  readKeyAction.set('')
   if (failed)
     await stxAlert('Could not issue a read key. Please try again.')
 }
@@ -1497,6 +1502,7 @@ async function revokeReadKey() {
   if (!(await stxConfirm('Revoke the read key? Anything using it stops reading immediately.')))
     return
   readKeyBusy.set(true)
+  readKeyAction.set('revoke')
   let failed = false
   try {
     const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/read-key`, { method: 'DELETE', credentials: 'same-origin' })
@@ -1513,6 +1519,7 @@ async function revokeReadKey() {
     failed = true
   }
   readKeyBusy.set(false)
+  readKeyAction.set('')
   // Worth surfacing rather than swallowing, for the same reason a failed share
   // revoke is: the old key is still live, and clearing nothing looks like success.
   if (failed)
@@ -3901,18 +3908,18 @@ onMount(() => {
 
           {{-- Just issued: the only time the key is ever shown. --}}
           <div class="flex flex-wrap gap-2 items-center" :show="readKeyOnce()" style="display:none">
-            <input readonly :value="readKeyOnce()" aria-label="Read key" class="text-xs mono" style="min-width:220px;max-width:340px;padding:6px 9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text-2)">
-            <button type="button" @click="copyReadKey" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ readKeyCopied() ? 'Copied' : 'Copy' }}</button>
+            <input readonly :value="readKeyOnce()" aria-label="Read key" class="px-[9px] py-[6px] max-w-[340px] min-w-[220px] text-[var(--text-2)] text-xs bg-[var(--bg)] border border-[var(--border)] rounded-[8px] mono">
+            <button type="button" @click="copyReadKey" class="px-[11px] py-[6px] text-[var(--text-2)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]">{{ readKeyCopied() ? 'Copied' : 'Copy' }}</button>
           </div>
 
           {{-- Otherwise: whether one exists, and whether it is still in use. --}}
           <div class="flex flex-wrap gap-2 items-center" :show="!readKeyOnce()" style="display:none">
-            <span class="text-text-3 text-xs" style="max-width:340px">{{ readKeyStatus() }}</span>
-            <button type="button" @click="issueReadKey" :disabled="readKeyBusy()" style="padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-2);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">{{ readKeyBusy() ? 'Working…' : (hasReadKey() ? 'Replace' : 'Issue key') }}</button>
-            <button type="button" @click="revokeReadKey" :disabled="readKeyBusy()" :show="hasReadKey()" style="display:none;padding:6px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text-3);font:600 12px/1 var(--sans,ui-sans-serif);cursor:pointer">Revoke</button>
+            <span class="max-w-[340px] text-text-3 text-xs">{{ readKeyStatus() }}</span>
+            <button type="button" @click="issueReadKey" :disabled="readKeyBusy()" :aria-busy="readKeyAction() === 'issue'" class="px-[11px] py-[6px] text-[var(--text-2)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]">{{ readKeyBusy() ? 'Working…' : (hasReadKey() ? 'Replace' : 'Issue key') }}</button>
+            <button type="button" @click="revokeReadKey" :disabled="readKeyBusy()" :aria-busy="readKeyAction() === 'revoke'" :show="hasReadKey()" style="display:none" class="px-[11px] py-[6px] text-[var(--text-3)] bg-[var(--panel)] border border-[var(--border)] rounded-[8px] cursor-pointer [font:600_12px/1_var(--sans,ui-sans-serif)]">Revoke</button>
           </div>
         </div>
-        <div class="mt-2 text-text-3" style="font-size:11px">Shown once when issued. The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.</div>
+        <div class="mt-2 text-[11px] text-text-3">Shown once when issued. The last-used time is written at most once a minute, so a key in constant use shows a time up to a minute old.</div>
       </div>
     @endif
 

@@ -94,28 +94,44 @@ describe('async buttons announce that they are working', () => {
 
   test('the count does not quietly fall to zero', () => {
     const total = files.reduce((n, f) => n + asyncButtons(readFileSync(f, 'utf8')).length, 0)
-    // 15 at the time of writing. A regex that stops matching would pass the
+    // 17 at the time of writing. A regex that stops matching would pass the
     // test above by finding nothing at all, which is the failure mode of every
     // gate in this repo that greps for a shape.
-    expect(total).toBeGreaterThanOrEqual(15)
+    expect(total).toBeGreaterThanOrEqual(17)
   })
 
-  test('the two Fathom buttons do not share one aria-busy source', () => {
-    const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8')
-    const fathom = asyncButtons(dashboard).filter(b => /fathom/i.test(b.attrs))
-    expect(fathom).toHaveLength(2)
-    const sources = fathom.map(b => /:aria-busy="([^"]*)"/.exec(b.attrs)?.[1])
-    expect(new Set(sources).size).toBe(2)
-    for (const source of sources)
-      expect(source).toMatch(/fathomAction\(\)/)
-  })
+  /*
+   * Two pairs of buttons sit on screen together sharing one busy signal. The
+   * signal is right for `:disabled` -- neither should be clickable while either
+   * runs -- and wrong for `aria-busy`, which names ONE element as updating. Each
+   * pair therefore has a discriminator saying which of the two is working.
+   *
+   * The share control's create/revoke pair is deliberately absent: those two are
+   * mutually exclusive, each inside its own `:show`, so the shared signal cannot
+   * be ambiguous and is used directly.
+   */
+  const PAIRS = [
+    { what: 'Fathom', match: /fathom/i, busy: 'fathomBusy', action: 'fathomAction' },
+    { what: 'read key', match: /ReadKey/, busy: 'readKeyBusy', action: 'readKeyAction' },
+  ]
 
-  test('fathomAction is cleared wherever fathomBusy is', () => {
-    const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8')
-    // A discriminator left set after the work finishes announces a button as
-    // busy forever, which is worse than not announcing it at all.
-    const body = code(dashboard)
-    expect((body.match(/fathomBusy\.set\(/g) ?? []).length)
-      .toBe((body.match(/fathomAction\.set\(/g) ?? []).length)
-  })
+  for (const pair of PAIRS) {
+    test(`the two ${pair.what} buttons do not share one aria-busy source`, () => {
+      const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8')
+      const found = asyncButtons(dashboard).filter(b => pair.match.test(b.attrs))
+      expect(found).toHaveLength(2)
+      const sources = found.map(b => /:aria-busy="([^"]*)"/.exec(b.attrs)?.[1])
+      expect(new Set(sources).size).toBe(2)
+      for (const source of sources)
+        expect(source).toContain(`${pair.action}()`)
+    })
+
+    test(`${pair.action} is cleared wherever ${pair.busy} is`, () => {
+      // A discriminator left set after the work finishes announces a button as
+      // busy forever, which is worse than not announcing it at all.
+      const body = code(readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8'))
+      expect((body.match(new RegExp(`${pair.busy}\\.set\\(`, 'g')) ?? []).length)
+        .toBe((body.match(new RegExp(`${pair.action}\\.set\\(`, 'g')) ?? []).length)
+    })
+  }
 })
