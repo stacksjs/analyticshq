@@ -2730,6 +2730,19 @@ onMount(() => {
         </div>
       </div>
 
+      {{-- Reporting period, Compare and Export are reader tools: they re-query the
+          site's own numbers. A visitor who may not see those numbers is offered
+          none of them. Without this guard the whole toolbar rendered above the
+          "Sign in to view analytics" gate, so a signed-out visitor was handed a
+          range picker, a Compare link and a CSV button for a report that is not
+          theirs to read. Nothing leaked - the payload behind them comes back all
+          zeroes - but offering a control that cannot work is its own bug, and it
+          made the page look like a dashboard with the data merely missing.
+
+          viewGranted, not ownsActive: a share viewer is allowed to see the
+          numbers and so is allowed to re-range them. Only the gate below
+          distinguishes "signed out" from "signed in with no sites yet". --}}
+      @if (viewGranted)
       <div class="workspace-range">
         <nav class="range-presets" aria-label="Reporting period">
           @foreach (ranges as r)
@@ -2754,6 +2767,7 @@ onMount(() => {
           </button>
         </div>
       </div>
+      @endif
     </header>
 
     {{-- Live now. Who is on the site this minute and where, first thing under the
