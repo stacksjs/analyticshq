@@ -1455,13 +1455,18 @@ function readKeyStatus(): string {
     : `A read key is active, last used ${when.toLocaleString()}.`
 }
 
+// Created ONCE, not per copy, for the reason spelled out at shareCopiedReset
+// below: useTimeout starts on creation and registers an onDestroy hook, so
+// calling it inside the handler stacks a fresh hook every time.
+const readKeyCopiedReset = useTimeout(() => readKeyCopied.set(false), 1600)
+
 function copyReadKey() {
   const value = readKeyOnce()
   if (!value || !navigator.clipboard?.writeText)
     return
   void navigator.clipboard.writeText(value).then(() => {
     readKeyCopied.set(true)
-    setTimeout(() => readKeyCopied.set(false), 1600)
+    readKeyCopiedReset.start()
   }, () => {})
 }
 
