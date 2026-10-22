@@ -114,27 +114,47 @@ export default {
   // at :9567 and :9745 — so without this key every violation is collected and silently
   // discarded (script-validation.js:148). Warn-only: rendered HTML is untouched.
   //
-  // failOnViolation MUST stay false. The throw at script-validation.js:154 is a plain
-  // Error that processDirectives catches and replaces the ENTIRE page with
-  // `<!-- Template Processing failed: ... -->` served at HTTP 200 — a blank page, not a 500.
+  // CORRECTED. This block used to say failOnViolation must stay false because the
+  // throw is caught and the page served as a blank HTTP 200. Checked against the
+  // installed copies: processDirectives does catch it (process.js:416-425) and
+  // return fallback content, but serve.js then RECOGNISES that content
+  // (isRenderFailure, :9243) and answers 500, trying /500 then /errors/500 first
+  // (:11111 for a fragment, :11133 for a document). So a violation is a real error
+  // page, not a silent blank one, and the flag is safe to turn on where a developer
+  // is the only person who can see it.
   //
   // allowPatterns is deliberately absent: it is a rule-GLOBAL substring filter matched
   // against the message OR the regex source (script-validation.js:131), so exempting
   // 'location.replace()' for the pre-paint auth guards would also silence every other
   // location rule across the app.
   //
-  // Gated to non-production because there is no render cache on either server, so
-  // validateClientScript re-runs per request (process.js:782) with no memoisation —
-  // measured at ~2 warning blocks per GET / and 6 per full 32-route sweep. That is
-  // useful in dev and pure stderr noise in prod.
+  // ALSO CORRECTED, twice over. The gate read `APP_ENV !== 'production'`, but
+  // APP_ENV is typed 'local'|'dev'|'stage'|'prod' (config/env.ts) and ships as
+  // 'development' in .env — 'production' is not a member and never was, so the
+  // predicate has been true in every environment including prod. `enabled: true`
+  // below is what it has always evaluated to, written honestly.
+  //
+  // Its stated cost is stale too: validateClientScript memoises per
+  // (content, file, config) in a module-level `verdicts` map and returns the
+  // remembered verdict on a repeat (script-validation.js:215-220), so it does not
+  // re-scan per request.
   //
   // This flag is NOT the enforcement gate: signal-using <script client> blocks are
   // re-tagged data-stx-scoped by processScriptSetup and then skipped by process.js's
   // skipAttrs, so it sees only 2 of the app's 7 violating blocks. The standalone
   // scanner in the enforcement stage is the real gate.
   strict: {
-    enabled: process.env.APP_ENV !== 'production',
-    failOnViolation: false,
+    enabled: true,
+
+    // Hard-fail on a prohibited DOM call in a developer's own environment, warn
+    // everywhere else. An ALLOWLIST deliberately, for the APP_ENV reason above:
+    // a predicate written against 'production' is true IN production, and an
+    // unset APP_ENV must not be what turns a page into a 500 either, so unknown
+    // values fall through to warn-only. That covers the real production path
+    // twice over: APP_ENV ships dotenvx-encrypted in .env.production, so it
+    // arrives either decrypted as 'prod' or, if the key is missing, as the
+    // literal 'encrypted:v2:...' string — and neither is in the list.
+    failOnViolation: ['local', 'dev', 'development'].includes(process.env.APP_ENV ?? ''),
 
     // The two DOM calls that are deliberate. allowPatterns matches a rule's
     // `message` or its `pattern.source` (script-validation.js:131), so each entry
