@@ -31,9 +31,17 @@ export default {
    * - Objects: [{ email: 'chris', password: '...' }]
    */
   mailboxes: [
+    // The mailbox this app authenticates as.
     'noreply',
-    'chris',
-    'hello',
+    // 'chris' and 'hello' were declared here. Both exist on the mail server and
+    // are left out on purpose, because provisioning sets every declared
+    // mailbox's password from MAIL_PASSWORD_<LOCALPART> and this app's
+    // .env.production still carries MAIL_PASSWORD_CHRIS, _BLAKE and _GLENN.
+    // The CI guard in this repo exists because those three were once shipped in
+    // plaintext, so a provisioning run would push a known value onto a live
+    // mailbox. Declaring a mailbox is not free; it is a credential write.
+    // Omitting them changes nothing about the accounts: provisioning creates
+    // and updates what it declares and has no removal path.
   ],
 
   url: env.APP_URL || 'https://stacksjs.com',
