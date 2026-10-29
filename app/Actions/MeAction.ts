@@ -1,5 +1,6 @@
 import type { RequestInstance } from '@stacksjs/types'
 import { Action } from '@stacksjs/actions'
+import { getTwoFactorState } from '@stacksjs/auth'
 import { db } from '@stacksjs/database'
 import { response } from '@stacksjs/router'
 import { isPlatformAdmin } from '../Analytics/access'
@@ -54,6 +55,14 @@ export default new Action({
     const social = await db.unsafe('SELECT avatar, provider FROM users WHERE id = $1', [user.id])
       .then(rows => rows[0] ?? {}, (): Row => ({}))
 
+    // Only `enabled` reaches the client: getTwoFactorState also returns the TOTP
+    // secret, which must never leave the server. The account page needs to know
+    // whether to show "set up" or "turn off", nothing more. Fails closed (shows
+    // "off") on a read error rather than hiding an enabled factor - the safer
+    // wrong answer, since it offers re-setup and never implies protection that
+    // is not there.
+    const twoFactor = await getTwoFactorState(Number(user.id)).catch(() => ({ enabled: false }))
+
     return response.json({
       user: {
         id: user.id,
@@ -62,6 +71,7 @@ export default new Action({
         avatar: text(social.avatar) ?? user.avatar ?? null,
         provider: text(social.provider),
         created_at: stampOf(profile.created_at) ?? user.created_at ?? null,
+        two_factor_enabled: Boolean(twoFactor.enabled),
       },
       pro,
       plan: pro ? 'pro' : 'free',

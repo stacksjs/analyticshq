@@ -21,6 +21,8 @@ interface SessionUser {
   avatar?: string | null
   provider?: string | null
   created_at?: string
+  /** Whether TOTP two-factor is on. Only this boolean crosses the wire; the secret stays server-side. */
+  two_factor_enabled?: boolean | null
 }
 
 /** Response body of GET /api/me. */

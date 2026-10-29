@@ -45,6 +45,29 @@ route.post('/password/forgot', 'Actions/Password/SendPasswordResetEmailAction').
 route.post('/password/reset', 'Actions/Password/PasswordResetAction').skipCsrf().rateLimit(5, 'minute')
 route.post('/password/verify-token', 'Actions/Password/VerifyResetTokenAction').skipCsrf().rateLimit(10, 'minute')
 
+/**
+ * Two-factor enrollment for the account page. These resolve to the framework's
+ * own JSON actions in @stacksjs/defaults (Actions/Auth/*), the same way the
+ * password actions above resolve - this app vendors no defaults tree, only the
+ * package. They are registered explicitly rather than left to framework-default
+ * registration, which this app does not mount at all (see the password note).
+ *
+ * generate-two-factor-secret makes a fresh secret, stashes it server-side with a
+ * short TTL, and returns the otpauth URI + secret for the authenticator app;
+ * enable-two-factor verifies the 6-digit code against that stash and only then
+ * persists users.two_factor_secret, so the server never trusts a client-supplied
+ * secret; disable-two-factor re-confirms the account password first, because
+ * turning a second factor off is the first thing a session thief would try.
+ *
+ * .middleware('auth') matches /api/me: the auth middleware stamps request.user()
+ * from the HttpOnly `auth-token` cookie the dashboard sends. skipCsrf stays - the
+ * same-origin fetch carries the cookie but no double-submit token (SameSite is the
+ * cross-site guard), exactly as /login and /logout above.
+ */
+route.post('/generate-two-factor-secret', 'Actions/Auth/GenerateTwoFactorSecretAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+route.post('/enable-two-factor', 'Actions/Auth/EnableTwoFactorAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+route.post('/disable-two-factor', 'Actions/Auth/DisableTwoFactorAction').middleware('auth').skipCsrf().rateLimit(10, 'minute')
+
 // GET API endpoints must sit under /api/** — the view process only reverse
 // proxies non-GET requests and the /api/** prefix through to this API process.
 // A bare GET like /me would be swallowed by the view server's page routing.
