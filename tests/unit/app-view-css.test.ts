@@ -141,8 +141,8 @@ describe('the surfaces and the timeline', () => {
       '.step-rail { border-left-width: 1px;',
       '.step-row { position: relative; }',
       '.step-row::before { content: \'\'; position: absolute; left: -20px; top: 11px; width: 7px; height: 7px; border-radius: 999px; background-color: var(--border); }',
-      '.step-row[data-kind=conversion]::before { background-color: var(--accent); }',
-      '.step-row[data-kind=event]::before { background-color: var(--text-3); }',
+      '.step-row[data-kind="conversion"]::before { background-color: var(--accent); }',
+      '.step-row[data-kind="event"]::before { background-color: var(--text-3); }',
       // Preflight, not shortcut -- see the config.
       '.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }',
       '.visit + .visit { margin-top: 12px; }',
