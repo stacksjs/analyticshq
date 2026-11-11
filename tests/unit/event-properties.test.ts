@@ -60,7 +60,8 @@ describe('event property storage', () => {
   test('the collector uses the bounded serializer without URL clipping', () => {
     const source = readFileSync(join(root, 'routes/analytics.ts'), 'utf8')
 
-    expect(source).toContain('serializeEventProperties(event, body.p)')
+    // App events add app_version and os first; a web beacon's properties go in as sent.
+    expect(source).toContain('serializeEventProperties(event, app ? withAppProperties(body.p, app.client) : body.p)')
     expect(source).not.toContain('while (props.length > 255')
     expect(source).not.toContain('widen custom_events.properties')
   })

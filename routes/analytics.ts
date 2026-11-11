@@ -18,6 +18,7 @@ import { config } from '@stacksjs/config'
 import { db } from '@stacksjs/database'
 import { formatCount, renderBadge, renderSparkline, sanitizeLabel } from '../app/Analytics/badge'
 import { ASSIGNABLE_ROLES, isAssignableRole, listReachableSites, listSiteMembers, resolveSiteRole, satisfies, siteExists, type SiteRole } from '../app/Analytics/access'
+import { type AppClient, appDimensions, declaresApp, hashInstall, mintAppSecret, readAppClient, withAppProperties } from '../app/Analytics/app-mode'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
 import { authorizeRead, looksLikeReadKey, newReadKey, shouldRecordUse } from '../app/Support/read-key'
@@ -329,7 +330,7 @@ function pgTrue(raw: unknown): boolean {
  * case of getting this wrong in one direction is a gap in a breakdown, and in
  * the other it is recording sub-country location for a site that did not ask.
  */
-async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: boolean, windowDays: number }> {
+async function siteGeoOptIns(siteId: string, query: CollectIo['query'] = pgq): Promise<{ region: boolean, city: boolean, windowDays: number }> {
   const now = Date.now()
   const hit = regionSites.get(siteId)
   if (hit && now - hit.at < REGION_SITE_TTL_MS)
@@ -337,7 +338,7 @@ async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: b
 
   // The visitor window rides in the same row and the same cache. It fails
   // closed the same way: anything but a readable number is 1, the daily reset.
-  const rows = await pgq(
+  const rows = await query(
     `SELECT region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`,
     [siteId],
   ).catch(() => null) as Array<{ region_geo?: unknown, city_geo?: unknown, visitor_window_days?: unknown }> | null
@@ -363,10 +364,10 @@ async function siteGeoOptIns(siteId: string): Promise<{ region: boolean, city: b
  * would withhold nothing and only make the Regions panel disagree with the
  * Cities panel beside it.
  */
-async function siteWantsRegion(siteId: string): Promise<boolean> {
+async function siteWantsRegion(siteId: string, query: CollectIo['query'] = pgq): Promise<boolean> {
   if (!geoPermits(privacy.geo.granularity, 'region'))
     return false
-  const want = await siteGeoOptIns(siteId)
+  const want = await siteGeoOptIns(siteId, query)
   return want.region || (want.city && geoPermits(privacy.geo.granularity, 'city'))
 }
 
@@ -375,10 +376,10 @@ async function siteWantsRegion(siteId: string): Promise<boolean> {
  * gates as region, one level finer, and a third that no flag can flip: the
  * database on disk has to carry cities, or `cityFromIp` returns null.
  */
-async function siteWantsCity(siteId: string): Promise<boolean> {
+async function siteWantsCity(siteId: string, query: CollectIo['query'] = pgq): Promise<boolean> {
   if (!geoPermits(privacy.geo.granularity, 'city'))
     return false
-  return (await siteGeoOptIns(siteId)).city
+  return (await siteGeoOptIns(siteId, query)).city
 }
 
 /** Forget the cached opt-ins. Called when a site's setting changes, and by tests. */
@@ -457,15 +458,125 @@ function conversionId(sessionId: string, goalId: string): string {
 
 route.options('/collect', () => new Response(null, { status: 204, headers: CORS }))
 
-route.post('/collect', async (request) => {
+/** What `/collect` reads off a request: the parsed JSON body and the headers. */
+export interface CollectRequest {
+  jsonBody?: Record<string, unknown> | null
+  headers: Headers
+}
+
+/**
+ * Everything the ingest does to the outside world, in one place.
+ *
+ * The handler takes this as a parameter so a test can run the real `collect`
+ * against rows held in memory. That is the only way to assert what a beacon
+ * actually STORES (no IP, a stable id, the app's version) without a database,
+ * and the tests that read this file as text cannot say any of it.
+ */
+export interface CollectIo {
+  query: (sql: string, params?: unknown[]) => Promise<Row[]>
+  insertOrIgnore: (table: CollectTable, values: Record<string, unknown>) => Promise<unknown>
+  insert: (table: CollectTable, values: Record<string, unknown>) => Promise<unknown>
+  /** The rotating visitor salt. Web traffic only: an app install never asks for it. */
+  visitorSalt: (siteId: string, windowDays: number) => Promise<string>
+  now: () => Date
+}
+
+/** The tables the ingest writes through the query builder. */
+type CollectTable = 'sites' | 'sessions' | 'page_views' | 'custom_events' | 'conversions'
+
+const liveIo: CollectIo = {
+  query: pgq,
+  insertOrIgnore: (table, values) => db.insertOrIgnore(table, values),
+  insert: (table, values) => db.insertInto(table).values(values).execute(),
+  visitorSalt: getVisitorSalt,
+  now: () => new Date(),
+}
+
+/**
+ * Sites in app mode, and each one's install secret, cached for a minute.
+ *
+ * Read ONLY when a beacon declares an app client, so the web path costs
+ * nothing extra and cannot be broken by this query failing. A separate cache
+ * from the geo opt-ins for the same reason.
+ *
+ * Only a yes is cached. A no is re-read on the next declared beacon, so an app
+ * starts being accepted the moment its owner turns the setting on, in every
+ * process, instead of answering 403 until a timer the owner cannot see runs
+ * out. Turning it OFF can take up to a minute to reach other processes, which
+ * is the same staleness the geo opt-ins accept.
+ *
+ * FAILS CLOSED: no row, the flag off, no secret, or a query that threw all
+ * read as "not an app site".
+ */
+const APP_SITE_TTL_MS = 60_000
+const appSites = new Map<string, { secret: string, at: number }>()
+
+async function siteAppSecret(siteId: string, io: CollectIo): Promise<string | null> {
+  const now = io.now().getTime()
+  const hit = appSites.get(siteId)
+  if (hit && now - hit.at < APP_SITE_TTL_MS)
+    return hit.secret
+
+  const rows = await io.query(`SELECT app_mode, app_secret FROM sites WHERE id = ? LIMIT 1`, [siteId]).catch(() => null)
+  const secret = text(rows?.[0]?.app_secret)
+  if (!rows || !pgTrue(rows[0]?.app_mode) || !secret) {
+    appSites.delete(siteId)
+    return null
+  }
+  appSites.set(siteId, { secret, at: now })
+  return secret
+}
+
+/** Forget the cached app-mode sites. Called when the setting changes, and by tests. */
+export function resetAppSiteCache(siteId?: string): void {
+  if (siteId)
+    appSites.delete(siteId)
+  else
+    appSites.clear()
+}
+
+/** The rotating salt for a web visitor, at the site's own window. */
+async function webVisitorSalt(siteId: string, io: CollectIo): Promise<string> {
+  const { windowDays } = await siteGeoOptIns(String(siteId), io.query)
+  return io.visitorSalt(String(siteId), windowDays)
+}
+
+export async function collect(request: CollectRequest, io: CollectIo = liveIo): Promise<Response> {
   const body = request.jsonBody ?? {}
   const siteId = body.s
   if (!siteId)
     return json({ error: 'missing site' }, 400)
 
   const ua = request.headers?.get('user-agent') ?? ''
-  if (isBot(ua))
+
+  // App mode (app/Analytics/app-mode.ts). A beacon that declares an app client
+  // is checked against the SITE first: only a site whose owner turned app mode
+  // on accepts it, and everything else is told so with a 4xx. Not the silent
+  // 204 the bot path gives, because this caller is a developer wiring up their
+  // own app, and a 204 that stores nothing is what sent them looking here.
+  //
+  // A valid declaration on an app site is the one way past the bot filter, and
+  // it is decided BEFORE `isBot` runs: these clients send `Bun/1.3`, `undici`
+  // or an Electron User-Agent, all of which the filter is right to drop from a
+  // web site. The filter itself is untouched, and a beacon with no declaration
+  // meets it exactly as before, on an app site too.
+  let app: { client: AppClient, secret: string } | null = null
+  if (declaresApp(body)) {
+    const secret = await siteAppSecret(String(siteId), io)
+    if (!secret)
+      return json({ error: 'App mode is not enabled for this site. The site owner turns it on in the site settings, or with PATCH /api/sites/{siteId} and {"appMode": true}.' }, 403)
+    const parsed = readAppClient(body.app)
+    if ('error' in parsed)
+      return json({ error: parsed.error }, 400)
+    // Web Vitals are a browser measurement. Refused, not ignored, so an app
+    // that sends them finds out.
+    if (body.e === 'vitals')
+      return json({ error: 'Web Vitals are not recorded in app mode' }, 400)
+    app = { client: parsed.client, secret }
+  }
+  else if (isBot(ua)) {
     return new Response(null, { status: 204, headers: CORS })
+  }
 
   // Global Privacy Control, enforced server-side as well as in the tracker (#8).
   //
@@ -484,8 +595,13 @@ route.post('/collect', async (request) => {
   // Per-site secret, not the UTC date (#9). One per day, or one per fixed block
   // of days on a site whose owner turned on visitor timelines. Memoised, so this
   // is a database round-trip once a window, not once a beacon.
-  const { windowDays } = await siteGeoOptIns(String(siteId))
-  const visitorId = hashVisitor(ip, ua, String(siteId), await getVisitorSalt(String(siteId), windowDays))
+  //
+  // An app install is hashed from the id the app sent, under the site's own
+  // secret, which does not rotate. Neither the IP nor the User-Agent goes in,
+  // and the rotating salt is never asked for.
+  const visitorId = app
+    ? hashInstall(app.client.installId, String(siteId), app.secret)
+    : hashVisitor(ip, ua, String(siteId), await webVisitorSalt(String(siteId), io))
 
   // The tracker's data-environment label (#60), on all three paths below.
   // Normalized or dropped to null here, never a reason to refuse the beacon.
@@ -516,7 +632,7 @@ route.post('/collect', async (request) => {
       vpath = clip255(new URL(String(body.u)).pathname) ?? '/'
     }
     catch { /* keep '/' for a malformed or absent url */ }
-    const vnow = new Date().toISOString()
+    const vnow = io.now().toISOString()
     // Device class for the breakdown (#43): "is my site slow on mobile" is the
     // question people actually have, and it is usually the answer.
     //
@@ -528,7 +644,7 @@ route.post('/collect', async (request) => {
     const vdevice = parseUserAgent(ua).deviceType
     // Same self-registration as the pageview path: web_vitals FKs to sites, so a
     // site whose very first beacon is a vitals one would fail the constraint.
-    await db.insertOrIgnore('sites', { id: String(siteId), created_at: vnow }).catch(() => {})
+    await io.insertOrIgnore('sites', { id: String(siteId), created_at: vnow }).catch(() => {})
     // Raw INSERT, like segments and alerts, because web_vitals deliberately has
     // no model — see the note on the read routes below. One multi-row statement
     // rather than a loop: this fires on every page view, and five round-trips
@@ -536,7 +652,7 @@ route.post('/collect', async (request) => {
     if (samples.length) {
       const placeholders = samples.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?)`).join(', ')
       const params = samples.flatMap(s => [randomId(), String(siteId), visitorId, vpath, s.metric, s.value, vnow, vdevice, environment])
-      await pgq(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp, device_type, environment) VALUES ${placeholders}`, params)
+      await io.query(`INSERT INTO web_vitals (id, site_id, visitor_id, path, metric, value, timestamp, device_type, environment) VALUES ${placeholders}`, params)
         // Never 500 the public beacon, matching every other insert on this path.
         .catch(() => {})
     }
@@ -555,15 +671,34 @@ route.post('/collect', async (request) => {
   // visitor-salt rotation at UTC midnight, starts a new session. This per-beacon lookup rides the
   // page_views(site_id, visitor_id) index on Postgres; cache the active session if it ever gets hot.
   const SESSION_WINDOW_MS = privacy.sessionWindowMinutes * 60 * 1000
-  const sessionSince = new Date(Date.now() - SESSION_WINDOW_MS).toISOString()
-  const recentSession = (await pgq(
+  const sessionSince = new Date(io.now().getTime() - SESSION_WINDOW_MS).toISOString()
+  const recentSession = (await io.query(
     `SELECT session_id FROM page_views WHERE site_id = ? AND visitor_id = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1`,
     [String(siteId), visitorId, sessionSince],
   ).catch(() => [])) as Array<{ session_id: string }>
+  // An app can run for hours sending events and no screen views (a tray app
+  // does), so its session is also looked for among its recent events. Web
+  // traffic always opens with a page view and never needs the second read.
+  if (app && !recentSession[0]?.session_id) {
+    recentSession.push(...(await io.query(
+      `SELECT session_id FROM custom_events WHERE site_id = ? AND visitor_id = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1`,
+      [String(siteId), visitorId, sessionSince],
+    ).catch(() => [])) as Array<{ session_id: string }>)
+  }
   const sessionId = recentSession[0]?.session_id
     ? String(recentSession[0].session_id)
-    : createHash('sha256').update(`${siteId}|${visitorId}|${Math.floor(Date.now() / SESSION_WINDOW_MS)}`).digest('hex').slice(0, 32)
+    : createHash('sha256').update(`${siteId}|${visitorId}|${Math.floor(io.now().getTime() / SESSION_WINDOW_MS)}`).digest('hex').slice(0, 32)
   const info = parseUserAgent(ua)
+  // In app mode the User-Agent describes an HTTP library, not the person's
+  // machine, so the dimensions come from what the app declared. They land in
+  // the same columns, so Browsers, Operating systems and Devices cover app
+  // traffic with no new report.
+  const appInfo = app ? appDimensions(app.client) : null
+  if (appInfo) {
+    info.deviceType = appInfo.deviceType
+    info.browser = appInfo.browser
+    info.os = appInfo.os
+  }
   // 'none' records no location at all. 'country' and 'region' both resolve the
   // country here; the difference between them is only whether a site is ALLOWED
   // to ask for more, which `siteWantsRegion` decides below.
@@ -577,12 +712,12 @@ route.post('/collect', async (request) => {
   // nothing finer, so there is no header path to read a subdivision out of. A
   // site behind Cloudflare that opts in gets regions from the local database or
   // not at all.
-  const region = (await siteWantsRegion(String(siteId))) ? regionFromIp(ip) : undefined
+  const region = (await siteWantsRegion(String(siteId), io.query)) ? regionFromIp(ip) : undefined
   // City, on the same terms one level finer: the install permits it, the site
   // asked, and the database on disk carries cities. Same IP, same request, same
   // discard. `US-CA:San Diego`, never coordinates — see cityFromIp.
-  const city = (await siteWantsCity(String(siteId))) ? cityFromIp(ip) : undefined
-  const now = new Date().toISOString()
+  const city = (await siteWantsCity(String(siteId), io.query)) ? cityFromIp(ip) : undefined
+  const now = io.now().toISOString()
 
   let url: URL | null = null
   try {
@@ -596,13 +731,13 @@ route.post('/collect', async (request) => {
   // custom_events and conversions all FK to sites.id, so a first-ever hit for a
   // site would otherwise fail the constraint (500). insertOrIgnore self-registers
   // the site on its first beacon and is a no-op on every hit after.
-  await db.insertOrIgnore('sites', {
+  await io.insertOrIgnore('sites', {
     id: String(siteId),
     created_at: now,
   }).catch(() => {})
 
   // Create the session on the first hit; ignore on later hits (same session id).
-  await db.insertOrIgnore('sessions', {
+  await io.insertOrIgnore('sessions', {
     id: sessionId,
     site_id: String(siteId),
     visitor_id: visitorId,
@@ -625,7 +760,7 @@ route.post('/collect', async (request) => {
 
   const event = body.e ?? 'pageview'
   if (event === 'pageview') {
-    await db.insertInto('page_views').values({
+    await io.insert('page_views', {
       id: randomId(),
       site_id: String(siteId),
       session_id: sessionId,
@@ -644,9 +779,9 @@ route.post('/collect', async (request) => {
       city: city ?? null,
       device_type: info.deviceType,
       browser: info.browser,
-      browser_version: null,
+      browser_version: appInfo?.browserVersion ?? null,
       os: info.os,
-      os_version: null,
+      os_version: appInfo?.osVersion ?? null,
       // title / screen_width / screen_height are no longer collected (#10) — the
       // tracker stops sending them and the columns are dropped by migration 37.
       // Nothing ever read them: every SELECT in this file is column-explicit and
@@ -655,7 +790,7 @@ route.post('/collect', async (request) => {
       is_bounce: false,
       environment,
       timestamp: now,
-    }).execute()
+    })
     // Open dashboards on this site see the visitor within a few hundred
     // milliseconds (app/Analytics/realtime.ts). A map lookup when nobody is
     // watching, which is almost always.
@@ -665,10 +800,13 @@ route.post('/collect', async (request) => {
     // Reserved auto-tracked events carry only their canonical URL, so grouping
     // stays stable even when a caller sends extra keys in a different order.
     // Optional metadata is bounded before it reaches the database.
-    const props = serializeEventProperties(event, body.p)
+    //
+    // An app event also carries app_version, os and os_version, which is how
+    // an event is broken down by release: custom_events has no dimension columns.
+    const props = serializeEventProperties(event, app ? withAppProperties(body.p, app.client) : body.p)
     // .catch like the sites/sessions inserts above: a storage failure must
     // never turn the public beacon into a 500 response.
-    await db.insertInto('custom_events').values({
+    await io.insert('custom_events', {
       id: randomId(),
       site_id: String(siteId),
       session_id: sessionId,
@@ -678,7 +816,7 @@ route.post('/collect', async (request) => {
       path,
       environment,
       timestamp: now,
-    }).execute().catch(() => {})
+    }).catch(() => {})
   }
 
   // Goal / conversion matching. Runs AFTER the session insert above so the
@@ -690,7 +828,7 @@ route.post('/collect', async (request) => {
   try {
     const isPageview = event === 'pageview'
     const eventName = String(event)
-    const goals = await pgq(
+    const goals = await io.query(
       `SELECT id, type, pattern, match_type, value, default_amount_minor, currency FROM goals WHERE site_id = ? AND is_active = true LIMIT 100`,
       [String(siteId)],
     )
@@ -699,7 +837,7 @@ route.post('/collect', async (request) => {
     // beacons are ordinary pageviews matching nothing, and this is the hot path.
     let siteCurrency: string | null = null
     if ((goals ?? []).length) {
-      const row = (await pgq(`SELECT currency FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
+      const row = (await io.query(`SELECT currency FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
       siteCurrency = normalizeCurrency(row?.currency)
     }
 
@@ -732,7 +870,7 @@ route.post('/collect', async (request) => {
 
       // Deterministic id + ON CONFLICT DO NOTHING => once per session per goal. Stores the
       // amount, its currency, and this beacon's attribution + timestamp.
-      await db.insertOrIgnore('conversions', {
+      await io.insertOrIgnore('conversions', {
         id: conversionId(sessionId, goal.id),
         site_id: String(siteId),
         goal_id: goal.id,
@@ -755,7 +893,9 @@ route.post('/collect', async (request) => {
   catch { /* goals/conversions are best-effort; never block the beacon */ }
 
   return new Response(null, { status: 204, headers: CORS })
-})
+}
+
+route.post('/collect', request => collect(request))
   // Public cross-origin, cookieless tracking beacon — no CSRF cookie can ride
   // along (like a webhook), so opt out of the default-on CSRF check.
   .skipCsrf()
@@ -1519,6 +1659,33 @@ route.patch('/api/sites/{siteId}', async (request) => {
     timelinesOff = body.visitorTimelines === false
   }
 
+  // App mode: accept events from a declared native or desktop app
+  // (app/Analytics/app-mode.ts). Owner-only, on the same reasoning as the geo
+  // and timeline opt-ins: it changes what the product records about people,
+  // here by keeping one id per install for as long as the setting stays on.
+  //
+  // Turning it ON mints the site's install secret, and keeps the one it has if
+  // it is already on, so sending `true` twice does not turn every install into
+  // a new visitor. Turning it OFF deletes the secret in the same statement:
+  // the ids already recorded stay in the reports, and nothing can tie one back
+  // to an install id again. Turning it on later starts every install fresh.
+  if (body.appMode !== undefined) {
+    if (typeof body.appMode !== 'boolean')
+      return json({ error: 'appMode must be true or false' }, 400)
+    const notOwner = await requireSiteOwner(request, siteId)
+    if (notOwner)
+      return notOwner
+    sets.push('app_mode = ?')
+    params.push(body.appMode)
+    if (body.appMode) {
+      sets.push('app_secret = COALESCE(app_secret, ?)')
+      params.push(mintAppSecret())
+    }
+    else {
+      sets.push('app_secret = NULL')
+    }
+  }
+
   if (!sets.length)
     return json({ error: 'nothing to update' }, 400)
 
@@ -1532,7 +1699,9 @@ route.patch('/api/sites/{siteId}', async (request) => {
   // here makes turning it OFF take effect on the next beacon rather than at the
   // end of a TTL the owner cannot see.
   resetRegionSiteCache(String(siteId))
-  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
+  resetAppSiteCache(String(siteId))
+  // `app_secret` is deliberately not in this list, or in any response.
+  const rows = await pgq(`SELECT id, name, domains, timezone, is_active, region_geo, city_geo, visitor_window_days, app_mode FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])
   return json({ site: rows?.[0] ?? null })
 }).middleware('auth').skipCsrf()
 

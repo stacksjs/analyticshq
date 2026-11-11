@@ -102,7 +102,8 @@ describe('who may turn it on, and who may read it', () => {
   })
 
   test('the ingest hashes with the site\'s window, read fail-closed', () => {
-    expect(routes).toContain('getVisitorSalt(String(siteId), windowDays)')
+    expect(routes).toContain('io.visitorSalt(String(siteId), windowDays)')
+    expect(routes).toContain('visitorSalt: getVisitorSalt')
     expect(routes).not.toContain('getDailySalt(')
   })
 

@@ -11,9 +11,15 @@ Dashboard APIs require the authenticated session unless described as public. Eve
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/collect` | Record page views, events, conversions, and vitals |
+| `POST` | `/collect` | Record page views, events, conversions, and vitals. With an `app` object, record a screen or event from a native or desktop app |
 | `GET` | `/script.js` | Browser tracker |
 | `GET` | `/api/health` | Service and geolocation health |
+
+### App mode
+
+A request to `/collect` that carries an `app` object, `{ "id": "<install UUID>", "version": "1.4.2", "name"?, "os"?, "osVersion"? }`, is an app-mode request. It skips the User-Agent bot filter and is counted under a stable, site-scoped hash of the install id instead of the daily visitor hash.
+
+It is accepted only for a site whose owner set `appMode` to `true` with `PATCH /api/sites/{siteId}`. Otherwise the answer is `403`, and `400` for a malformed `app.id` or `app.version`. Requests without an `app` object are unaffected. Field-by-field details are in [Desktop and mobile apps](/tracking/apps).
 
 ## Sites and access
 

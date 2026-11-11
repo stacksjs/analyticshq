@@ -39,6 +39,7 @@ const config: BunPressOptions = {
           items: [
             { text: 'Install tracking', link: '/tracking/install' },
             { text: 'Custom events', link: '/tracking/custom-events' },
+            { text: 'Desktop and mobile apps', link: '/tracking/apps' },
             { text: 'Custom domains', link: '/tracking/custom-domains' },
           ],
         },

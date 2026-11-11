@@ -242,7 +242,7 @@ describe('/collect stores it on all three paths', () => {
   const code = readFileSync(join(ROOT, 'routes/analytics.ts'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '')
-  const collect = code.slice(code.indexOf(`route.post('/collect'`), code.indexOf('.skipCsrf()', code.indexOf(`route.post('/collect'`)))
+  const collect = code.slice(code.indexOf(`export async function collect(`), code.indexOf('.skipCsrf()', code.indexOf(`export async function collect(`)))
 
   test('the body value only ever reaches the database through normalizeEnvironment', () => {
     const reads = [...collect.matchAll(/body\.environment/g)]
@@ -269,9 +269,9 @@ describe('/collect stores it on all three paths', () => {
 
   test('the page view and custom event inserts write it', () => {
     for (const table of ['page_views', 'custom_events']) {
-      const start = collect.indexOf(`insertInto('${table}')`)
+      const start = collect.indexOf(`io.insert('${table}', {`)
       expect(start).toBeGreaterThan(0)
-      const values = collect.slice(start, collect.indexOf('.execute()', start))
+      const values = collect.slice(start, collect.indexOf('\n    })', start))
       expect({ table, writes: /\benvironment,/.test(values) }).toEqual({ table, writes: true })
     }
   })

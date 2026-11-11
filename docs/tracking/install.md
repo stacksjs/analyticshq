@@ -108,3 +108,7 @@ export default function RootLayout({ children }) {
 The value travels as an `environment` field on each request to `/collect`, next to the event rather than inside its properties. AnalyticsHQ trims and lowercases it, then keeps it only when it is a short label: up to 32 characters of letters, digits, `.`, `-` and `_`, starting with a letter or digit. Anything else is discarded and the event is still recorded. Without the attribute, requests are exactly what they were before it existed.
 
 The dashboard always shows a snippet based on the current host or verified custom domain. Prefer it over a copied example.
+
+## Native and desktop apps
+
+An app has no page to put the script on, and requests from Bun, Node or Electron are filtered as bots. Turn on app mode for the site and use the app client instead. See [Desktop and mobile apps](/tracking/apps).

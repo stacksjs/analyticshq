@@ -84,8 +84,47 @@ one `Other` row instead of being named. (Filters don't apply to
 |----------|---------|
 | `GET /api/sites` | List the sites you can reach — owned and shared — each with your `role` |
 | `POST /api/sites` | Create a site — `{ name, domain? }` → `{ site }` |
-| `PATCH /api/sites/{id}` | Edit `name`, `domains`, or `timezone` (IANA); partial. Owners can also set `regionGeo` and `cityGeo` (booleans), answered 409 when the install's `geo.granularity` does not permit the level |
+| `PATCH /api/sites/{id}` | Edit `name`, `domains`, or `timezone` (IANA); partial. Owners can also set `regionGeo` and `cityGeo` (booleans), answered 409 when the install's `geo.granularity` does not permit the level, and `appMode` (boolean), which lets a native or desktop app send events to the site (see below) |
 | `DELETE /api/sites/{id}` | Delete the site and cascade-erase all its data |
+
+## App mode (native and desktop apps)
+
+`POST /collect` is public and normally drops any request whose User-Agent is an
+HTTP library (`Bun/`, `undici`, `node-fetch`, Electron) with a `204`. A site
+whose owner set `appMode: true` also accepts a request that declares an app
+client:
+
+```bash
+curl -X POST https://your-host/collect \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "s": "<SITE_ID>",
+    "e": "pageview",
+    "u": "app://fettler/Settings",
+    "app": { "id": "3f2b8c1e-9a4d-4e7b-b1c2-0d9e8f7a6b5c", "version": "1.4.2", "name": "Fettler", "os": "macOS", "osVersion": "15.1" }
+  }'
+```
+
+| Field | Meaning |
+|-------|---------|
+| `app.id` | Required. The install id, a UUID the app generated and stores. Never stored by the server: it is hashed with a secret that belongs to this site and does not rotate, so one install is one visitor across days |
+| `app.version` | Required. At most 32 characters, no spaces |
+| `app.name` | Optional. Reported as the `browser`; `App` when absent |
+| `app.os`, `app.osVersion` | Optional. Reported as the `os`. The version is cut to major and minor |
+
+`e` is `pageview` for a screen (the path of `u` is the screen) or an event name,
+with optional properties in `p`. Event properties also get `app_version`, `os`
+and `os_version`.
+
+| Status | Meaning |
+|--------|---------|
+| `204` | Recorded |
+| `400` | `app.id` is not a UUID, `app.version` is missing or malformed, or the event is `vitals` |
+| `403` | The site is not in app mode, or does not exist |
+
+Turning `appMode` off deletes the site's hashing secret. Requests without an
+`app` object are treated as web traffic on every site, bot filter included. The
+`@ts-analytics/tracking/app` client sends this request for you.
 
 ## Team
 

@@ -20,6 +20,8 @@ window.analyticshq?.('Signup completed', {
 
 Pages that cannot run script can tag markup instead: any element with `data-analyticshq-event="Signup completed"` sends that event on click, and its other `data-analyticshq-*` attributes become properties.
 
+A native or desktop app sends events with the app client's `track()` instead. See [Desktop and mobile apps](/tracking/apps).
+
 Framework integrations expose the same behavior through their typed helpers. For example, the Nuxt module auto-imports `useTsAnalytics()` and the Vue plugin provides a typed `track()` surface.
 
 ## Choose good event names

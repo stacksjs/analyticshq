@@ -43,6 +43,37 @@ code ever drifts. Tracking issue: [#28](https://github.com/stacksjs/analyticshq/
   A site that turns this on holds pseudonymous personal data for up to 30 days
   and should say so in its privacy policy. Site owners can erase one visitor's
   data from the visitor's page.
+- **App mode is opt-in twice, anonymous, and scoped to one site.** A native or
+  desktop app has no browser, so a site owner can turn on "Accept events from an
+  app" for a site. It is off for every site until its owner turns it on, and a
+  request that declares itself an app is refused with a 403 on every other
+  site, so web traffic cannot be passed off as app traffic and a bot cannot use
+  the declaration to get past the bot filter.
+
+  This is the one place a persistent identifier exists, and it is not ours: the
+  app generates a random install id, stores it with its own settings, and sends
+  it. The web tracker still writes nothing to anyone's device. We never store
+  the install id. We store `HMAC-SHA256(secret, siteId | installId)`, truncated,
+  where the secret is random, belongs to that one site, and is never returned by
+  any endpoint. Unlike the web salt it does not rotate, so one install is one
+  visitor across days, which is the purpose. Because the secret is per-site, the
+  same install id on two sites gives two unrelated ids: there is still **no
+  cross-site identity**. The IP and the User-Agent are not inputs to this id,
+  and neither is stored.
+
+  The person using the app keeps the controls. The app decides whether to send
+  anything (it should ask), and it can throw the install id away and make a new
+  one at any time, after which the two ids cannot be linked by anyone. The site
+  owner turning app mode off deletes the secret, and from then on no stored id
+  can be tied back to an install id, by us or anyone else. Until then, a site
+  using app mode holds pseudonymous data for as long as its events are retained
+  and should say so in the app's privacy policy.
+
+  What is recorded about the app is its name, its version, the operating system
+  and that system's major and minor version (`15.1.1` is stored as `15.1`).
+  No hostname, username, hardware id, MAC address or serial number is collected,
+  and there is no field to send one in. Reports over app data pass through the
+  same disclosure floor as everything else. No `identify()`, no name, no email.
 - **Country geolocation by default. Region and city only if you turn them on.**
   Country is resolved on your own server, by an IP-to-country database held on
   that machine, and the IP is discarded in the same breath it is hashed into the
@@ -96,12 +127,16 @@ changed first.
 - **Session replay / recordings** (à la Umami v3, Clarity, Matomo)
 - **Heatmaps**
 - **Individual visitor profiles beyond the opt-in 30-day timeline above**: no
-  id that outlives its block, and nothing that follows a person across sites
+  web visitor id that outlives its block, and nothing that follows a person or
+  an app install across sites
 - **`identify()` / distinct-user IDs / linking a visitor to a name, email or
   account**
 - **Precise geolocation / coordinates / postcodes**: the geo line stops at the
   city's name, and region and city are each off unless a site owner opts in
-- **Any cookie, `localStorage`, or device-persistent identifier**
+- **Any cookie, `localStorage`, or device-persistent identifier written by the
+  tracker or by us.** The only persistent id this product ever sees is the
+  install id an app generates for itself under app mode above, which its user
+  can reset and which we store only as a per-site hash
 - **Retargeting, ad-network, or cross-site tracking**
 
 ## How it's enforced
@@ -117,6 +152,12 @@ real tracker/ingest source and the dependency manifest:
 - a site keeps one salt for longer than a day only when its owner opted in, and
   never for more than `maxVisitorWindowDays`, and expired salts are purged by
   the daily prune job whether or not event retention is on.
+
+`tests/unit/app-mode.test.ts` runs the real ingest against rows held in memory
+and asserts the app mode guarantees: a declared app is refused on a site that
+did not turn it on, an undeclared `Bun/` request is still dropped, the stored id
+is stable across days and differs between sites, and no row holds the IP, the
+install id, the secret or the User-Agent.
 
 If you're changing tracking, run `./buddy test` — a red guardrail test means the
 change needs a privacy review, not a test edit.

@@ -362,6 +362,11 @@ let cityGeo = false
  * and its toggle. Never true in share mode: a public link shows aggregates only.
  */
 let visitorTimelines = false
+/**
+ * Whether THIS site accepts events from a declared native or desktop app
+ * (sites.app_mode, app/Analytics/app-mode.ts). Drives its toggle.
+ */
+let appMode = false
 /** Install ceiling for the window. Below 2, the toggle says the server does not allow it. */
 const visitorTimelinesAllowed = privacy.maxVisitorWindowDays >= 2
 /** Most recent visitors in range and under the active filters, for the Visitors panel. */
@@ -539,12 +544,14 @@ async function loadData(): Promise<void> {
       // Region opt-in. Its own tiny query rather than a join onto the plan
       // resolution: this is one boolean on `sites` and planForSite answers a
       // different question about a different table.
-      const geoRow = (await pgq(`SELECT region_geo, city_geo, visitor_window_days FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
+      const geoRow = (await pgq(`SELECT region_geo, city_geo, visitor_window_days, app_mode FROM sites WHERE id = ? LIMIT 1`, [String(siteId)])) ?? []
       const rawGeo = geoRow[0]?.region_geo
       regionGeo = rawGeo === true || rawGeo === 't' || rawGeo === 1
       const rawCity = geoRow[0]?.city_geo
       cityGeo = rawCity === true || rawCity === 't' || rawCity === 1
       visitorTimelines = Number(geoRow[0]?.visitor_window_days) > 1
+      const rawApp = geoRow[0]?.app_mode
+      appMode = rawApp === true || rawApp === 't' || rawApp === 1
     }
     catch {
       // A team panel that cannot load must not take the whole dashboard with it.
@@ -1403,7 +1410,9 @@ const readKeyUsedAt = __readKeyUsed
 // `typeof regionGeo` was 'undefined' in the client block and the box always
 // loaded unticked on a site that had regions on -- one click then sent `true`
 // again rather than turning it off.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyPresent, readKeyUsedAt, regionGeo, savedTz, shareCapability, visitorTimelines })
+// appMode seeds the app-mode toggle the same way. It is last, out of order,
+// because viewer-timezone.test.ts pins the opening of this list.
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyPresent, readKeyUsedAt, regionGeo, savedTz, shareCapability, visitorTimelines, appMode })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1935,6 +1944,42 @@ async function toggleVisitorTimelines(): Promise<void> {
     visitorTimelinesMsg.set('Could not reach the server.')
   }
   visitorTimelinesBusy.set(false)
+}
+
+// --- App mode opt-in ----------------------------------------------------------
+// Same rule as the toggles above: the box follows the server's answer.
+const appModeOn: StxSignal<boolean> = state(typeof appMode === 'boolean' ? appMode : false)
+const appModeBusy: StxSignal<boolean> = state(false)
+const appModeMsg: StxSignal<string> = state('')
+
+async function toggleAppMode(): Promise<void> {
+  if (appModeBusy())
+    return
+  const next = !appModeOn()
+  appModeBusy.set(true)
+  appModeMsg.set('')
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}`, {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ appMode: next }),
+    })
+    const data: { error?: string } = await res.json().catch(() => ({}))
+    if (res.ok) {
+      appModeOn.set(next)
+      appModeMsg.set(next
+        ? 'This site now accepts events from your app. Send them with the app client and this site id.'
+        : 'App events are refused from now on. The ones already recorded stay in your reports, and their ids can no longer be linked to an install.')
+    }
+    else {
+      appModeMsg.set(data?.error || 'That change could not be saved.')
+    }
+  }
+  catch {
+    appModeMsg.set('Could not reach the server.')
+  }
+  appModeBusy.set(false)
 }
 
 // --- Fathom import (CSV upload) ----------------------------------------------
@@ -3877,6 +3922,26 @@ onMount(() => {
           @endif
         </div>
         <p class="mt-3 text-sm text-text-2" :show="visitorTimelinesMsg()" style="display:none">{{ visitorTimelinesMsg() }}</p>
+      </div>
+
+      {{-- App mode (owner-only, off by default). The same shape as the rows
+          above. No install ceiling: it records nothing the app did not send. --}}
+      <div class="p-5 panel site-settings-panel">
+        <div class="flex flex-wrap gap-3 items-start justify-between">
+          <div style="max-width:60ch">
+            <div class="font-semibold text-sm">Accept events from an app</div>
+            <div class="mt-0.5 text-text-3 text-xs">
+              Off by default, so only browsers can report to this site. With it on, a desktop or mobile app can send screens and events with the app client.
+              The app sends a random install id that it creates and can reset. We never store it, only a hash that is unique to this site, so one install counts as one visitor across days and cannot be matched to any other site.
+              Still no IP address stored. Turning this off deletes the key behind those hashes. Ask your users before you send anything, and mention it in your privacy policy.
+            </div>
+          </div>
+          <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
+            <input type="checkbox" :checked="appModeOn()" :disabled="appModeBusy()" @change="toggleAppMode">
+            <span>Accept app events</span>
+          </label>
+        </div>
+        <p class="mt-3 text-sm text-text-2" :show="appModeMsg()" style="display:none">{{ appModeMsg() }}</p>
       </div>
     @endif
 

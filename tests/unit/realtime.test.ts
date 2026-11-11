@@ -116,7 +116,7 @@ describe('the wiring', () => {
   })
 
   test('the ingest pokes the hub after storing a page view', () => {
-    const insert = routes.indexOf(`await db.insertInto('page_views')`)
+    const insert = routes.indexOf(`await io.insert('page_views', {`)
     const poke = routes.indexOf('pokeLive(String(siteId))')
     expect(insert).toBeGreaterThan(-1)
     expect(poke).toBeGreaterThan(insert)

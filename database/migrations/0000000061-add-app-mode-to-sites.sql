@@ -1,0 +1,36 @@
+-- App mode: events from a declared native or desktop app.
+--
+-- NOTE ON STYLE: no semicolons in these comments, and nothing after the last
+-- statement. See migration 48 for why the runner makes both matter.
+--
+-- WHAT IT DOES
+--
+-- A desktop app's agent talks HTTP through Bun, Node or a webview, and the bot
+-- filter drops all of those on sight. A site whose owner turns app mode on
+-- accepts a beacon that declares an app client (an "app" object carrying a
+-- random install id and the app version) without running the filter. Every
+-- other site refuses that declaration with a 403. See app/Analytics/app-mode.ts.
+--
+-- app_mode
+--
+-- The owner's switch. NOT NULL and false by default, so this migration changes
+-- nothing for any existing site. Only PATCH /api/sites/{id} sets it, and only
+-- for the owner. Nothing in a beacon can.
+--
+-- app_secret
+--
+-- The key the stored visitor ids of app installs are derived from. The install
+-- id an app sends is never stored. What is stored is an HMAC of it under this
+-- value, which belongs to one site and does not rotate, so one install is one
+-- visitor across days and the same install id on two sites gives two unrelated
+-- ids. 32 random bytes as hex, which is the 64 characters.
+--
+-- Minted when app mode is turned on and set back to NULL when it is turned
+-- off. After that no stored id can be tied to an install id by anyone. It is
+-- never selected into an API response.
+--
+-- NO INDEX
+--
+-- Both columns are read by primary key, from the sites row, and cached.
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "app_mode" boolean NOT NULL DEFAULT false;
+ALTER TABLE "sites" ADD COLUMN IF NOT EXISTS "app_secret" varchar(64);

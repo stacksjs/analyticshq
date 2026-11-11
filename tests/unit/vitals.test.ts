@@ -408,7 +408,7 @@ describe('the read routes', () => {
     // insert), so deleting the last one leaves the check green while control
     // falls straight through into sessionization and goal matching. What has to
     // be true is structural: the block's own last statement is a return.
-    const collect = src.slice(src.indexOf(`route.post('/collect'`))
+    const collect = src.slice(src.indexOf(`export async function collect(`))
     const start = collect.indexOf(`if (body.e === 'vitals') {`)
     const goalMatcher = collect.indexOf('matchesGoal')
     expect(start).toBeGreaterThan(0)
@@ -628,7 +628,7 @@ describe('the device column', () => {
     // A device class the visitor's own payload could set is a device class an
     // owner cannot trust — and the whole breakdown is a thing people make
     // decisions from. It is parsed server-side, like the pageview path.
-    const collect = src.slice(src.indexOf(`route.post('/collect'`))
+    const collect = src.slice(src.indexOf(`export async function collect(`))
     const branch = collect.slice(collect.indexOf(`if (body.e === 'vitals') {`))
     const insert = branch.indexOf('INSERT INTO web_vitals')
     expect(insert).toBeGreaterThan(0)
@@ -650,7 +650,7 @@ describe('the device column', () => {
     // iPad classified as `mobile` and every iOS visit recorded `macOS`; both are
     // now correct, and this test never needed to change because it never pinned
     // the wrong answer.
-    const collect = src.slice(src.indexOf(`route.post('/collect'`))
+    const collect = src.slice(src.indexOf(`export async function collect(`))
     expect(collect).toContain('parseUserAgent(ua).deviceType')
     expect(collect).toContain('const info = parseUserAgent(ua)')
     expect(collect).toContain('device_type: info.deviceType')

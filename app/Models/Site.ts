@@ -118,6 +118,23 @@ export default defineModel({
       factory: () => 1,
     },
 
+    // App mode (migration 61, app/Analytics/app-mode.ts): the owner's switch
+    // that lets a declared native or desktop app send events to this site.
+    app_mode: {
+      fillable: true,
+      validation: { rule: schema.boolean().optional() },
+      factory: () => false,
+    },
+
+    // The site's own secret for hashing app install ids. Minted when app mode
+    // is turned on and deleted when it is turned off. NOT fillable and never
+    // selected into a response: it is the key the stored ids depend on.
+    app_secret: {
+      fillable: false,
+      hidden: true,
+      validation: { rule: schema.string().optional().max(64) },
+    },
+
     owner_id: {
       fillable: true,
       validation: { rule: schema.number().optional() },
