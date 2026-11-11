@@ -3928,7 +3928,7 @@ onMount(() => {
           above. No install ceiling: it records nothing the app did not send. --}}
       <div class="p-5 panel site-settings-panel">
         <div class="flex flex-wrap gap-3 items-start justify-between">
-          <div style="max-width:60ch">
+          <div class="max-w-[60ch]">
             <div class="font-semibold text-sm">Accept events from an app</div>
             <div class="mt-0.5 text-text-3 text-xs">
               Off by default, so only browsers can report to this site. With it on, a desktop or mobile app can send screens and events with the app client.
@@ -3936,7 +3936,7 @@ onMount(() => {
               Still no IP address stored. Turning this off deletes the key behind those hashes. Ask your users before you send anything, and mention it in your privacy policy.
             </div>
           </div>
-          <label class="flex gap-2 items-center text-text-2 text-xs" style="cursor: pointer">
+          <label class="flex gap-2 items-center text-text-2 text-xs cursor-pointer">
             <input type="checkbox" :checked="appModeOn()" :disabled="appModeBusy()" @change="toggleAppMode">
             <span>Accept app events</span>
           </label>
