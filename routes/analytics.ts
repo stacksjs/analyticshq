@@ -486,8 +486,10 @@ type CollectTable = 'sites' | 'sessions' | 'page_views' | 'custom_events' | 'con
 
 const liveIo: CollectIo = {
   query: pgq,
-  insertOrIgnore: (table, values) => db.insertOrIgnore(table, values),
-  insert: (table, values) => db.insertInto(table).values(values).execute(),
+  // The query builder answers in place now; the ingest's seam stays a promise
+  // so a test double can still be asynchronous.
+  insertOrIgnore: async (table, values) => db.insertOrIgnore(table, values),
+  insert: async (table, values) => db.insertInto(table).values(values).execute(),
   visitorSalt: getVisitorSalt,
   now: () => new Date(),
 }

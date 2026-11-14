@@ -21,7 +21,14 @@ import { response } from '@stacksjs/router'
  * subscription's `customer` maps back to the local user via `users.stripe_id`
  * (set during checkout).
  */
-async function syncSubscription(event: Stripe.Event): Promise<void> {
+/**
+ * The event a subscription handler is handed, read off the registration
+ * itself: the payments package carries its own Stripe types, and an event
+ * typed from this app's copy of the SDK is a different type to the compiler.
+ */
+type SubscriptionEvent = Parameters<NonNullable<Parameters<typeof Payment.onSubscription>[0]['created']>>[0]
+
+async function syncSubscription(event: SubscriptionEvent): Promise<void> {
   const sub = event.data.object as Stripe.Subscription
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id
   if (!customerId)
