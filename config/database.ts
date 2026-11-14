@@ -1,6 +1,5 @@
 import type { DatabaseConfig } from '@stacksjs/types'
 import type { SupportedDialect } from 'bun-query-builder'
-import process from 'node:process'
 import { env } from '@stacksjs/env'
 /**
  * **Database Configuration**
