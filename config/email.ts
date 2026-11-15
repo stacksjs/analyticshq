@@ -47,6 +47,16 @@ export default {
   url: env.APP_URL || 'https://stacksjs.com',
   charset: 'UTF-8',
 
+  // Who a suppressed address may still be written to. The list itself is the
+  // email_suppressions table (migration 0000000065): bounces, complaints and
+  // unsubscribes the framework records.
+  //
+  // 'transactional-allowed' and not the default 'strict': someone who
+  // unsubscribes from the digest must still be able to reset their password.
+  // Mail the framework tags transactional (password reset, verification,
+  // magic link) goes out regardless, and everything else is blocked.
+  suppressionPolicy: 'transactional-allowed',
+
   server: {
     enabled: true,
     scan: true, // scans for spam and viruses
