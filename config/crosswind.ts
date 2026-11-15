@@ -1879,6 +1879,10 @@ export default {
    * repeated composite, and it is where bughq keeps the same button.
    */
   shortcuts: {
+    // The logo on the signed-out pages: the marketing nav's outlined tile and
+    // letter (.brand-mark there), sized up to sit above the wordmark.
+    'auth-mark': 'flex items-center justify-center w-11 h-11 rounded-[12px] border border-[color-mix(in_srgb,var(--accent)_36%,transparent)] bg-[color-mix(in_srgb,var(--accent)_7%,transparent)] text-[var(--accent)] text-[24px] font-bold leading-none select-none',
+
     /*
      * ## The auth controls
      *
