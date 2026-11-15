@@ -777,6 +777,23 @@ export const tsCloud: TsCloudConfig = {
         // directory below; it has to exist before migrate runs.
         'mkdir -p /var/www/analyticshq-shared/db-snapshot',
         'bun node_modules/@stacksjs/buddy/dist/cli.js migrate',
+        // After migrate, the framework's own check of the queue's tables. The
+        // tables themselves come from migration 0000000064, which is named so
+        // this command finds them provided. What it adds is the safeguard
+        // tables a later framework release may introduce: every statement is
+        // IF NOT EXISTS, so it is safe on each deploy.
+        'bun node_modules/@stacksjs/buddy/dist/cli.js queue:table',
+      ],
+      // The worker that runs what the app dispatches. In production the
+      // framework queues every job to the database, and a job with nothing
+      // reading the queue never runs: the password reset email sat undelivered
+      // for exactly that reason. `emails` is where the framework's mail jobs
+      // (SendPasswordResetEmailJob among them) go, and it is read first.
+      //
+      // One process, because the box is shared and short of memory, and the
+      // work is a handful of emails. The worker restarts itself past 256 MB.
+      queues: [
+        { connection: 'database', queue: 'emails,default', processes: 1, timeout: 120, tries: 5, memory: 256, stopWaitSecs: 60 },
       ],
       // Pin the proxy target. `buddy serve` otherwise falls back to
       // 127.0.0.1:3008, which on this SHARED box is the `stacks` project's own
