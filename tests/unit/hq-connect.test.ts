@@ -66,7 +66,7 @@ function setup(options: { sites?: HqSite[], used?: Record<number, number> } = {}
   const start = async (app: string) => (await call('/api/cli/connect', { method: 'POST', body: { app } })).body as { code: string, approveUrl: string }
   const connect = async (app: string, user: HqUser): Promise<ConnectGrant> => {
     const { code } = await start(app)
-    await service.approveConnect(code, user)
+    await service.approveConnect(code, user, await confirmationCode(code))
     return (await call(`/api/cli/connect/${code}`)).body as ConnectGrant
   }
   const usage = (key?: string) => call('/api/v1/usage', { headers: key ? { Authorization: `Bearer ${key}` } : undefined })
@@ -94,7 +94,7 @@ describe('connect flow', () => {
   test('approving creates a site named after the app and hands over its id and read key once', async () => {
     const { start, call, service, sites } = setup()
     const { code } = await start('cursio')
-    expect(await service.approveConnect(code, ALICE)).toEqual({ ok: true, project: { id: sites.rows[0]!.id, name: 'cursio' } })
+    expect(await service.approveConnect(code, ALICE, await confirmationCode(code))).toEqual({ ok: true, project: { id: sites.rows[0]!.id, name: 'cursio' } })
 
     const first = await call(`/api/cli/connect/${code}`)
     expect(first.status).toBe(200)
@@ -117,7 +117,7 @@ describe('connect flow', () => {
     const { code } = await start('cursio')
     clock.at += 10 * 60_000 + 1
     expect(await call(`/api/cli/connect/${code}`)).toEqual({ status: 404, body: { status: 'expired' } })
-    expect(await service.approveConnect(code, ALICE)).toEqual({ ok: false, reason: 'expired' })
+    expect(await service.approveConnect(code, ALICE, await confirmationCode(code))).toEqual({ ok: false, reason: 'expired' })
     expect(await service.describeConnect(code)).toBeNull()
     expect(sites.rows).toEqual([])
   })
@@ -154,7 +154,7 @@ describe('connect flow', () => {
   test('only a signed-in user with a numeric id can approve', async () => {
     const { start, service, sites } = setup()
     const { code } = await start('cursio')
-    await expect(service.approveConnect(code, { id: 'not-a-user' })).rejects.toBeInstanceOf(TypeError)
+    await expect(service.approveConnect(code, { id: 'not-a-user' }, await confirmationCode(code))).rejects.toBeInstanceOf(TypeError)
     expect(sites.rows).toEqual([])
   })
 })

@@ -110,8 +110,16 @@ route.post('/api/cli/connect/{code}/approve', async (request: RouterRequest) => 
   }
 
   try {
-    const result = await hq.approveConnect(code, { id })
+    // The service checks the typed code itself as of @stacksjs/hq 0.75.600;
+    // the check above stays so a wrong code is answered before anything else.
+    const result = await hq.approveConnect(code, { id }, request.jsonBody?.confirm)
     if (!result.ok) {
+      if (result.reason === 'confirmation_mismatch') {
+        return json({
+          error: 'That code does not match. Enter the confirmation code your terminal is showing.',
+          reason: result.reason,
+        }, 422)
+      }
       return json({
         error: result.reason === 'already_approved'
           ? 'This connection was already approved.'
