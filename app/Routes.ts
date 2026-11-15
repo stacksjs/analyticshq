@@ -18,4 +18,5 @@ export type { RouteDefinition, RouteRegistry } from '@stacksjs/router'
 export default {
   analytics: { path: 'analytics', prefix: '' },
   auth: { path: 'auth', prefix: '' },
+  hq: { path: 'hq', prefix: '' },
 } satisfies RouteRegistry
