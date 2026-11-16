@@ -8,37 +8,44 @@ import { hqServiceContract } from '@stacksjs/hq/testing'
 import { createAnalyticshqAdapter, PAGEVIEWS_METER } from '../../app/Hq/adapter'
 import { rateLimit } from '../../app/Hq/limits'
 import { sameOrigin } from '../../app/Support/origin'
-import { looksLikeReadKey, newReadKey } from '../../app/Support/read-key'
 
 const ROOT = join(import.meta.dir, '..', '..')
 const read = (path: string): string => readFileSync(join(ROOT, path), 'utf8')
 const ORIGIN = 'https://analyticshq.test'
 
-/** The `sites` table, as much of it as the adapter touches. */
-function memorySites(seed: HqSite[] = []): SiteStore & { rows: HqSite[], touched: string[] } {
+/** A read key as the store keeps it: which site it reads, and whether it is still live. */
+interface IssuedKey { siteId: string, key: string, name: string, revoked: boolean }
+
+/**
+ * The `sites` table and the site's read keys, as much of both as the adapter
+ * touches. The real store mints a framework token and keeps a hash
+ * (app/Support/site-tokens.ts); this one keeps the key so a test can present
+ * it back.
+ */
+function memorySites(seed: HqSite[] = []): SiteStore & { rows: HqSite[], keys: IssuedKey[] } {
   const rows = seed.map(site => ({ ...site }))
-  const touched: string[] = []
+  const keys: IssuedKey[] = []
   return {
     rows,
-    touched,
+    keys,
     async findOwnedByName(ownerId, name) {
       const found = rows.find(site => site.ownerId === ownerId && site.name.toLowerCase() === name.toLowerCase())
       return found ? { ...found } : null
     },
     async create(ownerId, name) {
-      const site: HqSite = { id: `site${rows.length + 1}${'0'.repeat(18)}`.slice(0, 24), name, ownerId, readKey: null }
+      const site: HqSite = { id: `site${rows.length + 1}${'0'.repeat(18)}`.slice(0, 24), name, ownerId }
       rows.push(site)
       return { ...site }
     },
-    async setReadKey(siteId, readKey) {
-      rows.find(site => site.id === siteId)!.readKey = readKey
+    async issueReadKey(siteId, name) {
+      const key = `read-key-${keys.length + 1}-${globalThis.crypto.randomUUID()}`
+      keys.push({ siteId, key, name, revoked: false })
+      return key
     },
     async findByReadKey(readKey) {
-      const found = rows.find(site => site.readKey === readKey)
+      const issued = keys.find(entry => entry.key === readKey && !entry.revoked)
+      const found = issued ? rows.find(site => site.id === issued.siteId) : undefined
       return found ? { ...found } : null
-    },
-    async touchReadKey(siteId) {
-      touched.push(siteId)
     },
   }
 }
@@ -103,10 +110,11 @@ describe('connect flow', () => {
       project: { id: sites.rows[0]!.id, name: 'cursio' },
       // The tracker writes with the public site id: there is no ingest secret.
       ingestKey: sites.rows[0]!.id,
-      readKey: sites.rows[0]!.readKey,
+      readKey: sites.keys[0]!.key,
       dashboardUrl: `${ORIGIN}/dashboard?site=${sites.rows[0]!.id}`,
     })
-    expect(looksLikeReadKey((first.body as ConnectGrant).readKey)).toBe(true)
+    // Named after the app it was connected for, so it can be told apart in a list.
+    expect(sites.keys[0]).toMatchObject({ siteId: sites.rows[0]!.id, name: 'Connected: cursio' })
     expect(sites.rows[0]).toMatchObject({ ownerId: 1 })
 
     expect(await call(`/api/cli/connect/${code}`)).toEqual({ status: 404, body: { status: 'expired' } })
@@ -122,24 +130,25 @@ describe('connect flow', () => {
     expect(sites.rows).toEqual([])
   })
 
-  test('connecting an app that already exists reuses the site and keeps its read key', async () => {
+  test('connecting an app that already exists reuses the site, with a read key of its own', async () => {
     const { connect, sites } = setup()
     const first = await connect('Cursio', ALICE)
     // A second machine, and a different capitalisation of the same name.
     const second = await connect('cursio', ALICE)
     expect(sites.rows).toHaveLength(1)
     expect(second.project).toEqual(first.project)
-    // Not rotated: the first machine's deployment is still reading with it.
-    expect(second.readKey).toBe(first.readKey)
+    // A key of its own, because a stored key is a hash and cannot be handed
+    // out twice. The first machine's is not rotated: it still reads.
+    expect(second.readKey).not.toBe(first.readKey)
+    expect(sites.keys.map(entry => entry.revoked)).toEqual([false, false])
   })
 
   test('a site made in the dashboard, with no read key yet, is issued one', async () => {
-    const existing: HqSite = { id: 'a'.repeat(24), name: 'cursio', ownerId: 1, readKey: null }
+    const existing: HqSite = { id: 'a'.repeat(24), name: 'cursio', ownerId: 1 }
     const { connect, sites } = setup({ sites: [existing] })
     const grant = await connect('cursio', ALICE)
     expect(grant.project.id).toBe('a'.repeat(24))
-    expect(looksLikeReadKey(grant.readKey)).toBe(true)
-    expect(sites.rows[0]!.readKey).toBe(grant.readKey)
+    expect(sites.keys).toEqual([{ siteId: 'a'.repeat(24), key: grant.readKey, name: 'Connected: cursio', revoked: false }])
   })
 
   test('two accounts connecting the same app name get separate sites', async () => {
@@ -166,21 +175,20 @@ describe('GET /api/v1/usage', () => {
     const { status, body } = await usage(grant.readKey)
     expect(status).toBe(200)
     expect(body).toEqual([{ meter: PAGEVIEWS_METER, used: 4120, limit: null, period: '2026-03', state: 'ok', upgradeUrl: `${ORIGIN}/pricing` }])
-    expect(sites.touched).toEqual([grant.project.id])
   })
 
   test('the public site id is not a read key, and neither is an unknown key', async () => {
     const { connect, usage } = setup()
     const grant = await connect('cursio', ALICE)
     expect((await usage(grant.ingestKey)).status).toBe(401)
-    expect((await usage(newReadKey())).status).toBe(401)
+    expect((await usage('not-a-read-key')).status).toBe(401)
     expect((await usage()).status).toBe(401)
   })
 
   test('a revoked key stops reading at once', async () => {
     const { connect, usage, sites } = setup()
     const grant = await connect('cursio', ALICE)
-    sites.rows[0]!.readKey = null
+    sites.keys[0]!.revoked = true
     expect((await usage(grant.readKey)).status).toBe(401)
   })
 })

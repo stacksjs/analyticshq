@@ -378,8 +378,7 @@ let shareMode = false
 // The owner's existing share token for the active site ('' if none), so the owner
 // UI can show/copy/revoke the link. Bridged into the client block.
 let __shareToken = ''
-let __hasReadKey = false
-let __readKeyUsed = ''
+let __readKeyCount = 0
 
 // Raw rows, read into the shapes in types/dashboard.d.ts as each query returns.
 // `db.unsafe` answers Record<string, unknown>, and Postgres hands COUNT(*) back as
@@ -505,14 +504,13 @@ async function loadData(): Promise<void> {
   if (!shareMode)
     __shareToken = text((await readSettings(siteId)).share_token) || ''
 
-  // The read key's presence and last use, never the key (#67). It is a secret,
-  // shown once when it is issued and never again, so the page is only ever told
-  // whether one exists — enough to tell a live key from a forgotten one before
-  // revoking it.
+  // How many read keys the site holds, never a key (#67). A key is a secret,
+  // shown once when it is issued and stored only as a hash
+  // (app/Support/site-tokens.ts), so the page is only ever told whether any
+  // exist.
   if (!shareMode) {
-    const keyRow = (await pgq(`SELECT read_key, read_key_last_used_at FROM sites WHERE id = ? LIMIT 1`, [String(siteId)]))?.[0]
-    __hasReadKey = !!(keyRow && keyRow.read_key)
-    __readKeyUsed = keyRow && keyRow.read_key_last_used_at ? String(keyRow.read_key_last_used_at) : ''
+    const { SITE_SCOPES, siteTokens } = await import('../../app/Support/site-tokens')
+    __readKeyCount = (await siteTokens(String(siteId), SITE_SCOPES.read)).length
   }
 
   // Team: who can already reach this site, and who has been invited but has not
@@ -1401,10 +1399,9 @@ const exportPayload = {
 // UI so it can display the existing share link. The underlying server binding
 // stays private and only this exact scalar crosses the bridge.
 const shareCapability = __shareToken
-// Presence and last use only. The key itself is never bridged, because it is
-// never on the server side of this page either — see the read of it above.
-const readKeyPresent = __hasReadKey
-const readKeyUsedAt = __readKeyUsed
+// How many, only. A key itself is never bridged, because it is never on the
+// server side of this page either: see the read of it above.
+const readKeyCount = __readKeyCount
 // regionGeo and cityGeo seed the two geo toggles. They were missing from this
 // list for regions, and a declared payload bridges ONLY what it names, so
 // `typeof regionGeo` was 'undefined' in the client block and the box always
@@ -1412,7 +1409,7 @@ const readKeyUsedAt = __readKeyUsed
 // again rather than turning it off.
 // appMode seeds the app-mode toggle the same way. It is last, out of order,
 // because viewer-timezone.test.ts pins the opening of this list.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyPresent, readKeyUsedAt, regionGeo, savedTz, shareCapability, visitorTimelines, appMode })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyCount, regionGeo, savedTz, shareCapability, visitorTimelines, appMode })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1443,8 +1440,8 @@ const shareUrl = state(shareCapability ? shareLinkFor(shareCapability) : '')
 // for as long as the page that issued it is open: nothing renders it from the
 // server and nothing stores it, so leaving the page is the end of the only copy
 // the browser ever had.
-const hasReadKey = state(readKeyPresent)
-const readKeyUsed = state(readKeyUsedAt)
+const readKeyHeld = state(readKeyCount)
+const hasReadKey = (): boolean => readKeyHeld() > 0
 const readKeyOnce = state('')
 const readKeyBusy = state(false)
 // Which read-key button is working. See fathomAction above for why a shared
@@ -1453,15 +1450,10 @@ const readKeyAction = state('')
 const readKeyCopied = state(false)
 
 function readKeyStatus(): string {
-  if (!hasReadKey())
+  const held = readKeyHeld()
+  if (held === 0)
     return 'No read key. Issue one to let a server read this site.'
-  const at = readKeyUsed()
-  if (!at)
-    return 'A read key is active, never used.'
-  const when = new Date(at)
-  return Number.isNaN(when.getTime())
-    ? 'A read key is active, used recently.'
-    : `A read key is active, last used ${when.toLocaleString()}.`
+  return held === 1 ? 'A read key is active.' : `${held} read keys are active.`
 }
 
 // Created ONCE, not per copy, for the reason spelled out at shareCopiedReset
@@ -1484,7 +1476,7 @@ async function issueReadKey() {
     return
   // Replacing is destructive in the same way revoking is, so it asks — but only
   // when there is something to break.
-  if (hasReadKey() && !(await stxConfirm('Replace the read key? Anything using the current one stops reading immediately.')))
+  if (hasReadKey() && !(await stxConfirm('Replace the read key? Every read key this site holds stops working immediately, the ones given to connected apps included.')))
     return
   readKeyBusy.set(true)
   readKeyAction.set('issue')
@@ -1494,8 +1486,7 @@ async function issueReadKey() {
     const d: { read_key?: string } = await res.json().catch(() => ({}))
     if (res.ok && d.read_key) {
       readKeyOnce.set(d.read_key)
-      hasReadKey.set(true)
-      readKeyUsed.set('')
+      readKeyHeld.set(1)
     }
     else {
       failed = true
@@ -1513,7 +1504,7 @@ async function issueReadKey() {
 async function revokeReadKey() {
   if (readKeyBusy())
     return
-  if (!(await stxConfirm('Revoke the read key? Anything using it stops reading immediately.')))
+  if (!(await stxConfirm('Revoke every read key for this site? Anything using one stops reading immediately.')))
     return
   readKeyBusy.set(true)
   readKeyAction.set('revoke')
@@ -1521,8 +1512,7 @@ async function revokeReadKey() {
   try {
     const res = await fetch(`/api/sites/${encodeURIComponent(activeSiteId)}/read-key`, { method: 'DELETE', credentials: 'same-origin' })
     if (res.ok) {
-      hasReadKey.set(false)
-      readKeyUsed.set('')
+      readKeyHeld.set(0)
       readKeyOnce.set('')
     }
     else {

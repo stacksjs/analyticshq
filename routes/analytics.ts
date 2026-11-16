@@ -21,7 +21,8 @@ import { ASSIGNABLE_ROLES, isAssignableRole, listReachableSites, listSiteMembers
 import { type AppClient, appDimensions, declaresApp, hashInstall, mintAppSecret, readAppClient, withAppProperties } from '../app/Analytics/app-mode'
 import { ALERT_CONDITIONS, ALERT_METRICS, isAlertCondition, isAlertMetric, isRelative } from '../app/Analytics/alerts'
 import { planForSite } from '../app/Analytics/entitlements'
-import { authorizeRead, looksLikeReadKey, newReadKey, shouldRecordUse } from '../app/Support/read-key'
+import { SETTINGS_READ_KEY_NAME } from '../app/Support/read-key'
+import { mintSiteToken, revokeSiteTokens, SITE_SCOPES, siteForToken } from '../app/Support/site-tokens'
 import { normalizeEnvironment } from '../app/Analytics/environment'
 import { serializeEventProperties } from '../app/Analytics/event-properties'
 import { expiryFrom, hashToken, inviteRefusal, looksLikeEmail, mintToken, normalizeEmail } from '../app/Analytics/invites'
@@ -972,27 +973,19 @@ async function requireSiteRead(request: HandlerRequest, siteId: string): Promise
   // declares no such method here, and line 3272 reads the same header the same
   // way, so this stays consistent with the rest of the file.
   const presented = String(request.headers?.get?.('authorization') ?? '').replace(/^Bearer\s+/i, '')
-  if (!looksLikeReadKey(presented))
+  // A read key is a site token carrying `site:read` (app/Support/site-tokens.ts).
+  // Anything else falls through to the person check.
+  const key = await siteForToken(presented, SITE_SCOPES.read)
+  if (!key)
     return requireSiteRole(request, siteId, 'viewer')
 
-  const row = (await pgq('SELECT id, read_key, read_key_last_used_at FROM sites WHERE id = ? LIMIT 1', [String(siteId)]))?.[0]
-  const site = row ? { id: String(row.id), read_key: row.read_key == null ? null : String(row.read_key), read_key_last_used_at: row.read_key_last_used_at == null ? null : String(row.read_key_last_used_at) } : null
-  const verdict = authorizeRead(site, presented)
-  if (!verdict.ok)
-    return json({ error: verdict.error }, verdict.status)
-  if (site)
-    await recordReadKeyUse(site)
+  // A key for a different site answers 404, as an unknown site does: a caller
+  // who cannot read a site should not learn that it exists.
+  if (key.siteId !== String(siteId))
+    return json({ error: 'unknown site' }, 404)
+  if (!key.isActive)
+    return json({ error: 'site inactive' }, 403)
   return null
-}
-
-/** Stamp the key as used, at most once a minute — see LAST_USED_RESOLUTION_MS. */
-async function recordReadKeyUse(site: { id: string, read_key_last_used_at?: string | null }): Promise<void> {
-  const now = new Date()
-  if (!shouldRecordUse(site.read_key_last_used_at, now))
-    return
-  // Never let the stamp fail a read: it aids revoking a key, it does not
-  // authorise one.
-  await pgq('UPDATE sites SET read_key_last_used_at = ? WHERE id = ?', [now.toISOString(), String(site.id)]).catch(() => {})
 }
 
 async function requireSiteRole(request: HandlerRequest, siteId: string, required: SiteRole): Promise<Response | null> {
@@ -1212,22 +1205,24 @@ route.post('/api/sites/{siteId}/read-key', async (request) => {
   if (denied)
     return denied
 
-  const key = newReadKey()
-  // A new key starts with no last-used stamp: keeping the old one would read
-  // as "used before it existed".
-  await pgq('UPDATE sites SET read_key = ?, read_key_last_used_at = NULL WHERE id = ?', [key, siteId])
-  return json({ read_key: key })
+  // Issuing from the dashboard REPLACES: every read key the site holds stops
+  // working and one new key is answered, which is what the page says it does.
+  // (`buddy hq:connect` adds a key instead, in app/Hq/adapter.ts, so a second
+  // machine does not break the first.)
+  await revokeSiteTokens(siteId, SITE_SCOPES.read)
+  const created = await mintSiteToken(siteId, SITE_SCOPES.read, SETTINGS_READ_KEY_NAME)
+  return json({ read_key: created.token })
 }).middleware('auth').skipCsrf()
 
-// Revoke a site's read key. Admin-only. Anything still presenting it is
-// refused on its next request.
+// Revoke a site's read keys, all of them. Admin-only. Anything still
+// presenting one is refused on its next request.
 route.delete('/api/sites/{siteId}/read-key', async (request) => {
   const siteId = request.params.siteId
   const denied = await requireSiteRole(request, siteId, 'admin')
   if (denied)
     return denied
 
-  await pgq('UPDATE sites SET read_key = NULL, read_key_last_used_at = NULL WHERE id = ?', [siteId])
+  await revokeSiteTokens(siteId, SITE_SCOPES.read)
   return json({ revoked: true })
 }).middleware('auth').skipCsrf()
 
@@ -1716,6 +1711,10 @@ route.delete('/api/sites/{siteId}', async (request) => {
   const deleted = await eraseRows(siteId)
   const goals = await pgq(`DELETE FROM goals WHERE site_id = ? RETURNING 1`, [String(siteId)])
   deleted.goals = Array.isArray(goals) ? goals.length : 0
+  // Its read keys before the row: a key for a site that no longer exists must
+  // not stay live in the framework's token table.
+  await revokeSiteTokens(String(siteId), SITE_SCOPES.read)
+  await pgq(`DELETE FROM site_principals WHERE site_id = ?`, [String(siteId)])
   await pgq(`DELETE FROM sites WHERE id = ?`, [String(siteId)])
   return json({ ok: true, deleted })
 }).middleware('auth').skipCsrf()

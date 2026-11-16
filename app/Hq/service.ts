@@ -5,7 +5,7 @@ import { db } from '@stacksjs/database'
 import { createHqService, sqlConnectCodeStore } from '@stacksjs/hq/service'
 import { normalizeOrigin } from '../Analytics/install'
 import { mintSiteId } from '../Analytics/sites'
-import { shouldRecordUse } from '../Support/read-key'
+import { mintSiteToken, SITE_SCOPES, siteForToken } from '../Support/site-tokens'
 import { num, text } from '../Support/rows'
 import { createAnalyticshqAdapter } from './adapter'
 
@@ -24,22 +24,17 @@ function query(sql: string, params: unknown[] = []): Promise<Row[]> {
   return db.unsafe(IS_PG ? sql.replace(/\?/g, () => `$${++i}`) : sql, params)
 }
 
-const COLUMNS = 'id, name, owner_id, read_key, read_key_last_used_at'
+const COLUMNS = 'id, name, owner_id'
 
-function toSite(row: Row | null | undefined): (HqSite & { readKeyLastUsedAt: string | null }) | null {
+function toSite(row: Row | null | undefined): HqSite | null {
   if (!row)
     return null
   return {
     id: String(row.id),
     name: text(row.name) ?? '',
     ownerId: row.owner_id == null ? null : Number(row.owner_id),
-    readKey: text(row.read_key),
-    readKeyLastUsedAt: text(row.read_key_last_used_at),
   }
 }
-
-/** When each key was last stamped, so the stamp costs a write a minute, not one per read. */
-const lastStamped = new Map<string, Date>()
 
 export const sqlSiteStore: SiteStore = {
   async findOwnedByName(ownerId, name) {
@@ -66,24 +61,17 @@ export const sqlSiteStore: SiteStore = {
       created_at: now,
       updated_at: now,
     }).execute()
-    return { id, name, ownerId, readKey: null }
+    return { id, name, ownerId }
   },
-  async setReadKey(siteId, readKey) {
-    // A new key starts with no last-used stamp, as POST /api/sites/{id}/read-key writes it.
-    await query('UPDATE sites SET read_key = ?, read_key_last_used_at = NULL WHERE id = ?', [readKey, siteId])
+  async issueReadKey(siteId, name) {
+    return (await mintSiteToken(siteId, SITE_SCOPES.read, name)).token
   },
   async findByReadKey(readKey) {
-    const site = toSite((await query(`SELECT ${COLUMNS} FROM sites WHERE read_key = ? LIMIT 1`, [readKey]))?.[0])
-    if (site && !lastStamped.has(site.id) && site.readKeyLastUsedAt)
-      lastStamped.set(site.id, new Date(site.readKeyLastUsedAt))
-    return site
-  },
-  async touchReadKey(siteId) {
-    const now = new Date()
-    if (!shouldRecordUse(lastStamped.get(siteId), now))
-      return
-    lastStamped.set(siteId, now)
-    await query('UPDATE sites SET read_key_last_used_at = ? WHERE id = ?', [now.toISOString(), siteId])
+    const target = await siteForToken(readKey, SITE_SCOPES.read)
+    // An inactive site's key stops reading, as its dashboard does.
+    if (!target || !target.isActive)
+      return null
+    return toSite((await query(`SELECT ${COLUMNS} FROM sites WHERE id = ? LIMIT 1`, [target.siteId]))?.[0])
   },
 }
 

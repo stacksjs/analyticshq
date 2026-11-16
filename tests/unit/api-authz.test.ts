@@ -87,9 +87,11 @@ describe('guardrail: a read key reaches exactly the reads it was issued for', ()
     expect(end).toBeGreaterThan(i)
     const body = analytics.slice(i, end)
     expect(body).toContain('requireSiteRole(request, siteId, \'viewer\')')
-    // And it only accepts something shaped like a key — anything else falls
-    // through to the person check rather than being trusted.
-    expect(body).toContain('looksLikeReadKey(presented)')
+    // And it only accepts a live site token carrying the read scope: anything
+    // else falls through to the person check rather than being trusted.
+    expect(body).toContain('siteForToken(presented, SITE_SCOPES.read)')
+    // A key for another site is refused, not honoured for this one.
+    expect(body).toContain('key.siteId !== String(siteId)')
   })
 })
 

@@ -1,5 +1,5 @@
 import type { ConnectCodeStore, ConnectGrant, HqServiceAdapter, ReadPrincipal } from '@stacksjs/hq/service'
-import { looksLikeReadKey, newReadKey, sameKey } from '../Support/read-key'
+import { connectReadKeyName } from '../Support/read-key'
 
 /**
  * AnalyticsHQ's side of the HQ connect contract (`@stacksjs/hq/service`).
@@ -27,7 +27,6 @@ export interface HqSite {
   id: string
   name: string
   ownerId: number | null
-  readKey: string | null
 }
 
 export interface SiteStore {
@@ -35,10 +34,13 @@ export interface SiteStore {
   findOwnedByName: (ownerId: number, name: string) => Promise<HqSite | null>
   /** Create a site for this owner and answer it, with a server-minted id. */
   create: (ownerId: number, name: string) => Promise<HqSite>
-  setReadKey: (siteId: string, readKey: string) => Promise<void>
+  /**
+   * Mint a read key for the site and answer it. The only time it is ever
+   * readable: what is kept is a hash (app/Support/site-tokens.ts).
+   */
+  issueReadKey: (siteId: string, name: string) => Promise<string>
+  /** The site a presented read key reads, or null when it is not a live one. */
   findByReadKey: (readKey: string) => Promise<HqSite | null>
-  /** Note that the key was used. Optional bookkeeping, must not throw. */
-  touchReadKey?: (siteId: string) => Promise<void>
 }
 
 /** The signed-in person approving a connect. */
@@ -69,13 +71,11 @@ export function createAnalyticshqAdapter(deps: AnalyticshqAdapterDeps): HqServic
     // The same rule as POST /api/sites: one site of a name per account.
     const site = await sites.findOwnedByName(ownerId, app) ?? await sites.create(ownerId, app)
 
-    // A reused site keeps the read key it has. Connecting a second machine
-    // must not rotate the key out from under the first one's deployment.
-    let { readKey } = site
-    if (!looksLikeReadKey(readKey)) {
-      readKey = newReadKey()
-      await sites.setReadKey(site.id, readKey)
-    }
+    // Each connect is given a read key of its own. A read key is stored
+    // hashed, so the one a first machine was given cannot be handed out again;
+    // minting another leaves the first machine's deployment working, and each
+    // can be revoked alone.
+    const readKey = await sites.issueReadKey(site.id, connectReadKeyName(app))
 
     return {
       project: { id: site.id, name: site.name },
@@ -87,14 +87,11 @@ export function createAnalyticshqAdapter(deps: AnalyticshqAdapterDeps): HqServic
   }
 
   async function authenticateReadKey(presented: string): Promise<ReadPrincipal | null> {
-    // Shape first: a site id, a session token or anything else never reaches
-    // the lookup, so none of them can be tried as a read key.
-    if (!looksLikeReadKey(presented))
-      return null
+    // Whether it is a live read key at all is the store's answer: a site id,
+    // a session token or anything else resolves to nothing.
     const site = await sites.findByReadKey(presented)
-    if (!site || !looksLikeReadKey(site.readKey) || !sameKey(presented, site.readKey))
+    if (!site)
       return null
-    await sites.touchReadKey?.(site.id).catch(() => {})
     // Usage is the ACCOUNT's, so the owner is the principal. A site nobody
     // owns is not metered, and the empty owner reads as exactly that below.
     return { owner: site.ownerId == null ? '' : String(site.ownerId), project: site.id }
