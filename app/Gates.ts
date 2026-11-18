@@ -1,4 +1,4 @@
-import type { UserModel } from '@stacksjs/orm'
+import type { GateUser } from '@stacksjs/auth'
 import { isPlatformAdmin } from './Analytics/access'
 
 /**
@@ -31,14 +31,14 @@ export const gates = {
    * The platform-admin flag, not an email domain. Registration does not verify
    * addresses, so `endsWith('@stacksjs.org')` let anyone who typed one in pass.
    */
-  'access-admin': async (user: UserModel | null) => {
+  'access-admin': async (user: GateUser | null) => {
     return isPlatformAdmin(user?.id)
   },
 
   /**
    * Check if user can edit application settings
    */
-  'edit-settings': (user: UserModel | null) => {
+  'edit-settings': (user: GateUser | null) => {
     // Add your logic here
     return user !== null
   },
@@ -46,7 +46,7 @@ export const gates = {
   /**
    * Check if user can view dashboard
    */
-  'view-dashboard': (user: UserModel | null) => {
+  'view-dashboard': (user: GateUser | null) => {
     return user !== null
   },
 
@@ -86,7 +86,7 @@ export const policies: Record<string, string | { policy: string, model?: string 
  * // Super admins bypass all checks
  * (user) => user?.role === 'super-admin' ? true : null
  */
-export const before: Array<(user: UserModel | null, ability: string, args: unknown[]) => boolean | null | Promise<boolean | null>> = [
+export const before: Array<(user: GateUser | null, ability: string, args: unknown[]) => boolean | null | Promise<boolean | null>> = [
   // Example: Super admin bypass
   // (user, ability) => {
   //   if (user?.role === 'super-admin') {
@@ -101,7 +101,7 @@ export const before: Array<(user: UserModel | null, ability: string, args: unkno
  *
  * Run after gate/policy checks. Can override the result.
  */
-export const after: Array<(user: UserModel | null, ability: string, result: boolean, args: unknown[]) => boolean | void | Promise<boolean | void>> = [
+export const after: Array<(user: GateUser | null, ability: string, result: boolean, args: unknown[]) => boolean | void | Promise<boolean | void>> = [
   // Example: Log all authorization checks
   // (user, ability, result) => {
   //   console.log(`User ${user?.id} ${result ? 'allowed' : 'denied'} for ${ability}`)
