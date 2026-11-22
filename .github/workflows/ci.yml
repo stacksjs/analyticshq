@@ -128,9 +128,18 @@ jobs:
 
       # tsc cannot see inside .stx, so the templates' script blocks and {{ }}
       # expressions are checked by stx's own checker. Through the package script
-      # so the --lib list of ambient types/ files lives in one place.
+      # so the --lib list of ambient types/ files lives in one place. The checker
+      # exits 1 on errors but 0 on warnings, so the summary line is the gate;
+      # `set -o pipefail` carries an error exit through the tee. Same shape as
+      # bughq's, loghq's and reportshq's.
       - name: Typecheck views
-        run: bun run typecheck:views
+        run: |
+          set -o pipefail
+          bun run typecheck:views | tee /tmp/stx-typecheck.log
+          if ! grep -qE '0 error\(s\), 0 warning\(s\)' /tmp/stx-typecheck.log; then
+            echo "::error::stx typecheck is not clean, see the log above"
+            exit 1
+          fi
 
   test:
     runs-on: ${{ matrix.os }}
