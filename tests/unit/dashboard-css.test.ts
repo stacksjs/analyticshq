@@ -136,18 +136,20 @@ describe('the rules that moved', () => {
       expect({ needle, present: PREFLIGHT.includes(needle) }).toEqual({ needle, present: true })
   })
 
-  test('the arbitrary max-width variant really does generate nothing', async () => {
-    // The reason the breakpoints could not be utilities. Asserted rather than
-    // assumed, because if a later engine version starts supporting it this
-    // file should be the thing that says so.
+  test('the arbitrary max-width variant now generates its exact breakpoint', async () => {
+    // It generated nothing when the breakpoints above moved into the preflight,
+    // which is why they could not be utilities. ts-css 0.3.28 (with stx 0.2.925)
+    // emits it, at the exact width. The preflight rules still work as they are;
+    // converting them back to call-site utilities is a separate change, and
+    // this test is what says it is now possible.
     const engine = await loadCssEngine()
     if (!engine)
       throw new Error('The installed STX CSS engine is required')
     const merged = mergeCssConfig(engine.defaultConfig || engine.config, theme)
-    for (const cls of ['max-[1023px]:hidden', 'max-[767px]:items-center']) {
+    for (const [cls, media] of [['max-[1023px]:hidden', '@media (max-width: 1023px)'], ['max-[767px]:items-center', '@media (max-width: 767px)']]) {
       const gen = new engine.CSSGenerator(merged.config)
       gen.generate(cls)
-      expect({ cls, css: gen.toCSS(false, false) }).toEqual({ cls, css: '' })
+      expect({ cls, emitsBreakpoint: gen.toCSS(false, false).includes(media) }).toEqual({ cls, emitsBreakpoint: true })
     }
   })
 
