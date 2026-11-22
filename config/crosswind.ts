@@ -1388,8 +1388,6 @@ body:not([data-site-mode="coming-soon"]) .mode-screen { display: none; }
 .code pre .str { color: var(--code-str); }
 /* Framework picker in the code-bar (HTML / Vue / Nuxt / React / Next). */
 .code-lang {
-  appearance: none;
-  -webkit-appearance: none;
   background-color: transparent;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1399,9 +1397,6 @@ body:not([data-site-mode="coming-soon"]) .mode-screen { display: none; }
   letter-spacing: 0.03em;
   padding: 0.15rem 1.5rem 0.15rem 0.6rem;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23808a9d' stroke-width='1.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.55rem center;
 }
 .code-lang:hover { border-color: var(--line-strong); color: var(--ink); }
 .code-lang:focus-visible { outline: none; border-color: var(--accent); }
@@ -1811,6 +1806,41 @@ a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
 }
 `
 
+/*
+ * One caret for every single-line <select>, drawn in the text's own colour.
+ *
+ * The browser's arrow sat about 3px from the rounded border whatever the
+ * padding, because Chrome does not apply padding-right to it. Two gradients
+ * paint the caret instead: unlike an SVG in a data URI they read currentColor,
+ * so it follows light and dark (prefers-color-scheme or data-theme) with no
+ * per-theme rule. Sized in em, so the 2rem date-picker select gets a smaller
+ * caret, closer in, than a 42px form field.
+ *
+ * These are the declarations ts-css 0.3.28 ships as `form-select`
+ * (stacksjs/ts-css#45). That one is opt-in per element and brings a base input
+ * look with it, and a `background` or `padding` shorthand in a component rule
+ * after it erases the caret. This rule needs no class in the markup, outranks
+ * those shorthands, and reaches a select added later, so it stays.
+ *
+ * padding-right is !important because this lands in the preflight layer and an
+ * unlayered px-* utility on the element would otherwise win and run a long
+ * label under the caret. The :not()s keep list boxes, which draw no arrow,
+ * out of it; they also put this above a bare class like .select or .drp-sel.
+ */
+const SELECT_CARET_CSS = `
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.3125em) 50%, calc(100% - 1em) 50%;
+  background-size: 0.3125em 0.3125em;
+  background-repeat: no-repeat;
+  padding-right: 2.25em !important;
+  print-color-adjust: exact;
+}
+`
+
 export default {
 
   content: [
@@ -1866,6 +1896,8 @@ export default {
     // Scoped to the marketing layout group; the four above are site-wide.
     // LAST on purpose -- see the note on MARKETING.
     { getCSS: () => MARKETING },
+    // Last, so it is the final word on a <select>'s arrow (see SELECT_CARET_CSS).
+    { getCSS: () => SELECT_CARET_CSS },
   ],
   // The theme below maps utility names onto the tokens the preflight declares,
   // so `text-text-2`, `bg-panel`, `border-border` exist and replace the
