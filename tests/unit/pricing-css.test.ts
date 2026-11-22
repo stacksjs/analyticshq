@@ -167,11 +167,12 @@ describe('every declaration the block carried', () => {
   test('the one-column breakpoint is the only thing that moved', async () => {
     /*
      * The block said `@media (max-width: 640px)`. `max-sm:` is
-     * `max-width: 639.98px`, and the arbitrary form -- `max-[640px]:` -- is not
-     * supported by this engine: it generates nothing at all, in markup AND
-     * inside a shortcut, which was checked rather than assumed. So the plans
-     * stack one-up 0.02px earlier than they did. Nothing else in the page
-     * changed by any amount.
+     * `max-width: 639.98px`, and the arbitrary form -- `max-[640px]:` -- was not
+     * supported by the engine at the time: it generated nothing at all, in
+     * markup AND inside a shortcut, which was checked rather than assumed. So
+     * the plans stack one-up 0.02px earlier than they did. Nothing else in the
+     * page changed by any amount. ts-css 0.3.28 (with stx 0.2.925) does emit
+     * `max-[640px]:`, so the exact width is available again if it matters.
      */
     expect(SRC).toContain('max-sm:grid-cols-1')
     const css = await generate(SRC)
@@ -184,6 +185,6 @@ describe('every declaration the block carried', () => {
     const merged = mergeCssConfig(engine.defaultConfig || engine.config, theme)
     const probe = new engine.CSSGenerator(merged.config)
     probe.generate('max-[640px]:grid-cols-1')
-    expect(probe.toCSS(false, false)).toBe('')
+    expect(probe.toCSS(false, false)).toContain('@media (max-width: 640px)')
   })
 })
