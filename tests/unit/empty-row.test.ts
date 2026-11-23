@@ -7,7 +7,7 @@
  * BreakdownPanel's own. They are `class="empty-row"` now.
  *
  * The reason this is a test and not just a config entry: a shortcut lives in
- * config/crosswind.ts, which only reaches the page through the Crosswind merge.
+ * config/css.ts, which only reaches the page through the Crosswind merge.
  * If the entry were renamed or dropped, `class="empty-row"` would generate
  * nothing at all and all thirteen placeholders would render unstyled, left
  * aligned at full size with no padding. Nothing else would fail. So the
@@ -16,14 +16,14 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 // The installed STX package does not export these subpaths by bare specifier.
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
 /**
  * The marketing sheet. It was public/marketing.css until it moved into the
- * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * MARKETING preflight in config/css.ts, scoped to the marketing layout
  * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
  * what these assertions read is unchanged -- except that it is layered now,
  * which is the point several of them turn on.

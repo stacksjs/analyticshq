@@ -171,7 +171,7 @@ async function eraseThisVisitor(): Promise<void> {
 @extends('app')
 
 {{-- No <style> block, and no @push('styles'): rule 3 / §11.1. .panel and the
-    `.visit + .visit` spacing are a preflight in config/crosswind.ts, .mono keeps its
+    `.visit + .visit` spacing are a preflight in config/css.ts, .mono keeps its
     name as a shortcut there, and this page's `.btn` / `.btn.btn-danger` are the shared
     `btn-ghost` / `btn-danger`. `.stat-label` is `stat-key`: public/marketing.css
     declares that name too, without the mono/uppercase half, so a rule under it here

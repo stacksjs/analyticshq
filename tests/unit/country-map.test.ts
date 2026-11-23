@@ -22,7 +22,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { countryName } from '../../app/Support/dashboard-format'
-import crosswind from '../../config/crosswind'
+import crosswind from '../../config/css'
 
 const root = join(import.meta.dir, '../..')
 const bundle = join(root, 'public/vendor/ts-maps.js')
@@ -30,7 +30,7 @@ const geojson = join(root, 'public/vendor/world-countries.geojson')
 const dashboard = readFileSync(join(root, 'resources/views/dashboard.stx'), 'utf8')
 /*
  * The map's own CSS -- the ts-maps tooltip restatement, the sea fill, the live
- * pins -- is config/crosswind.ts's DASHBOARD_CSS now rather than a <style>
+ * pins -- is config/css.ts's DASHBOARD_CSS now rather than a <style>
  * block in the view (rule 3 / §11.1). It could not become utility classes
  * whatever the rule said: ts-maps writes these nodes itself, from JavaScript,
  * long after the extractor has read the page.

@@ -5,7 +5,7 @@
  * `<style>` block in `@head`: a `:root` palette, a `body` rule, `.wordmark`,
  * ThemeToggle's ten rules, and (auth only) the form controls. That is what
  * stx-standards rule 3 / §11.1 forbids, and the palette is what §11.2 says
- * belongs in config/crosswind.ts exactly once. The palette and the chrome are
+ * belongs in config/css.ts exactly once. The palette and the chrome are
  * a `preflights` entry there now; the controls are shortcuts.
  *
  * Why these assertions are on the GENERATED sheet and not on the config
@@ -23,14 +23,14 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 // The installed STX package does not export these subpaths by bare specifier.
 import { loadCssEngine } from '../../node_modules/@stacksjs/stx/dist/dev-server/ts-css.js'
 import { mergeCssConfig } from '../../node_modules/@stacksjs/stx/dist/ts-css-config.js'
 
 /**
  * The marketing sheet. It was public/marketing.css until it moved into the
- * MARKETING preflight in config/crosswind.ts, scoped to the marketing layout
+ * MARKETING preflight in config/css.ts, scoped to the marketing layout
  * group (stx-standards rule 3, §11.2). Nesting did not rewrite the rules, so
  * what these assertions read is unchanged -- except that it is layered now,
  * which is the point several of them turn on.

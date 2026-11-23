@@ -2682,7 +2682,7 @@ onMount(() => {
     body, so a loose block would still apply but from the wrong place. --}}
 @push('styles')
 {{-- ts-maps' own stylesheet, and the only thing this push still carries: the
-    492-line <style> that sat under it is config/crosswind.ts's DASHBOARD_CSS
+    492-line <style> that sat under it is config/css.ts's DASHBOARD_CSS
     now, which is where rule 3 / §11.1 says it belongs and where the one tag the
     SPA router preserves can hold it.
 

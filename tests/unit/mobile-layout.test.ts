@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import theme from '../../config/crosswind'
+import theme from '../../config/css'
 
 const marketing = ((theme as { preflights?: { getCSS: () => string }[] }).preflights ?? [])
   .map(entry => entry.getCSS())

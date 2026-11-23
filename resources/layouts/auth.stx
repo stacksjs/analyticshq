@@ -15,7 +15,7 @@
     §11.1. It held the marketing palette under this layout's token names plus the form
     chrome, and before that the same CSS was copy-pasted byte for byte into login.stx
     and register.stx, and into sites/new.stx minus the .oauth-btn/.divider rules it does
-    not use. Three copies became one block here, and the block is now config/crosswind.ts:
+    not use. Three copies became one block here, and the block is now config/css.ts:
     the palette as a `preflights` entry keyed off the `<meta name="stx-layout-group"
     content="auth">` stx emits from THIS FILE'S NAME, and the controls as the
     `btn-accent` / `oauth-btn` / `field` / `err` / `ok` / `divider` shortcuts. `.btn` is

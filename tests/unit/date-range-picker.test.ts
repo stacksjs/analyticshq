@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import crosswind from '../../config/crosswind'
+import crosswind from '../../config/css'
 
 const ROOT = join(import.meta.dir, '../..')
 const component = readFileSync(join(ROOT, 'resources/components/DateRangePicker.stx'), 'utf8')
 const dashboard = readFileSync(join(ROOT, 'resources/views/dashboard.stx'), 'utf8')
 /*
- * The picker's CSS lives in config/crosswind.ts's DASHBOARD_CSS now, not in a
+ * The picker's CSS lives in config/css.ts's DASHBOARD_CSS now, not in a
  * <style> block in the view -- rule 3 / §11.1. Read from the config's own
  * preflight entry rather than from the file's text, so these assertions follow
  * the rules wherever they are declared and fail if an entry stops being

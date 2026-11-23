@@ -25,7 +25,7 @@
  * auth.stx belongs to every page those layouts serve, by design rather than by
  * accident of entry. But "belongs to every page" is the definition of a
  * preflight, and a <style> block in a .stx file is what rule 3 / §11.1
- * forbids, so both are config/crosswind.ts entries now -- scoped to their
+ * forbids, so both are config/css.ts entries now -- scoped to their
  * layout group, and inside the one tag the router already preserves. See
  * tests/unit/layout-chrome-css.test.ts. Nothing below changes: this file is
  * about where a PAGE's styles are rendered, and four views still push.
@@ -81,7 +81,7 @@ describe('page style leak', () => {
     // keeps it where the layout decides.
     //
     // Three of the original four are gone: account.stx and visitor.stx are
-    // config/crosswind.ts entries now, and pricing.stx is utilities on its own
+    // config/css.ts entries now, and pricing.stx is utilities on its own
     // elements. The last one is the allowlist in
     // tests/unit/layout-chrome-css.test.ts.
     for (const view of ['dashboard']) {

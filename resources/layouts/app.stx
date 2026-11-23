@@ -23,7 +23,7 @@
 
     There is no <style> block here any more, and there must not be one: a style block in
     a .stx file is what stx-standards rule 3 / §11.1 forbids, and the tokens it held are
-    what §11.2 says belong in config/crosswind.ts exactly once. The :root palette, the
+    what §11.2 says belong in config/css.ts exactly once. The :root palette, the
     body rule, .wordmark and ThemeToggle's ten rules are `preflights` entries there now,
     keyed off the `<meta name="stx-layout-group" content="app">` that stx emits from THIS
     FILE'S NAME -- so renaming this file repaints these pages, and the config says so.

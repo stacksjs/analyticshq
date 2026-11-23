@@ -38,7 +38,7 @@ const auth = await sessionFrom(typeof cookies !== 'undefined' ? cookies : {})
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0c0e">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafbfb">
 {{-- /marketing.css is gone: it is the MARKETING preflight in
-    config/crosswind.ts, scoped to this layout's group
+    config/css.ts, scoped to this layout's group
     (stx-standards rule 3, §11.2). --}}
 @endhead
 

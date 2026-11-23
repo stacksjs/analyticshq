@@ -225,7 +225,7 @@ onMount(() => {
 @extends('app')
 
 {{-- No <style> block, and no @push('styles'): rule 3 / §11.1. Tokens, body and
-    .wordmark are a preflight in config/crosswind.ts; .card, .badge, .badge-pro,
+    .wordmark are a preflight in config/css.ts; .card, .badge, .badge-pro,
     .avatar, .row and .skeleton are shortcuts there, and the two buttons this page
     spelled as `.btn .btn-primary` and `.btn .btn-ghost` are `btn-accent` and
     `btn-ghost` -- the same two the auth views and visitor.stx use, because measured
