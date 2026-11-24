@@ -164,27 +164,20 @@ describe('every declaration the block carried', () => {
     expect(css).not.toContain('--tc-shadow')
   })
 
-  test('the one-column breakpoint is the only thing that moved', async () => {
+  test('the plans stack one-up at exactly 640px, as the old block did', async () => {
     /*
-     * The block said `@media (max-width: 640px)`. `max-sm:` is
-     * `max-width: 639.98px`, and the arbitrary form -- `max-[640px]:` -- was not
-     * supported by the engine at the time: it generated nothing at all, in
-     * markup AND inside a shortcut, which was checked rather than assumed. So
-     * the plans stack one-up 0.02px earlier than they did. Nothing else in the
-     * page changed by any amount. ts-css 0.3.28 (with stx 0.2.925) does emit
-     * `max-[640px]:`, so the exact width is available again if it matters.
+     * The block said `@media (max-width: 640px)`. When it became utilities the
+     * arbitrary form, `max-[640px]:`, generated nothing (checked in markup and
+     * inside a shortcut), so the page used `max-sm:` and stacked 0.02px early,
+     * at 639.98px. ts-css 0.3.28 (with stx 0.2.925) emits the arbitrary form,
+     * so the exact width is back. `max-sm:` must not come back with it: both
+     * would leave two one-column rules a hair apart.
      */
-    expect(SRC).toContain('max-sm:grid-cols-1')
+    expect(SRC).toContain('max-[640px]:grid-cols-1')
+    expect(SRC).not.toContain('max-sm:grid-cols-1')
     const css = await generate(SRC)
-    expect(css).toContain('@media (max-width: 639.98px)')
+    expect(css).toContain('@media (max-width: 640px)')
+    expect(css).not.toContain('@media (max-width: 639.98px)')
     expect(has(css, 'grid-template-columns: repeat(1, minmax(0, 1fr))')).toBe(true)
-
-    const engine = await loadCssEngine()
-    if (!engine)
-      throw new Error('The installed STX CSS engine is required')
-    const merged = mergeCssConfig(engine.defaultConfig || engine.config, theme)
-    const probe = new engine.CSSGenerator(merged.config)
-    probe.generate('max-[640px]:grid-cols-1')
-    expect(probe.toCSS(false, false)).toContain('@media (max-width: 640px)')
   })
 })

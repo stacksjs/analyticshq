@@ -92,7 +92,7 @@ async function upgrade(): Promise<void> {
           </div>
         </div>
 
-        <div class="grid gap-5 grid-cols-2 max-sm:grid-cols-1 mx-auto max-w-[720px]">
+        <div class="grid gap-5 grid-cols-2 max-[640px]:grid-cols-1 mx-auto max-w-[720px]">
           <div class="relative p-[1.9rem] bg-[var(--surface)] border border-[var(--line)] border-solid rounded-[var(--r)]">
             <span class="text-[0.74rem] text-[var(--faint)] tracking-[0.14em] uppercase [font-family:var(--mono)]">Free</span>
             <div class="flex gap-[0.3rem] items-baseline mt-4"><span class="font-bold text-[2.4rem] text-[var(--ink)] tracking-[-0.03em]">$0</span><span class="text-[0.9rem] text-[var(--faint)]">/ forever</span></div>

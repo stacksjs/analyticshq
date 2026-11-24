@@ -210,10 +210,13 @@ const APP_VIEWS = `.panel { background: var(--panel); border: 1px solid var(--bo
  *     and `.site-settings-shell:not([open]) ~ .site-settings-panel` have no
  *     utility form at all.
  *   - `@media (max-width: 1023px)` and `(max-width: 767px)` are exact. The
- *     engine's own are 1023.98px and 767.98px, and the arbitrary spelling
- *     `max-[1023px]:` generates NOTHING here -- in markup and inside a shortcut
- *     alike, checked rather than assumed. A preflight is the only vehicle that
- *     keeps the numbers.
+ *     engine's own are 1023.98px and 767.98px. When this moved, the arbitrary
+ *     spelling `max-[1023px]:` generated NOTHING (checked in markup and inside
+ *     a shortcut), so a preflight was the only vehicle that kept the numbers.
+ *     ts-css 0.3.28 emits it now, but the widths here are already exact and
+ *     most rules in these blocks could not move anyway (ts-maps nodes,
+ *     ::before, descendant selectors), so they stay; tests/unit/dashboard-
+ *     css.test.ts proves the arbitrary form works if a rule ever needs it.
  *   - `.drp-day.is-range`, `.range-tool.is-active` and the rest of the `.is-*`
  *     family land on elements the date picker renders in a loop, from its own
  *     signals.
