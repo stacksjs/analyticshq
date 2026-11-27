@@ -11,6 +11,14 @@ const crumbs = [
   { name: "Use cases", href: "/use-cases", url: "https://analyticshq.org/use-cases" },
   { name: "SaaS" },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../../app/Support/highlight')
+const snippet1Html = await highlightCode(`// when the account is created
+analyticshq('signup', { plan: 'pro', source: 'product-hunt' })
+
+// later, when they reach the aha moment
+analyticshq('activated', { plan: 'pro' })`, 'typescript')
 </script>
 
 @extends('marketing')
@@ -136,11 +144,7 @@ const crumbs = [
         <div class="code-grid">
           <div class="code">
             <div class="code-bar"><span>onboarding.ts</span><span>JavaScript</span></div>
-            <pre><span class="cmt">// when the account is created</span>
-<span class="tok">analyticshq</span>('signup', { plan: 'pro', source: 'product-hunt' })
-
-<span class="cmt">// later, when they reach the aha moment</span>
-<span class="tok">analyticshq</span>('activated', { plan: 'pro' })</pre>
+            <pre>{!! snippet1Html !!}</pre>
           </div>
         </div>
         <p class="code-note">The <code>analyticshq()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, and the beacon <code>POST</code>s to your own <code>/collect</code> endpoint.</p>
