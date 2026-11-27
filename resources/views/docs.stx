@@ -23,6 +23,26 @@ const crumbs = [
   { name: "Home", href: "/", url: "https://analyticshq.org/" },
   { name: "Docs" },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../app/Support/highlight')
+const snippet1Html = await highlightCode(`\x3Cscript defer
+  src="https://analyticshq.org/script.js"
+  data-site="YOUR_SITE_ID">\x3C/script>`, 'html')
+const snippet2Html = await highlightCode(`// e.g. right after a successful signup
+analyticshq('signup', {
+  plan: 'pro',
+  value: 19,
+})`, 'typescript')
+const snippet3Html = await highlightCode(`GET /api/sites/{siteId}/stats        // visitors, views, sessions
+GET /api/sites/{siteId}/timeseries   // views per day
+GET /api/sites/{siteId}/pages        // top pages
+GET /api/sites/{siteId}/referrers    // top sources
+
+// example
+fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&to=2026-07-10')
+  .then(r => r.json())
+// { "views": 8, "visitors": 4, "sessions": 4 }`, 'typescript')
 </script>
 
 @extends('marketing')
@@ -47,9 +67,7 @@ const crumbs = [
         </div>
         <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">Add to every page, once</span></div>
-          <pre class="code-body"><code>&lt;script defer
-  src="https://analyticshq.org/script.js"
-  data-site="YOUR_SITE_ID"&gt;&lt;/script&gt;</code></pre>
+          <pre class="code-body"><code>{!! snippet1Html !!}</code></pre>
         </div>
       </section>
 
@@ -60,11 +78,7 @@ const crumbs = [
         </div>
         <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">On the event that matters</span></div>
-          <pre class="code-body"><code>// e.g. right after a successful signup
-analyticshq('signup', {
-  plan: 'pro',
-  value: 19,
-})</code></pre>
+          <pre class="code-body"><code>{!! snippet2Html !!}</code></pre>
         </div>
       </section>
 
@@ -75,15 +89,7 @@ analyticshq('signup', {
         </div>
         <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">GET /api/sites/{siteId}/*</span></div>
-          <pre class="code-body"><code>GET /api/sites/{siteId}/stats        // visitors, views, sessions
-GET /api/sites/{siteId}/timeseries   // views per day
-GET /api/sites/{siteId}/pages        // top pages
-GET /api/sites/{siteId}/referrers    // top sources
-
-// example
-fetch('https://analyticshq.org/api/sites/demo/stats?from=2026-07-01&amp;to=2026-07-10')
-  .then(r =&gt; r.json())
-// { "views": 8, "visitors": 4, "sessions": 4 }</code></pre>
+          <pre class="code-body"><code>{!! snippet3Html !!}</code></pre>
         </div>
       </section>
 

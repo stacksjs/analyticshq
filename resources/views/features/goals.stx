@@ -11,6 +11,17 @@ const crumbs = [
   { name: "Features", href: "/features", url: "https://analyticshq.org/features" },
   { name: "Goals and campaigns" },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../../app/Support/highlight')
+const snippet1Html = await highlightCode(`// anywhere in your app, on the event that matters
+analyticshq('signup', {
+  plan: 'pro',
+  value: 19,
+})
+
+// campaigns are matched automatically from the
+// utm_* parameters already on the landing URL`, 'typescript')
 </script>
 
 @extends('marketing')
@@ -31,14 +42,7 @@ const crumbs = [
       <section class="reveal section shell" aria-label="Goals and campaigns preview">
         <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">Track a signup conversion</span></div>
-          <pre class="code-body"><code>// anywhere in your app, on the event that matters
-analyticshq('signup', {
-  plan: 'pro',
-  value: 19,
-})
-
-// campaigns are matched automatically from the
-// utm_* parameters already on the landing URL</code></pre>
+          <pre class="code-body"><code>{!! snippet1Html !!}</code></pre>
         </div>
       </section>
 

@@ -2,6 +2,26 @@
  * Crosswind (utility CSS) — content globs for STX views.
  * @see https://github.com/cwcss/crosswind
  */
+import { SYNTAX_DARK, SYNTAX_LIGHT, syntaxTokenRules, syntaxVariables } from '@stacksjs/components'
+
+/**
+ * Syntax highlighting (app/Support/highlight.ts). The highlighter writes a class
+ * on each token and no colour; the rules in SYNTAX colour them from the
+ * `--stx-syntax-*` properties, stx's own GitHub light and dark pair. It replaces
+ * the hand-written .tok / .str / .cmt spans the samples used to carry.
+ *
+ * The palette switches exactly where this app's two theme models do, so it is
+ * declared in two places like every other palette here: SYNTAX keys it to the
+ * app group (light by default), and MARKETING carries the marketing group's
+ * copy with that sheet's own selectors (dark by default). Light-theme comments
+ * use GitHub's #57606a, since stx's #6e7781 is under 4.5:1 on these off-white
+ * surfaces.
+ */
+const SYNTAX_LIGHT_AA: Readonly<Record<string, string>> = { ...SYNTAX_LIGHT, comment: '#57606a' }
+
+function syntax(palette: Readonly<Record<string, string>>): string {
+  return syntaxVariables(palette, '').replace(/\n/g, ' ')
+}
 
 /*
  * ## Where the chrome below used to live, and why it moved
@@ -1387,8 +1407,6 @@ body:not([data-site-mode="coming-soon"]) .mode-screen { display: none; }
   font-size: 0.86rem;
   line-height: 1.7;
 }
-.code pre .tok { color: var(--accent); }
-.code pre .str { color: var(--code-str); }
 /* Framework picker in the code-bar (HTML / Vue / Nuxt / React / Next). */
 .code-lang {
   background-color: transparent;
@@ -1798,8 +1816,6 @@ a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
 .bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); opacity: 0.82; }
 
-/* dim comment token inside code samples */
-.code pre .cmt { color: var(--faint); }
 
 @media (max-width: 860px) {
   .split { grid-template-columns: minmax(0, 1fr); gap: 2rem; }
@@ -1807,6 +1823,11 @@ a.cell:hover .cell-more { color: var(--accent); gap: 0.55rem; }
   .qa-grid { grid-template-columns: 1fr; }
 }
 }
+
+/* Syntax-highlighting colours (see SYNTAX_LIGHT_AA), switched like the palette above. */
+html:has(meta[name="stx-layout-group"][content="marketing"]) { ${syntax(SYNTAX_DARK)} }
+@media (prefers-color-scheme: light) { html:has(meta[name="stx-layout-group"][content="marketing"]):not([data-theme="dark"]) { ${syntax(SYNTAX_LIGHT_AA)} } }
+html:has(meta[name="stx-layout-group"][content="marketing"])[data-theme="light"] { ${syntax(SYNTAX_LIGHT_AA)} }
 `
 
 /*
@@ -1843,6 +1864,14 @@ select:not([multiple]):not([size]) {
   print-color-adjust: exact;
 }
 `
+
+const SYNTAX = [
+  `${APP} { ${syntax(SYNTAX_LIGHT_AA)} }`,
+  `@media (prefers-color-scheme: dark) { ${APP} { ${syntax(SYNTAX_DARK)} } }`,
+  `${APP}[data-theme="dark"] { ${syntax(SYNTAX_DARK)} }`,
+  `${APP}[data-theme="light"] { ${syntax(SYNTAX_LIGHT_AA)} }`,
+  syntaxTokenRules(),
+].join('\n')
 
 export default {
 
@@ -1899,6 +1928,8 @@ export default {
     // Scoped to the marketing layout group; the four above are site-wide.
     // LAST on purpose -- see the note on MARKETING.
     { getCSS: () => MARKETING },
+    // The app group's syntax-highlighting colours and the token rules.
+    { getCSS: () => SYNTAX },
     // Last, so it is the final word on a <select>'s arrow (see SELECT_CARET_CSS).
     { getCSS: () => SELECT_CARET_CSS },
   ],

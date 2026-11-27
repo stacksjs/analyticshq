@@ -147,16 +147,17 @@ describe('the install targets', () => {
  * The public homepage keeps its own copy of these snippets.
  *
  * `dashboard.stx` renders from installTargets(), so it is covered by everything
- * above. `index.stx` does not — it hardcodes the same snippets again with
- * syntax-highlighting markup wrapped around them, and that copy drifted: it went
+ * above. `index.stx` does not — it hardcodes the same snippets again (as plain
+ * source now, highlighted on the server), and that copy drifted: it went
  * on telling visitors `npm i @stacksjs/ts-analytics` for seven weeks after the
  * rename, which installs 0.1.6 — the build whose endpoint is localhost and whose
  * track() is a no-op. The marketing page is the acquisition path, so it was the
  * worst possible place for that to rot.
  *
- * Reconciling the two properly means teaching install.ts to emit highlighted
- * markup, or the homepage to render plain code. Until then this asserts the one
- * property that actually bit us.
+ * Both now highlight plain source on the server, so the homepage could render
+ * straight from installTargets(); its snippets still differ in wording, which is
+ * a content decision. Until then this asserts the one property that actually
+ * bit us.
  */
 describe('the marketing homepage agrees with the canonical snippets', () => {
   const homepage = readFileSync(join(import.meta.dir, '../../resources/views/index.stx'), 'utf8')

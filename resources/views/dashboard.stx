@@ -14,7 +14,8 @@
 import { CH_SEARCH, CH_SOCIAL, channelOf, channelPredicate, countryName, eventUrl, flag, fmtDuration, pct } from '../../app/Support/dashboard-format'
 // Core Web Vitals (#41). The thresholds and the disclosure floor live in a real
 // .ts module for the same reason the formatters above do.
-import { installTargets } from '../../app/Analytics/install'
+import { installTargets, renderInstallCode } from '../../app/Analytics/install'
+import { highlightCode } from '../../app/Support/highlight'
 import { listReachableSites, listSiteMembers } from '../../app/Analytics/access'
 import { planForSite } from '../../app/Analytics/entitlements'
 import { foldRegions, splitRegion, subdivisionName } from '../../app/Analytics/regions'
@@ -1333,6 +1334,17 @@ const activeSiteLabel = activeSiteDomain || activeSiteName
 //     code assembled the tag name here for exactly this reason; the tokens do
 //     the same job for values that now travel further.
 const installOptions = installTargets(String(siteId))
+
+// The same snippets, syntax-highlighted on the server (app/Support/highlight.ts).
+// The origin still can only be known in the browser, so each is rendered with
+// this stand-in host and installCodeHtml() swaps in window.location.origin. The
+// tag is real here because the highlighter escapes it: what crosses the payload
+// bridge is `&lt;script`, never a literal tag that could end an inline script.
+const installOriginStandin = 'https://analyticshq-origin.invalid'
+const installLanguages: Record<string, 'html' | 'tsx' | 'typescript'> = { html: 'html', react: 'html', next: 'tsx' }
+const installHtml: Record<string, string> = {}
+for (const opt of installOptions)
+  installHtml[opt.id] = await highlightCode(renderInstallCode(opt.code, installOriginStandin), installLanguages[opt.id] ?? 'typescript')
 // No eslint-disable here any more: activeSiteId reads as unused only while the
 // only thing consuming it is the implicit bridge, which nothing can see. The
 // defineClientPayload call at the end of this block is a real reference.
@@ -1409,7 +1421,7 @@ const readKeyCount = __readKeyCount
 // again rather than turning it off.
 // appMode seeds the app-mode toggle the same way. It is last, out of order,
 // because viewer-timezone.test.ts pins the opening of this list.
-defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installOptions, liveNow, livePlaces, liveWhere, range, readKeyCount, regionGeo, savedTz, shareCapability, visitorTimelines, appMode })
+defineClientPayload({ activeSiteId, chartTz, cityGeo, countryTotals, exportPayload, installHtml, installOptions, installOriginStandin, liveNow, livePlaces, liveWhere, range, readKeyCount, regionGeo, savedTz, shareCapability, visitorTimelines, appMode })
 
 useSeoMeta({
   title: "Dashboard - analyticshq",
@@ -1707,22 +1719,19 @@ function activeInstall(): { id: string, label: string, file: string, note: strin
 }
 
 /**
- * Finish a snippet: real origin, real script tag.
- *
- * Kept in step with app/Analytics/install.ts by tests/unit/install.test.ts,
- * which asserts the rendered HTML target matches what the API's snippetFor()
- * returns byte for byte — the two must not drift, or a support answer stops
- * matching what the dashboard shows.
+ * The active snippet, coloured and finished: the server highlighted it
+ * (installHtml, from installTargets() through renderInstallCode(), the same
+ * function the API's snippetFor() uses, so the two cannot drift) with a
+ * stand-in host, and this swaps in the real origin. The origin is escaped
+ * because the result is bound with :html.
  */
-function installCode(): string {
-  return String(activeInstall().code)
-    .split('%ORIGIN%')
-    // stx-strict-ignore-next-line window.location
-    .join(window.location.origin)
-    .split('%TAG%')
-    .join(`<${'scr'}${'ipt'}`)
-    .split('%ENDTAG%')
-    .join(`</${'scr'}${'ipt'}>`)
+function installCodeHtml(): string {
+  // split/join rather than a regex: a lone double quote inside a regex literal
+  // reads as an open string to stx's script scanner, which then misses every
+  // stx-strict-ignore marker after it.
+  // stx-strict-ignore-next-line window.location
+  const origin = window.location.origin.split('&').join('&amp;').split('<').join('&lt;').split('>').join('&gt;').split('"').join('&quot;')
+  return String(installHtml[activeInstall().id] ?? '').split(installOriginStandin).join(origin)
 }
 // --- Google Analytics import ------------------------------------------------
 // The "one click" the marketing has been promising. The endpoint imports ONE
@@ -3502,8 +3511,9 @@ onMount(() => {
 
         The tab strip is x-for over the server-built catalogue, and the body is
         reactive because the origin can only be resolved in the browser — see the
-        installCode() note in the client block. Server interpolation HTML-escapes the snippet so
-        the tag shows as text rather than executing. --}}
+        installCodeHtml() note in the client block. The body is the server's syntax-highlighted
+        markup (installCodeHtml), in which the highlighter has already escaped the tag, so it
+        shows as text rather than executing. --}}
     @if (ownsActive)
       <section class="border-border panel site-settings-panel">
         <div class="flex items-center justify-between px-5 py-4">
@@ -3542,7 +3552,7 @@ onMount(() => {
 
           {{-- The one reactive node. window.location.origin is the only correct
               answer here and the server cannot know it. --}}
-          <pre class="overflow-x-auto m-0 px-4 py-3 text-[var(--text-2)] text-xs whitespace-pre bg-[var(--bg)] border border-[var(--border)] rounded-[10px] mono">{{ installCode() }}</pre>
+          <pre class="overflow-x-auto m-0 px-4 py-3 text-[var(--text-2)] text-xs whitespace-pre bg-[var(--bg)] border border-[var(--border)] rounded-[10px] mono" :html="installCodeHtml()"></pre>
         </div>
       </section>
     @endif

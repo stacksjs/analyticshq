@@ -54,6 +54,40 @@ const comparison = [
   { dim: 'Weight', ga: 'About 50 KB gtag.js, often blocked', ours: 'Under 2 KB, first-party, resilient' },
   { dim: 'Leaving', ga: 'Export is a project', ours: 'One-click GA import, both ways' },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../app/Support/highlight')
+const snippet1Html = await highlightCode(`\x3C!-- analyticshq -->
+\x3Cscript defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID">\x3C/script>`, 'html')
+const snippet2Html = await highlightCode(`// bun add @ts-analytics/tracking (official Stacks / stx config)
+import { tsAnalyticsStxConfig } from '@ts-analytics/tracking/stx'
+
+export default {
+  analytics: tsAnalyticsStxConfig({ appId: 'YOUR_SITE_ID' }),
+}`, 'typescript')
+const snippet3Html = await highlightCode(`// npm i @ts-analytics/tracking (official Vue 3 plugin)
+import { tsAnalytics } from '@ts-analytics/tracking/vue'
+
+createApp(App)
+  .use(tsAnalytics, { appId: 'YOUR_SITE_ID' })
+  .mount('#app')`, 'typescript')
+const snippet4Html = await highlightCode(`\x3C!-- analyticshq · add to index.html (or public/index.html) -->
+\x3Cscript defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID">\x3C/script>`, 'html')
+const snippet5Html = await highlightCode(`// npm i @ts-analytics/tracking (official Nuxt module)
+export default defineNuxtConfig({
+  modules: ['@ts-analytics/tracking/nuxt'],
+  tsAnalytics: {
+    appId: 'YOUR_SITE_ID',
+  },
+})`, 'typescript')
+const snippet6Html = await highlightCode(`import Script from 'next/script'
+
+<Script
+  src="https://analyticshq.org/script.js"
+  data-site="YOUR_SITE_ID"
+  strategy="afterInteractive"
+/>`, 'tsx')
+const snippet7Html = await highlightCode(`analyticshq('signup', { plan: 'pro' })`, 'typescript')
 </script>
 
 <script client>
@@ -182,40 +216,16 @@ function pickFramework(e: Event): void {
                   <option value="next">Next.js</option>
                 </select>
               </div>
-              <pre :show="framework() === 'html'" style="display:none">&lt;!-- analyticshq --&gt;
-&lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :show="framework() === 'stacks'" style="display:none"><span class="cmt">// bun add @ts-analytics/tracking (official Stacks / stx config)</span>
-<span class="tok">import</span> { tsAnalyticsStxConfig } <span class="tok">from</span> <span class="str">'@ts-analytics/tracking/stx'</span>
-
-<span class="tok">export default</span> {
-  analytics: tsAnalyticsStxConfig({ appId: <span class="str">'YOUR_SITE_ID'</span> }),
-}</pre>
-              <pre :show="framework() === 'vue'" style="display:none"><span class="cmt">// npm i @ts-analytics/tracking (official Vue 3 plugin)</span>
-<span class="tok">import</span> { tsAnalytics } <span class="tok">from</span> <span class="str">'@ts-analytics/tracking/vue'</span>
-
-createApp(App)
-  .use(tsAnalytics, { appId: <span class="str">'YOUR_SITE_ID'</span> })
-  .mount(<span class="str">'#app'</span>)</pre>
-              <pre :show="framework() === 'react'" style="display:none"><span class="cmt">&lt;!-- analyticshq · add to index.html (or public/index.html) --&gt;</span>
-&lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
-              <pre :show="framework() === 'nuxt'" style="display:none"><span class="cmt">// npm i @ts-analytics/tracking (official Nuxt module)</span>
-<span class="tok">export default</span> defineNuxtConfig({
-  modules: [<span class="str">'@ts-analytics/tracking/nuxt'</span>],
-  tsAnalytics: {
-    appId: <span class="str">'YOUR_SITE_ID'</span>,
-  },
-})</pre>
-              <pre :show="framework() === 'next'" style="display:none"><span class="tok">import</span> Script <span class="tok">from</span> <span class="str">'next/script'</span>
-
-&lt;Script
-  src=<span class="str">"https://analyticshq.org/script.js"</span>
-  data-site=<span class="str">"YOUR_SITE_ID"</span>
-  strategy=<span class="str">"afterInteractive"</span>
-/&gt;</pre>
+              <pre :show="framework() === 'html'" style="display:none">{!! snippet1Html !!}</pre>
+              <pre :show="framework() === 'stacks'" style="display:none">{!! snippet2Html !!}</pre>
+              <pre :show="framework() === 'vue'" style="display:none">{!! snippet3Html !!}</pre>
+              <pre :show="framework() === 'react'" style="display:none">{!! snippet4Html !!}</pre>
+              <pre :show="framework() === 'nuxt'" style="display:none">{!! snippet5Html !!}</pre>
+              <pre :show="framework() === 'next'" style="display:none">{!! snippet6Html !!}</pre>
             </div>
             <div class="code">
               <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>
-              <pre><span class="tok">analyticshq</span>('signup', { plan: 'pro' })</pre>
+              <pre>{!! snippet7Html !!}</pre>
             </div>
           </div>
           <p class="code-note">Track a conversion from anywhere in your app, no SDK and no init call. The script and your data live on the same host you control: beacons <code>POST</code> to <code>/collect</code> and aggregates come back from your own PostgreSQL database. Serve it first-party and even ad-blockers count.</p>

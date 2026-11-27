@@ -11,6 +11,16 @@ const crumbs = [
   { name: "Use cases", href: "/use-cases", url: "https://analyticshq.org/use-cases" },
   { name: "Developers" },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../../app/Support/highlight')
+const snippet1Html = await highlightCode(`\x3C!-- analyticshq -->
+\x3Cscript defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID">\x3C/script>`, 'html')
+const snippet2Html = await highlightCode(`// a custom event with whatever properties you want
+analyticshq('plan_upgraded', { from: 'free', to: 'pro', seats: 3 })
+
+// read your numbers back over the API
+fetch('/api/stats?range=30d').then(r => r.json())`, 'typescript')
 </script>
 
 @extends('marketing')
@@ -136,16 +146,11 @@ const crumbs = [
         <div class="code-grid">
           <div class="code">
             <div class="code-bar"><span>index.html</span><span>HTML</span></div>
-            <pre>&lt;!-- analyticshq --&gt;
-&lt;<span class="tok">script</span> defer src="https://analyticshq.org/script.js" data-site="YOUR_SITE_ID"&gt;&lt;/<span class="tok">script</span>&gt;</pre>
+            <pre>{!! snippet1Html !!}</pre>
           </div>
           <div class="code">
             <div class="code-bar"><span>anywhere in your app</span><span>JavaScript</span></div>
-            <pre><span class="cmt">// a custom event with whatever properties you want</span>
-<span class="tok">analyticshq</span>('plan_upgraded', { from: 'free', to: 'pro', seats: 3 })
-
-<span class="cmt">// read your numbers back over the API</span>
-<span class="tok">fetch</span>('/api/stats?range=30d').then(r =&gt; r.json())</pre>
+            <pre>{!! snippet2Html !!}</pre>
           </div>
         </div>
         <p class="code-note">The <code>analyticshq()</code> function ships with the tracking script, so there is nothing extra to import. Properties become filters and breakdowns in your dashboard, the beacon <code>POST</code>s to your own <code>/collect</code> endpoint, and everything is readable back over the <code>/api</code> routes you host.</p>

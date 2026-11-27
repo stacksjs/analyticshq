@@ -11,6 +11,17 @@ const crumbs = [
   { name: "Features", href: "/features", url: "https://analyticshq.org/features" },
   { name: "Privacy by design" },
 ]
+// The code samples below, highlighted on the server (app/Support/highlight.ts)
+// so the page ships coloured HTML and no highlighter.
+const { highlightCode } = await import('../../../app/Support/highlight')
+const snippet1Html = await highlightCode(`{
+  "d": "yoursite.com",      // domain
+  "p": "/pricing",          // path
+  "r": "google.com",        // referrer
+  "h": "a3f9c2...",          // hash, rotates every 24h by default
+  "w": 1440                 // viewport width
+}
+// no cookie, no stored IP, no name, no device id`, 'typescript')
 </script>
 
 @extends('marketing')
@@ -31,14 +42,7 @@ const crumbs = [
       <section class="reveal section shell" aria-label="Privacy by design preview">
         <div class="max-w-[680px] code">
           <div class="code-bar"><span class="chart-cap">The entire payload a visitor sends</span></div>
-          <pre class="code-body"><code>{
-  "d": "yoursite.com",      // domain
-  "p": "/pricing",          // path
-  "r": "google.com",        // referrer
-  "h": "a3f9c2...",          // hash, rotates every 24h by default
-  "w": 1440                 // viewport width
-}
-// no cookie, no stored IP, no name, no device id</code></pre>
+          <pre class="code-body"><code>{!! snippet1Html !!}</code></pre>
         </div>
       </section>
 
